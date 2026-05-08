@@ -1,0 +1,68 @@
+<div class="module-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <h2>Gestión de Usuarios</h2>
+    <button class="btn-primary" id="btnNuevoUsuario" style="width: auto;">
+        <i class="fas fa-plus"></i> Nuevo Usuario
+    </button>
+</div>
+
+<div class="welcome-card" style="max-width: 100%;">
+    <table id="tablaUsuarios" class="display" style="width:100%">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Usuario</th>
+                <th>Perfil</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Llenado dinámico con DataTables -->
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal CRUD Usuario -->
+<div id="modalUsuario" class="modal-overlay" style="display: none;">
+    <div class="modal-container">
+        <div class="modal-header">
+            <h3 id="modalTitle">Nuevo Usuario</h3>
+            <button class="btn-close" id="btnCerrarModal"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <form id="formUsuario">
+                <input type="hidden" id="id_usuario" name="id_usuario">
+                
+                <div class="form-group">
+                    <label for="nombre">Nombre Completo</label>
+                    <input type="text" id="nombre" name="nombre" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="usuario_login">Usuario</label>
+                    <input type="text" id="usuario_login" name="usuario_login" required autocomplete="off">
+                </div>
+                
+                <div class="form-group">
+                    <label for="id_perfil">Perfil</label>
+                    <select id="id_perfil" name="id_perfil" class="form-control" required style="width: 100%; padding: 12px 16px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background-color: #fafafa; font-family: inherit;">
+                        <option value="">Seleccione...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="clave_login" id="labelClave">Contraseña</label>
+                    <input type="password" id="clave_login" name="clave_login">
+                    <small id="helpClave" style="color: var(--text-muted); font-size: 12px; display: none; margin-top: 4px;">(Dejar en blanco para no cambiar)</small>
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+                    <button type="button" class="btn-secondary" id="btnCancelarModal" style="padding: 10px 16px; background: transparent; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); cursor: pointer; color: var(--text-secondary); font-weight: 600;">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="width: auto; padding: 10px 24px;">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+

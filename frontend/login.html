@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Transporte Joselito</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/login.css">
+    <!-- SweetAlert2 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="login-container">
+            <div class="login-header">
+                <h1>Transporte Joselito</h1>
+                <p>Acceso al panel administrativo</p>
+            </div>
+            
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label for="usuario">Usuario</label>
+                    <input type="text" id="usuario" name="usuario" placeholder="Ingresa tu usuario" required autocomplete="off">
+                </div>
+                
+                <div class="form-group">
+                    <label for="clave">Contraseña</label>
+                    <input type="password" id="clave" name="clave" placeholder="Ingresa tu contraseña" required>
+                </div>
+                
+                <button type="submit" class="btn-primary" id="btnSubmit">
+                    <span>Iniciar Sesión</span>
+                    <div class="spinner" id="spinner" style="display: none;"></div>
+                </button>
+            </form>
+            
+            <div class="login-footer">
+                <p>&copy; 2026 Transporte Joselito. Todos los derechos reservados.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/login.js"></script>
+</body>
+</html>

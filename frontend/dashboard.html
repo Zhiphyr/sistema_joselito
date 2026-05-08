@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Transporte Joselito</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons (as defined in DB) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- jQuery (Requerido por DataTables clásico) -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    
+    <!-- DataTables CSS/JS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    
+    <!-- SweetAlert2 CDN (Lo usaremos globalmente) -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-truck-moving brand-icon"></i>
+                <h2>T. Joselito</h2>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <ul id="menuList">
+                    <!-- Los items del menú se cargarán aquí dinámicamente -->
+                </ul>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="user-details">
+                        <span class="user-name" id="userName">Cargando...</span>
+                        <span class="user-role" id="userRole">...</span>
+                    </div>
+                </div>
+                <button id="btnLogout" class="btn-logout" title="Cerrar Sesión">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Contenedor Principal -->
+        <main class="main-content">
+            <header class="topbar">
+                <button id="btnToggleSidebar" class="btn-icon">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="topbar-title">
+                    <h1 id="viewTitle">Dashboard</h1>
+                </div>
+            </header>
+            
+            <div class="content-area" id="app-content">
+                <!-- Aquí se cargarán las vistas SPA dinámicamente -->
+                <div class="welcome-card">
+                    <h2>Cargando interfaz...</h2>
+                    <p>Por favor espere.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Contenedor para inyectar modales dinámicos del SPA -->
+    <div id="app-modals"></div>
+
+    <script src="js/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,157 @@
+:root {
+    /* Intent: Professional, trustworthy, clean */
+    /* Palette: Blues & Whites */
+    --brand-blue: #0f4c81; /* Classic Corporate Blue */
+    --brand-blue-hover: #135d9d;
+    --brand-blue-active: #0c3e69;
+    
+    --surface-bg: #f4f7f9; /* Slight blue tint in gray */
+    --surface-card: #ffffff;
+    
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --text-muted: #94a3b8;
+    
+    --border-subtle: rgba(15, 76, 129, 0.1);
+    --border-focus: rgba(15, 76, 129, 0.3);
+    
+    --shadow-card: 0 4px 20px rgba(15, 76, 129, 0.08);
+    --radius-md: 8px;
+    --radius-lg: 12px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--surface-bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-wrapper {
+    width: 100%;
+    max-width: 420px;
+    padding: 20px;
+}
+
+.login-container {
+    background: var(--surface-card);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    padding: 40px;
+    border: 1px solid var(--border-subtle);
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.login-header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--brand-blue);
+    margin-bottom: 8px;
+}
+
+.login-header p {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.form-group {
+    margin-bottom: 24px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--text-primary);
+    background-color: #fafafa;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.form-group input:hover {
+    border-color: var(--border-focus);
+}
+
+.form-group input:focus {
+    outline: none;
+    background-color: #fff;
+    border-color: var(--brand-blue);
+    box-shadow: 0 0 0 3px rgba(15, 76, 129, 0.1);
+}
+
+.btn-primary {
+    width: 100%;
+    padding: 14px;
+    background-color: var(--brand-blue);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-primary:hover {
+    background-color: var(--brand-blue-hover);
+}
+
+.btn-primary:active {
+    background-color: var(--brand-blue-active);
+}
+
+.btn-primary:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.login-footer {
+    margin-top: 32px;
+    text-align: center;
+}
+
+.login-footer p {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* Spinner animation for loading state */
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
