@@ -2,7 +2,7 @@
 window.clientesCache = [];
 
 window.init_clientes = function () {
-    console.log("Módulo Clientes inicializado (Vanilla JS)");
+    console.log("Módulo Clientes inicializado");
 
     cargarTablaClientes();
     configurarEventosDocumento();

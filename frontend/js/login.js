@@ -37,9 +37,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await response.json();
 
             if (response.ok && result.success) {
-                // Guardar en sessionStorage para la SPA
+                // Guardar en sessionStorage
                 sessionStorage.setItem('usuario_joselito', JSON.stringify(result.data));
-                
+
                 Swal.fire({
                     icon: 'success',
                     title: '¡Bienvenido!',
@@ -47,8 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     showConfirmButton: false,
                     timer: 1500
                 }).then(() => {
-                    // Redirigir o cambiar vista SPA
-                    window.location.href = 'dashboard.html'; 
+                    // Redirigir o cambiar vista
+                    window.location.href = 'dashboard.html';
                 });
             } else {
                 // Error de credenciales o estado inactivo

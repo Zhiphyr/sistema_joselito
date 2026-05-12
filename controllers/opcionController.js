@@ -53,9 +53,8 @@ const actualizar = async (req, res) => {
 const cambiarEstado = async (req, res) => {
     try {
         const { id } = req.params;
-        const { estado } = req.body; 
+        const { estado } = req.body;
 
-        // Como regla general de protección del sistema, la opción 1 (Dashboard) no debería borrarse
         if (parseInt(id) === 1) {
             return res.status(403).json({ success: false, message: 'La opción principal del sistema no puede ser desactivada' });
         }

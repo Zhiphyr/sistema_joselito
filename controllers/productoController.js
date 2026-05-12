@@ -18,16 +18,15 @@ const registrar = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El nombre del producto es obligatorio' });
         }
 
-        // Validar unicidad y lógica de reactivación
         const existe = await ProductoModel.findByNombre(nombre.trim());
-        
+
         if (existe) {
             if (existe.estado === 0 || existe.estado === 2) {
-                return res.status(409).json({ 
-                    success: false, 
-                    reactivar: true, 
+                return res.status(409).json({
+                    success: false,
+                    reactivar: true,
                     productoInfo: existe,
-                    message: 'El producto ya existe pero está inactivo o eliminado' 
+                    message: 'El producto ya existe pero está inactivo o eliminado'
                 });
             } else {
                 return res.status(400).json({ success: false, message: 'Ya existe un producto activo con ese nombre' });
@@ -35,7 +34,7 @@ const registrar = async (req, res) => {
         }
 
         const id = await ProductoModel.registrarProducto({
-            nombre: nombre.trim(), 
+            nombre: nombre.trim(),
             descripcion: descripcion ? descripcion.trim() : null
         });
 
@@ -60,17 +59,16 @@ const actualizar = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Producto no encontrado' });
         }
 
-        // Validar que el nuevo nombre no choque con otro producto diferente
         const existe = await ProductoModel.findByNombre(nombre.trim());
         if (existe && existe.id_producto != id) {
             return res.status(400).json({ success: false, message: 'Ya existe otro producto con ese nombre' });
         }
 
-        await ProductoModel.actualizarProducto(id, { 
-            nombre: nombre.trim(), 
-            descripcion: descripcion ? descripcion.trim() : null 
+        await ProductoModel.actualizarProducto(id, {
+            nombre: nombre.trim(),
+            descripcion: descripcion ? descripcion.trim() : null
         });
-        
+
         return res.status(200).json({ success: true, message: 'Producto actualizado exitosamente' });
     } catch (error) {
         console.error('Error en actualizar producto:', error);
@@ -81,7 +79,7 @@ const actualizar = async (req, res) => {
 const cambiarEstado = async (req, res) => {
     try {
         const { id } = req.params;
-        const { estado } = req.body; 
+        const { estado } = req.body;
 
         const producto = await ProductoModel.obtenerProductoPorId(id);
         if (!producto) {

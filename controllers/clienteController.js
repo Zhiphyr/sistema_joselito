@@ -18,7 +18,6 @@ const registrar = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Los campos marcados con * son obligatorios' });
         }
 
-        // Validación estricta de documentos en backend
         if (tipo_documento === 'DNI' && numero_documento.length !== 8) {
             return res.status(400).json({ success: false, message: 'El DNI debe tener 8 dígitos' });
         }
@@ -26,17 +25,15 @@ const registrar = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El RUC debe tener 11 dígitos' });
         }
 
-        // Validar unicidad
         const existe = await ClienteModel.findByDocumento(numero_documento);
-        
+
         if (existe) {
-            // Lógica de Reactivación
             if (existe.estado === 0 || existe.estado === 2) {
-                return res.status(409).json({ 
-                    success: false, 
-                    reactivar: true, 
+                return res.status(409).json({
+                    success: false,
+                    reactivar: true,
                     clienteInfo: existe,
-                    message: 'El cliente ya se encuentra registrado pero está desactivado o eliminado' 
+                    message: 'El cliente ya se encuentra registrado pero está desactivado o eliminado'
                 });
             } else {
                 return res.status(400).json({ success: false, message: 'Ya existe un cliente activo con ese número de documento' });
@@ -68,7 +65,6 @@ const actualizar = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Cliente no encontrado' });
         }
 
-        // Actualizamos (los documentos son inmutables, no se actualizan)
         await ClienteModel.actualizarCliente(id, { nombre_razon_social, direccion, telefono, correo });
         return res.status(200).json({ success: true, message: 'Cliente actualizado exitosamente' });
     } catch (error) {
@@ -80,7 +76,7 @@ const actualizar = async (req, res) => {
 const cambiarEstado = async (req, res) => {
     try {
         const { id } = req.params;
-        const { estado } = req.body; 
+        const { estado } = req.body;
 
         const cliente = await ClienteModel.obtenerClientePorId(id);
         if (!cliente) {
@@ -109,7 +105,6 @@ const consultarDocumento = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Tipo y número de documento requeridos' });
         }
 
-        // Validar tipos
         const tipoMin = tipo.toLowerCase();
         if (tipoMin !== 'dni' && tipoMin !== 'ruc') {
             return res.status(400).json({ success: false, message: 'Tipo de documento inválido. Use dni o ruc.' });
@@ -136,7 +131,7 @@ const consultarDocumento = async (req, res) => {
             const datos = data.datos;
             let nombreCompleto = '';
             let direccionCompleta = '';
-            
+
             if (tipoMin === 'ruc') {
                 nombreCompleto = datos.razon_social || '';
             } else {
@@ -145,7 +140,6 @@ const consultarDocumento = async (req, res) => {
 
             if (datos.domiciliado) {
                 const dom = datos.domiciliado;
-                // Formatear dirección limpiando comas vacías
                 let dirParts = [dom.direccion, dom.distrito, dom.provincia, dom.departamento].filter(Boolean);
                 direccionCompleta = dirParts.join(', ');
             }

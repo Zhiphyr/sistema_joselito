@@ -29,7 +29,6 @@ const registrar = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
         }
 
-        // Validar que el usuario no exista
         const existe = await UsuarioModel.findByUsername(usuario);
         if (existe) {
             return res.status(400).json({ success: false, message: 'El nombre de usuario ya está registrado' });
@@ -64,7 +63,6 @@ const actualizar = async (req, res) => {
 
         const id_perfil_logueado = req.headers['x-user-profile'];
 
-        // Protección DEV (Root): Solo el propio DEV puede editar su cuenta
         if (parseInt(usuarioTarget.id_perfil) === 1 && parseInt(id_perfil_logueado) !== 1) {
             return res.status(403).json({ success: false, message: 'Acceso Denegado: Este usuario está protegido por el sistema' });
         }
@@ -88,10 +86,9 @@ const actualizar = async (req, res) => {
 const cambiarEstado = async (req, res) => {
     try {
         const { id } = req.params;
-        const { estado } = req.body; // 0: Inactivo, 1: Activo, 2: Eliminado
-        const id_usuario_logueado = req.headers['x-user-id']; // Asumimos que enviamos el ID logueado para validar
+        const { estado } = req.body;
+        const id_usuario_logueado = req.headers['x-user-id'];
 
-        // Regla: Un usuario no puede eliminarse ni desactivarse a sí mismo
         if (parseInt(id) === parseInt(id_usuario_logueado)) {
             return res.status(400).json({ success: false, message: 'No puedes alterar tu propio estado de cuenta' });
         }
@@ -103,13 +100,10 @@ const cambiarEstado = async (req, res) => {
 
         const id_perfil_logueado = req.headers['x-user-profile'];
 
-        // Protección DEV (Root): Nadie (excepto Dev a sí mismo si no estuviera protegido arriba)
         if (parseInt(usuarioTarget.id_perfil) === 1) {
             return res.status(403).json({ success: false, message: 'Acceso Denegado: Este usuario no puede ser eliminado ni desactivado' });
         }
 
-        // Regla: Proteger al administrador de sede (normalmente id 2)
-        // Solo el Desarrollador (1) puede desactivarlo o eliminarlo.
         if (parseInt(usuarioTarget.id_perfil) === 2 && parseInt(estado) !== 1) {
             if (parseInt(id_perfil_logueado) !== 1) {
                 return res.status(400).json({ success: false, message: 'El administrador principal no puede ser desactivado ni eliminado por este nivel de acceso' });

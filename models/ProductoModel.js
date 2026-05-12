@@ -19,7 +19,6 @@ class ProductoModel {
     }
 
     static async findByNombre(nombre) {
-        // Búsqueda case-insensitive para evitar duplicados como "Caja" y "caja"
         const query = `SELECT * FROM productos WHERE LOWER(nombre) = LOWER(?)`;
         const [rows] = await db.query(query, [nombre]);
         return rows[0];

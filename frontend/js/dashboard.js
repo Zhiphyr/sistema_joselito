@@ -39,21 +39,17 @@ async function cargarMenu(id_perfil) {
 
 function construirSidebar(opciones) {
     const menuList = document.getElementById('menuList');
-    menuList.innerHTML = ''; // Limpiar lista inicial
+    menuList.innerHTML = '';
 
     opciones.forEach(opcion => {
         const li = document.createElement('li');
-        
-        // El enlace almacena la ruta en dataset para uso del SPA
+
         const a = document.createElement('a');
         a.className = 'nav-link';
         a.dataset.ruta = opcion.ruta;
-        
-        // Ícono (usa FontAwesome guardado en BD)
         const icon = document.createElement('i');
         icon.className = opcion.icono || 'fas fa-circle';
-        
-        // Texto
+
         const span = document.createElement('span');
         span.textContent = opcion.nombre;
 
@@ -61,39 +57,29 @@ function construirSidebar(opciones) {
         a.appendChild(span);
         li.appendChild(a);
 
-        // Evento SPA: No recarga la página, solo cambia el main container
         a.addEventListener('click', (e) => {
             e.preventDefault();
-            
-            // Gestión visual de 'active'
+
             document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
             a.classList.add('active');
-
-            // Actualizar Título
             document.getElementById('viewTitle').textContent = opcion.nombre;
 
-            // Cargar el componente correspondiente
             cargarVistaSPA(opcion.ruta, opcion.nombre);
         });
 
         menuList.appendChild(li);
     });
 
-    // Auto-click a la primera opción para no ver el panel vacío al entrar
     if (opciones.length > 0) {
         const firstLink = menuList.querySelector('.nav-link');
         if (firstLink) firstLink.click();
     }
 }
 
-// Lógica inicial del SPA para inyectar contenido
 async function cargarVistaSPA(ruta, nombre) {
     const appContent = document.getElementById('app-content');
-    
-    // Destruir instancias previas de DataTables antes de limpiar el DOM
-    // Esto previene el error 'Cannot reinitialise DataTable' y 'Node was not found'
+
     if (window.$ && $.fn && $.fn.DataTable) {
-        // Obtenemos todas las instancias de DataTables y las destruimos adecuadamente
         const api = $.fn.dataTable.tables({ api: true });
         if (api.length > 0) {
             api.destroy();
@@ -101,16 +87,14 @@ async function cargarVistaSPA(ruta, nombre) {
     }
 
     try {
-        // Mostramos un loader mientras carga la vista
         appContent.innerHTML = `
             <div style="display:flex; justify-content:center; padding: 40px;">
                 <i class="fas fa-spinner fa-spin fa-2x" style="color: var(--brand-blue)"></i>
             </div>
         `;
 
-        // Fetch del archivo HTML de la vista
         const response = await fetch(`vistas/${ruta}.html`);
-        
+
         if (!response.ok) {
             throw new Error(`Vista no encontrada: ${ruta}`);
         }
@@ -118,11 +102,8 @@ async function cargarVistaSPA(ruta, nombre) {
         const html = await response.text();
         appContent.innerHTML = html;
 
-        // Ejecutar script asociado a la vista si existe
-        // Verificamos si existe la función init_${ruta}
         const funcName = `init_${ruta}`;
-        
-        // Cargamos el script dinámicamente si no está en el DOM
+
         if (!document.querySelector(`script[src="js/vistas/${ruta}.js"]`)) {
             const script = document.createElement('script');
             script.src = `js/vistas/${ruta}.js`;
@@ -133,7 +114,6 @@ async function cargarVistaSPA(ruta, nombre) {
             };
             document.body.appendChild(script);
         } else {
-            // Si ya está cargado, solo lo ejecutamos
             if (typeof window[funcName] === 'function') {
                 window[funcName]();
             }

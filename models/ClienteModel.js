@@ -35,7 +35,6 @@ class ClienteModel {
     }
 
     static async actualizarCliente(id_cliente, datos) {
-        // En base a la inmutabilidad de los documentos, solo actualizamos el resto
         const { nombre_razon_social, direccion, telefono, correo } = datos;
         const query = `
             UPDATE clientes 

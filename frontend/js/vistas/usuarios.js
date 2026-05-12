@@ -3,7 +3,7 @@ window.usuariosCache = [];
 
 // Función de inicialización exigida por el router SPA
 window.init_usuarios = function () {
-    console.log("Módulo Usuarios inicializado (Vanilla JS)");
+    console.log("Módulo Usuarios inicializado");
 
     cargarTablaUsuarios();
     cargarPerfilesActivos();

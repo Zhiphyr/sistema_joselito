@@ -41,21 +41,19 @@ class PerfilModel {
     static async obtenerOpcionesPorPerfil(id_perfil) {
         const query = `SELECT id_opcion FROM perfil_opcion WHERE id_perfil = ?`;
         const [rows] = await db.query(query, [id_perfil]);
-        // Devolvemos solo un array simple con los IDs
         return rows.map(row => row.id_opcion);
     }
 
     static async guardarPermisos(id_perfil, array_opciones) {
-        // Obtenemos una conexión individual para manejar la transacción
         const connection = await db.getConnection();
-        
+
         try {
             await connection.beginTransaction();
 
             // 1. Eliminar permisos anteriores
             await connection.query(`DELETE FROM perfil_opcion WHERE id_perfil = ?`, [id_perfil]);
 
-            // 2. Insertar los nuevos (si hay alguno)
+            // 2. Insertar los nuevos
             if (array_opciones && array_opciones.length > 0) {
                 const values = array_opciones.map(id_opcion => [id_perfil, id_opcion]);
                 await connection.query(`INSERT INTO perfil_opcion (id_perfil, id_opcion) VALUES ?`, [values]);

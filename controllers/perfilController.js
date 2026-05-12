@@ -22,7 +22,6 @@ const crear = async (req, res) => {
         return res.status(201).json({ success: true, message: 'Perfil creado exitosamente', id });
     } catch (error) {
         console.error('Error en crear perfil:', error);
-        // Manejar duplicados si el nombre es UNIQUE en BD
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ success: false, message: 'Ya existe un perfil con ese nombre' });
         }
@@ -44,7 +43,6 @@ const actualizar = async (req, res) => {
         }
 
         if (parseInt(id) === 2) {
-            // Protección opcional: No dejar cambiar el nombre del admin principal para evitar desastres
             if (nombre.toLowerCase() !== 'administrador') {
                 return res.status(400).json({ success: false, message: 'El nombre del Perfil Administrador Principal no puede ser alterado' });
             }
@@ -64,7 +62,7 @@ const actualizar = async (req, res) => {
 const cambiarEstado = async (req, res) => {
     try {
         const { id } = req.params;
-        const { estado } = req.body; 
+        const { estado } = req.body;
 
         const id_perfil_logueado = req.headers['x-user-profile'];
 
@@ -87,7 +85,6 @@ const cambiarEstado = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Perfil no encontrado' });
         }
     } catch (error) {
-        // Falla si el perfil está asignado a usuarios (restricción RESTRICT de la BD)
         if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.code === 'ER_ROW_IS_REFERENCED') {
             return res.status(400).json({ success: false, message: 'No se puede eliminar: Hay usuarios asignados a este perfil' });
         }
@@ -117,7 +114,7 @@ const listarPermisosDePerfil = async (req, res) => {
 const asignarPermisos = async (req, res) => {
     try {
         const { id } = req.params;
-        const { opciones } = req.body; // Array de IDs de opciones
+        const { opciones } = req.body;
 
         const id_perfil_logueado = req.headers['x-user-profile'];
 

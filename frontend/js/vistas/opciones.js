@@ -2,7 +2,7 @@
 window.opcionesCache = [];
 
 window.init_opciones = function () {
-    console.log("Módulo Opciones inicializado (Vanilla JS)");
+    console.log("Módulo Opciones inicializado");
 
     cargarTablaOpciones();
 

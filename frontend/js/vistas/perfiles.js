@@ -3,7 +3,7 @@ window.perfilesCache = [];
 let todasLasOpciones = [];
 
 window.init_perfiles = function () {
-    console.log("Módulo Perfiles inicializado (Vanilla JS)");
+    console.log("Módulo Perfiles inicializado");
 
     cargarTablaPerfiles();
     cargarOpcionesSistema();

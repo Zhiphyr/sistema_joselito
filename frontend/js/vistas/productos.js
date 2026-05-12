@@ -1,7 +1,7 @@
 window.productosCache = []; // Caché para la edición rápida
 
 window.init_productos = function () {
-    console.log("Módulo Productos inicializado (Vanilla JS)");
+    console.log("Módulo Productos inicializado");
 
     cargarTablaProductos();
 
@@ -11,11 +11,11 @@ window.init_productos = function () {
     document.getElementById('formProducto').addEventListener('submit', guardarProducto);
 
     // Buscador en tiempo real
-    document.getElementById('inputBuscarProducto').addEventListener('keyup', function(e) {
+    document.getElementById('inputBuscarProducto').addEventListener('keyup', function (e) {
         const text = e.target.value.toLowerCase();
         const filas = document.querySelectorAll('#tbody-productos tr');
         filas.forEach(fila => {
-            if(fila.textContent.toLowerCase().includes(text)) {
+            if (fila.textContent.toLowerCase().includes(text)) {
                 fila.style.display = '';
             } else {
                 fila.style.display = 'none';
@@ -27,9 +27,9 @@ window.init_productos = function () {
 async function cargarTablaProductos() {
     const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
     const tbody = document.getElementById('tbody-productos');
-    
+
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Cargando productos...</td></tr>';
-    
+
     try {
         const response = await fetch('http://localhost:3000/api/productos', {
             headers: {
@@ -37,28 +37,28 @@ async function cargarTablaProductos() {
             }
         });
         const result = await response.json();
-        
+
         if (response.ok && result.success) {
             window.productosCache = result.data;
-            
+
             if (result.data.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color: var(--text-muted);">No se encontraron productos</td></tr>';
                 return;
             }
-            
+
             let filasHTML = '';
             result.data.forEach(p => {
-                const badgeEstado = p.estado === 1 
-                    ? '<span class="badge-activo">Activo</span>' 
+                const badgeEstado = p.estado === 1
+                    ? '<span class="badge-activo">Activo</span>'
                     : '<span class="badge-inactivo">Inactivo</span>';
-                
-                const descripcion = p.descripcion 
-                    ? p.descripcion 
+
+                const descripcion = p.descripcion
+                    ? p.descripcion
                     : '<span style="color:#aaa; font-style:italic;">Sin descripción</span>';
-                
+
                 const iconToggle = p.estado === 1 ? 'fa-ban' : 'fa-check';
                 const titleToggle = p.estado === 1 ? 'Desactivar' : 'Activar';
-                
+
                 filasHTML += `
                     <tr class="tabla-tr">
                         <td class="tabla-td tabla-id">${p.id_producto}</td>
@@ -79,7 +79,7 @@ async function cargarTablaProductos() {
                     </tr>
                 `;
             });
-            
+
             tbody.innerHTML = filasHTML;
         } else {
             tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color: red;">Error: ${result.message}</td></tr>`;
@@ -94,7 +94,7 @@ function abrirModalCrearProducto() {
     document.getElementById('formProducto').reset();
     document.getElementById('id_producto').value = '';
     document.getElementById('modalTitle').textContent = 'Nuevo Producto';
-    
+
     // Inmutabilidad del nombre (solo lectura al editar, editable al crear)
     document.getElementById('nombre_producto').readOnly = false;
     document.getElementById('nombre_producto').style.backgroundColor = '#fff';
@@ -127,7 +127,7 @@ async function guardarProducto(e) {
 
     const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
     const id = document.getElementById('id_producto').value;
-    
+
     const nombreInput = document.getElementById('nombre_producto');
     const descripcionInput = document.getElementById('descripcion_producto');
 
@@ -210,7 +210,7 @@ function abrirModalEdicionEspecial(data) {
 
     document.getElementById('modalTitle').textContent = 'Editar y Reactivar Producto';
     document.getElementById('modalProducto').style.display = 'flex';
-    
+
     // Lo activamos silenciosamente
     cambiarEstadoProducto(data.id_producto, 1, true);
 }
