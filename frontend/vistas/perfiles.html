@@ -1,24 +1,34 @@
-<div class="module-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-    <h2>Gestión de Perfiles</h2>
+<div class="module-header">
+    <div>
+        <h2>Gestión de Perfiles</h2>
+        <p>Administra los perfiles y sus accesos al sistema</p>
+    </div>
     <button class="btn-primary" id="btnNuevoPerfil" style="width: auto;">
         <i class="fas fa-plus"></i> Nuevo Perfil
     </button>
 </div>
 
-<div class="welcome-card" style="max-width: 100%;">
-    <table id="tablaPerfiles" class="display" style="width:100%">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Nombre</th>
-                <th>Descripción</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-        </tbody>
-    </table>
+<div class="welcome-card sin-padding">
+
+    <div class="tabla-toolbar">
+        <label for="inputBuscarPerfil">Buscar:</label>
+        <input type="text" id="inputBuscarPerfil" class="form-control" placeholder="Nombre o descripción...">
+    </div>
+
+    <div class="tabla-scroll">
+        <table class="tabla-modulo">
+            <thead>
+                <tr>
+                    <th class="tabla-th" style="width: 60px;">ID</th>
+                    <th class="tabla-th">Nombre</th>
+                    <th class="tabla-th">Descripción</th>
+                    <th class="tabla-th" style="width: 120px;">Estado</th>
+                    <th class="tabla-th" style="width: 200px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-perfiles"></tbody>
+        </table>
+    </div>
 </div>
 
 <!-- Modal 1: CRUD Perfil -->
@@ -31,20 +41,20 @@
         <div class="modal-body">
             <form id="formPerfil">
                 <input type="hidden" id="id_perfil" name="id_perfil">
-                
+
                 <div class="form-group">
-                    <label for="nombre_perfil">Nombre del Perfil</label>
-                    <input type="text" id="nombre_perfil" name="nombre_perfil" class="form-control" required autocomplete="off">
+                    <label for="nombre_perfil">Nombre del Perfil <span class="required">*</span></label>
+                    <input type="text" id="nombre_perfil" name="nombre_perfil" class="form-control" required autocomplete="off" placeholder="Ej. Operador Logístico">
                 </div>
-                
+
                 <div class="form-group">
                     <label for="descripcion_perfil">Descripción (Opcional)</label>
-                    <input type="text" id="descripcion_perfil" name="descripcion_perfil" class="form-control" autocomplete="off">
+                    <input type="text" id="descripcion_perfil" name="descripcion_perfil" class="form-control" autocomplete="off" placeholder="Breve descripción del rol...">
                 </div>
-                
+
                 <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
                     <button type="button" class="btn-secondary" id="btnCancelarModal">Cancelar</button>
-                    <button type="submit" class="btn-primary" style="width: auto;">Guardar</button>
+                    <button type="submit" class="btn-primary" style="width: auto; padding: 10px 24px;">Guardar</button>
                 </div>
             </form>
         </div>
@@ -61,19 +71,18 @@
         <div class="modal-body">
             <form id="formPermisos">
                 <input type="hidden" id="id_perfil_permisos">
-                
+
                 <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">
                     Selecciona las opciones a las que este perfil tendrá acceso en el menú principal.
                 </p>
-                
+
                 <div id="contenedorOpciones" class="opciones-grid">
-                    <!-- Checkboxes dinámicos -->
                     <div style="text-align: center; color: var(--text-muted); grid-column: 1 / -1;"><i class="fas fa-spinner fa-spin"></i> Cargando opciones...</div>
                 </div>
-                
+
                 <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 32px; border-top: 1px solid var(--border-light); padding-top: 20px;">
                     <button type="button" class="btn-secondary" id="btnCancelarModalPermisos">Cancelar</button>
-                    <button type="submit" class="btn-primary" style="width: auto;">Guardar Permisos</button>
+                    <button type="submit" class="btn-primary" style="width: auto; padding: 10px 24px;">Guardar Permisos</button>
                 </div>
             </form>
         </div>
@@ -81,7 +90,6 @@
 </div>
 
 <style>
-/* Grid de opciones para checkboxes estilizados */
 .opciones-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -90,13 +98,8 @@
     overflow-y: auto;
     padding-right: 8px;
 }
-.opciones-grid::-webkit-scrollbar {
-    width: 6px;
-}
-.opciones-grid::-webkit-scrollbar-thumb {
-    background-color: var(--border-light);
-    border-radius: 4px;
-}
+.opciones-grid::-webkit-scrollbar { width: 6px; }
+.opciones-grid::-webkit-scrollbar-thumb { background-color: var(--border-light); border-radius: 4px; }
 .opcion-card {
     border: 1px solid var(--border-light);
     border-radius: var(--radius-md);
@@ -109,15 +112,8 @@
     background: #fafafa;
 }
 .opcion-card:hover { border-color: rgba(15, 76, 129, 0.3); background: #fff; }
-.opcion-card.checked {
-    border-color: var(--brand-blue);
-    background: rgba(15, 76, 129, 0.05);
-}
-.opcion-card input[type="checkbox"] {
-    accent-color: var(--brand-blue);
-    width: 18px; height: 18px;
-    cursor: pointer;
-}
+.opcion-card.checked { border-color: var(--brand-blue); background: rgba(15, 76, 129, 0.05); }
+.opcion-card input[type="checkbox"] { accent-color: var(--brand-blue); width: 18px; height: 18px; cursor: pointer; }
 .opcion-info { display: flex; flex-direction: column; }
 .opcion-info span { font-size: 14px; font-weight: 600; color: var(--text-primary); }
 .opcion-info small { font-size: 11px; color: var(--text-secondary); font-family: monospace; }

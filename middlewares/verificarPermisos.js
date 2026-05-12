@@ -28,7 +28,18 @@ const verificarDeveloper = (req, res, next) => {
     next();
 };
 
+const verificarAuth = (req, res, next) => {
+    const idPerfil = req.headers['x-user-profile'];
+
+    if (!idPerfil) {
+        return res.status(401).json({ success: false, message: 'No autorizado: Falta información de perfil' });
+    }
+
+    next();
+};
+
 module.exports = {
     verificarAdmin,
-    verificarDeveloper
+    verificarDeveloper,
+    verificarAuth
 };

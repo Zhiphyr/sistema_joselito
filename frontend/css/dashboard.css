@@ -230,7 +230,7 @@ body {
     overflow-y: auto;
 }
 
-/* Welcome Card Demo Component */
+/* Welcome Card / Contenedor de módulo */
 .welcome-card {
     background-color: var(--surface-card);
     border-radius: var(--radius-lg);
@@ -238,6 +238,12 @@ body {
     box-shadow: var(--shadow-soft);
     border: 1px solid var(--border-light);
     max-width: 800px;
+}
+
+/* Welcome-card sin padding (para tablas al borde) */
+.welcome-card.sin-padding {
+    padding: 0;
+    max-width: 100%;
 }
 
 .welcome-card h2 {
@@ -251,6 +257,29 @@ body {
     font-size: 14px;
     line-height: 1.5;
     margin-bottom: 16px;
+}
+
+/* ==========================================
+   Module Header
+   ========================================== */
+.module-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.module-header h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.module-header p {
+    color: var(--text-muted);
+    margin-top: 5px;
+    font-size: 14px;
 }
 
 .module-badge {
@@ -389,56 +418,169 @@ body {
 }
 
 /* ==========================================
-   DataTables Customization
+   Sistema de Tabla Modular (Vanilla JS)
    ========================================== */
-table.dataTable.display tbody tr.even>.sorting_1, table.dataTable.order-column.stripe tbody tr.even>.sorting_1, 
-table.dataTable.display tbody tr.odd>.sorting_1, table.dataTable.order-column.stripe tbody tr.odd>.sorting_1 {
-    background-color: transparent !important;
+
+/* Toolbar de búsqueda */
+.tabla-toolbar {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border-subtle, rgba(15,76,129,0.1));
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
-table.dataTable tbody tr {
-    background-color: transparent !important;
+
+.tabla-toolbar label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    margin-bottom: 0;
 }
-table.dataTable {
+
+.tabla-toolbar .form-control {
+    max-width: 280px;
+    margin: 0;
+}
+
+/* Contenedor con scroll horizontal */
+.tabla-scroll {
+    overflow-x: auto;
+}
+
+/* Tabla base */
+.tabla-modulo {
+    width: 100%;
     border-collapse: collapse;
 }
-table.dataTable thead th {
-    border-bottom: 2px solid var(--border-light) !important;
+
+/* Cabecera */
+.tabla-modulo thead tr {
+    background: #f0f6ff;
+}
+
+.tabla-th {
+    padding: 13px 20px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     color: var(--brand-blue);
-    font-weight: 600;
-    font-size: 14px;
-    padding: 12px 10px !important;
+    border-bottom: 2px solid #d0e4ff;
+    white-space: nowrap;
 }
-table.dataTable tbody td {
-    border-bottom: 1px solid var(--border-light) !important;
+
+/* Celda de cuerpo */
+.tabla-td {
+    padding: 14px 20px;
     vertical-align: middle;
+    border-bottom: 1px solid #e8f0fe;
+}
+
+/* Fila con hover */
+.tabla-tr {
+    border-bottom: 1px solid #e8f0fe;
+    transition: background 0.15s;
+}
+
+.tabla-tr:hover {
+    background: #f5f9ff;
+}
+
+/* Variantes de contenido de celda */
+.tabla-id {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.tabla-nombre {
     font-size: 14px;
-    padding: 12px 10px !important;
-}
-table.dataTable.no-footer {
-    border-bottom: 1px solid var(--border-light) !important;
-}
-.dataTables_wrapper .dataTables_filter input {
-    border: 1px solid #cbd5e1;
-    border-radius: var(--radius-md);
-    padding: 6px 12px;
-    margin-left: 8px;
-}
-.dataTables_wrapper .dataTables_paginate .paginate_button.current, .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
-    background: var(--brand-blue) !important;
-    color: white !important;
-    border: 1px solid var(--brand-blue) !important;
-    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-weight: 600;
 }
 
-.badge-activo { background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; display: inline-block; }
-.badge-inactivo { background: #fee2e2; color: #991b1b; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; display: inline-block; }
+.tabla-secundario {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
 
+.tabla-mono {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: #f1f5f9;
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+/* Badge de tipo de documento */
+.badge-tipo-dni {
+    background: #dbeafe;
+    color: #1d4ed8;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-block;
+}
+
+.badge-tipo-ruc {
+    background: #ede9fe;
+    color: #6d28d9;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-block;
+}
+
+/* Badges de estado */
+.badge-activo {
+    background: #dcfce7;
+    color: #166534;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.badge-inactivo {
+    background: #fee2e2;
+    color: #991b1b;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+/* Botones de acción */
 .btn-action {
-    background: none; border: none; padding: 8px; cursor: pointer; margin-right: 4px; border-radius: var(--radius-md); transition: background 0.2s; font-size: 14px;
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    margin-right: 4px;
+    border-radius: var(--radius-md);
+    transition: background 0.2s;
+    font-size: 14px;
 }
+
 .btn-edit { color: var(--brand-blue); }
 .btn-edit:hover { background: var(--brand-blue-light); }
 .btn-toggle { color: #f59e0b; }
 .btn-toggle:hover { background: #fef3c7; }
 .btn-delete { color: #ef4444; }
 .btn-delete:hover { background: #fee2e2; }
+
+/* Fila de estado (loading, vacío, error) */
+.tabla-estado-fila td {
+    text-align: center;
+    padding: 32px;
+    color: var(--text-muted);
+    font-size: 14px;
+}

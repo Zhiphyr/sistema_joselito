@@ -90,6 +90,16 @@ function construirSidebar(opciones) {
 async function cargarVistaSPA(ruta, nombre) {
     const appContent = document.getElementById('app-content');
     
+    // Destruir instancias previas de DataTables antes de limpiar el DOM
+    // Esto previene el error 'Cannot reinitialise DataTable' y 'Node was not found'
+    if (window.$ && $.fn && $.fn.DataTable) {
+        // Obtenemos todas las instancias de DataTables y las destruimos adecuadamente
+        const api = $.fn.dataTable.tables({ api: true });
+        if (api.length > 0) {
+            api.destroy();
+        }
+    }
+
     try {
         // Mostramos un loader mientras carga la vista
         appContent.innerHTML = `

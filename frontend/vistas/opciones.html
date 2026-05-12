@@ -1,25 +1,35 @@
-<div class="module-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-    <h2>Gestión de Opciones</h2>
+<div class="module-header">
+    <div>
+        <h2>Gestión de Opciones</h2>
+        <p>Administra las opciones del menú del sistema</p>
+    </div>
     <button class="btn-primary" id="btnNuevaOpcion" style="width: auto;">
         <i class="fas fa-plus"></i> Nueva Opción
     </button>
 </div>
 
-<div class="welcome-card" style="max-width: 100%;">
-    <table id="tablaOpciones" class="display" style="width:100%">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Ícono</th>
-                <th>Nombre</th>
-                <th>Ruta (SPA)</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-        </tbody>
-    </table>
+<div class="welcome-card sin-padding">
+
+    <div class="tabla-toolbar">
+        <label for="inputBuscarOpcion">Buscar:</label>
+        <input type="text" id="inputBuscarOpcion" class="form-control" placeholder="Nombre o ruta...">
+    </div>
+
+    <div class="tabla-scroll">
+        <table class="tabla-modulo">
+            <thead>
+                <tr>
+                    <th class="tabla-th" style="width: 60px;">ID</th>
+                    <th class="tabla-th" style="width: 70px;">Ícono</th>
+                    <th class="tabla-th">Nombre</th>
+                    <th class="tabla-th">Ruta (SPA)</th>
+                    <th class="tabla-th" style="width: 120px;">Estado</th>
+                    <th class="tabla-th" style="width: 160px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-opciones"></tbody>
+        </table>
+    </div>
 </div>
 
 <!-- Modal CRUD Opción -->
@@ -32,31 +42,33 @@
         <div class="modal-body">
             <form id="formOpcion">
                 <input type="hidden" id="id_opcion" name="id_opcion">
-                
+
                 <div class="form-group">
-                    <label for="nombre_opcion">Nombre de la Opción</label>
-                    <input type="text" id="nombre_opcion" name="nombre_opcion" required autocomplete="off" placeholder="Ej. Reportes">
-                </div>
-                
-                <div class="form-group">
-                    <label for="ruta_opcion">Ruta SPA (sin barra '/')</label>
-                    <input type="text" id="ruta_opcion" name="ruta_opcion" required autocomplete="off" placeholder="Ej. reportes" style="font-family: monospace;">
+                    <label for="nombre_opcion">Nombre de la Opción <span class="required">*</span></label>
+                    <input type="text" id="nombre_opcion" name="nombre_opcion" class="form-control" required autocomplete="off" placeholder="Ej. Reportes">
                 </div>
 
                 <div class="form-group">
-                    <label for="icono_opcion">Clase del Ícono (FontAwesome)</label>
+                    <label for="ruta_opcion">Ruta SPA (sin barra '/') <span class="required">*</span></label>
+                    <input type="text" id="ruta_opcion" name="ruta_opcion" class="form-control" required autocomplete="off" placeholder="Ej. reportes" style="font-family: monospace;">
+                </div>
+
+                <div class="form-group">
+                    <label for="icono_opcion">Clase del Ícono (FontAwesome) <span class="required">*</span></label>
                     <div style="display: flex; gap: 8px;">
-                        <span id="previewIcono" style="display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; background: #fafafa; border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--brand-blue);"><i class="fas fa-cube"></i></span>
-                        <input type="text" id="icono_opcion" name="icono_opcion" required autocomplete="off" placeholder="Ej. fas fa-chart-line" value="fas fa-cube" style="flex: 1;">
+                        <span id="previewIcono" style="display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; background: #fafafa; border: 1px solid var(--border-light); border-radius: var(--radius-md); color: var(--brand-blue); flex-shrink: 0;">
+                            <i class="fas fa-cube"></i>
+                        </span>
+                        <input type="text" id="icono_opcion" name="icono_opcion" class="form-control" required autocomplete="off" placeholder="Ej. fas fa-chart-line" value="fas fa-cube" style="flex: 1; margin: 0;">
                     </div>
                     <small style="color: var(--text-secondary); font-size: 11px; margin-top: 6px; display: block;">
                         Busca íconos gratis en <a href="https://fontawesome.com/v6/search?o=r&m=free" target="_blank" style="color: var(--brand-blue); text-decoration: none; font-weight: 600;">FontAwesome</a>.
                     </small>
                 </div>
-                
+
                 <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
                     <button type="button" class="btn-secondary" id="btnCancelarModal">Cancelar</button>
-                    <button type="submit" class="btn-primary" style="width: auto;">Guardar</button>
+                    <button type="submit" class="btn-primary" style="width: auto; padding: 10px 24px;">Guardar</button>
                 </div>
             </form>
         </div>

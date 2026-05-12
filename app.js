@@ -19,6 +19,8 @@ const menuRoutes = require('./routes/menuRoutes');
 const usuarioRoutes = require('./routes/usuarioRoutes');
 const perfilRoutes = require('./routes/perfilRoutes');
 const opcionRoutes = require('./routes/opcionRoutes');
+const clienteRoutes = require('./routes/clienteRoutes');
+const productoRoutes = require('./routes/productoRoutes');
 
 // Registro de rutas
 app.use('/api/auth', authRoutes);
@@ -26,6 +28,8 @@ app.use('/api/menu', menuRoutes);
 app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/perfiles', perfilRoutes);
 app.use('/api/opciones', opcionRoutes);
+app.use('/api/clientes', clienteRoutes);
+app.use('/api/productos', productoRoutes);
 
 // Ruta de prueba
 app.get('/api/ping', (req, res) => {
