@@ -1,0 +1,227 @@
+const CamionModel = require('../models/CamionModel');
+
+const listarCamiones = async (req, res) => {
+    try {
+        const camiones = await CamionModel.obtenerCamiones();
+        return res.status(200).json({ success: true, data: camiones });
+    } catch (error) {
+        console.error('Error en listarCamiones:', error);
+        return res.status(500).json({ success: false, message: 'Error interno del servidor' });
+    }
+};
+
+const registrar = async (req, res) => {
+    try {
+        const { nombre, placa, tipo_documento, numero_documento, conductor, direccion, telefono } = req.body;
+
+        if (!nombre || !placa || !tipo_documento || !numero_documento || !conductor || !direccion || !telefono) {
+            return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
+        }
+
+        const tipoMin = tipo_documento.toLowerCase();
+        if (tipoMin === 'dni' && numero_documento.length !== 8) {
+            return res.status(400).json({ success: false, message: 'El DNI debe tener 8 dígitos' });
+        }
+        if (tipoMin === 'ruc' && numero_documento.length !== 11) {
+            return res.status(400).json({ success: false, message: 'El RUC debe tener 11 dígitos' });
+        }
+
+        const placaNorm = placa.trim().toUpperCase();
+
+        const existe = await CamionModel.findByPlaca(placaNorm);
+
+        if (existe) {
+            if (existe.estado === 1 || existe.estado === 0) {
+                // Camión activo o inactivo: no se puede duplicar
+                return res.status(400).json({
+                    success: false,
+                    message: `La placa ${placaNorm} ya se encuentra registrada en el sistema`
+                });
+            } else if (existe.estado === 2) {
+                // Camión eliminado: ofrecer reactivación al frontend
+                return res.status(409).json({
+                    success: false,
+                    status: 'deleted_exists',
+                    id_camion: existe.id_camion,
+                    camionInfo: existe,
+                    message: `La placa ${placaNorm} pertenece a un camión que fue eliminado anteriormente`
+                });
+            }
+        }
+
+        const id = await CamionModel.registrarCamion({ 
+            nombre: nombre.trim(), 
+            placa: placaNorm, 
+            tipo_documento, 
+            numero_documento, 
+            conductor: conductor.trim(), 
+            direccion: direccion.trim(), 
+            telefono: telefono.trim() 
+        });
+        return res.status(201).json({ success: true, message: 'Camión registrado exitosamente', id });
+
+    } catch (error) {
+        console.error('Error en registrar camión:', error);
+        return res.status(500).json({ success: false, message: 'Error interno del servidor' });
+    }
+};
+
+const actualizar = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre, tipo_documento, numero_documento, conductor, direccion, telefono } = req.body;
+
+        if (!nombre || !tipo_documento || !numero_documento || !conductor || !direccion || !telefono) {
+            return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
+        }
+
+        const camion = await CamionModel.obtenerCamionPorId(id);
+        if (!camion) {
+            return res.status(404).json({ success: false, message: 'Camión no encontrado' });
+        }
+
+        await CamionModel.actualizarCamion(id, { 
+            nombre: nombre.trim(), 
+            tipo_documento, 
+            numero_documento, 
+            conductor: conductor.trim(), 
+            direccion: direccion.trim(), 
+            telefono: telefono.trim() 
+        });
+        return res.status(200).json({ success: true, message: 'Camión actualizado exitosamente' });
+
+    } catch (error) {
+        console.error('Error en actualizar camión:', error);
+        return res.status(500).json({ success: false, message: 'Error interno del servidor' });
+    }
+};
+
+const reactivar = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre, tipo_documento, numero_documento, conductor, direccion, telefono } = req.body;
+
+        const camion = await CamionModel.obtenerCamionPorId(id);
+        if (!camion) {
+            return res.status(404).json({ success: false, message: 'Camión no encontrado' });
+        }
+
+        if (camion.estado !== 2) {
+            return res.status(400).json({ success: false, message: 'Solo se pueden reactivar camiones eliminados' });
+        }
+
+        await CamionModel.reactivarCamion(id, {
+            nombre: nombre ? nombre.trim() : camion.nombre,
+            tipo_documento: tipo_documento || camion.tipo_documento,
+            numero_documento: numero_documento || camion.numero_documento,
+            conductor: conductor ? conductor.trim() : camion.conductor,
+            direccion: direccion ? direccion.trim() : camion.direccion,
+            telefono: telefono ? telefono.trim() : camion.telefono
+        });
+
+        return res.status(200).json({ success: true, message: 'Camión reactivado exitosamente' });
+
+    } catch (error) {
+        console.error('Error en reactivar camión:', error);
+        return res.status(500).json({ success: false, message: 'Error interno del servidor' });
+    }
+};
+
+const cambiarEstado = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { estado } = req.body;
+
+        const camion = await CamionModel.obtenerCamionPorId(id);
+        if (!camion) {
+            return res.status(404).json({ success: false, message: 'Camión no encontrado' });
+        }
+
+        const afectados = await CamionModel.cambiarEstadoCamion(id, estado);
+
+        if (afectados > 0) {
+            const mensaje =
+                estado === 2 ? 'Camión eliminado del sistema' :
+                estado === 1 ? 'Camión activado exitosamente' :
+                'Camión desactivado exitosamente';
+            return res.status(200).json({ success: true, message: mensaje });
+        } else {
+            return res.status(404).json({ success: false, message: 'No se pudo cambiar el estado' });
+        }
+
+    } catch (error) {
+        console.error('Error en cambiarEstado camión:', error);
+        return res.status(500).json({ success: false, message: 'Error interno del servidor' });
+    }
+};
+
+const consultarDocumento = async (req, res) => {
+    try {
+        const { tipo, numero } = req.params;
+
+        if (!tipo || !numero) {
+            return res.status(400).json({ success: false, message: 'Tipo y número de documento requeridos' });
+        }
+
+        const tipoMin = tipo.toLowerCase();
+        if (tipoMin !== 'dni' && tipoMin !== 'ruc') {
+            return res.status(400).json({ success: false, message: 'Tipo de documento inválido. Use dni o ruc.' });
+        }
+
+        const url = `https://miapi.cloud/v1/${tipoMin}/${numero}`;
+        const token = process.env.MIAPICLOUD_TOKEN;
+
+        if (!token || token === 'coloca_tu_token_aqui_antes_de_usarlo') {
+            return res.status(500).json({ success: false, message: 'El token de MiApiCloud no está configurado.' });
+        }
+
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data && data.success && data.datos) {
+            const datos = data.datos;
+            let nombreCompleto = '';
+            let direccionCompleta = '';
+
+            if (tipoMin === 'ruc') {
+                nombreCompleto = datos.razon_social || '';
+            } else {
+                nombreCompleto = `${datos.nombres || ''} ${datos.ape_paterno || ''} ${datos.ape_materno || ''}`.trim();
+            }
+
+            if (datos.domiciliado) {
+                const dom = datos.domiciliado;
+                let dirParts = [dom.direccion, dom.distrito, dom.provincia, dom.departamento].filter(Boolean);
+                direccionCompleta = dirParts.join(', ');
+            }
+
+            if (!nombreCompleto) {
+                return res.status(404).json({ success: false, message: 'Documento no encontrado o formato desconocido' });
+            }
+
+            return res.status(200).json({ success: true, nombre: nombreCompleto, direccion: direccionCompleta });
+        } else {
+            return res.status(404).json({ success: false, message: 'Documento no encontrado en la base de datos externa' });
+        }
+
+    } catch (error) {
+        console.error('Error en consultarDocumento:', error);
+        return res.status(500).json({ success: false, message: 'Error interno de comunicación externa' });
+    }
+};
+
+module.exports = {
+    listarCamiones,
+    registrar,
+    actualizar,
+    reactivar,
+    cambiarEstado,
+    consultarDocumento
+};

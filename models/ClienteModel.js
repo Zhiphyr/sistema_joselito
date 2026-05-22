@@ -6,7 +6,7 @@ class ClienteModel {
             SELECT id_cliente, tipo_documento, numero_documento, nombre_razon_social, direccion, telefono, correo, estado
             FROM clientes
             WHERE estado IN (0, 1)
-            ORDER BY id_cliente DESC
+            ORDER BY id_cliente ASC
         `;
         const [rows] = await db.query(query);
         return rows;

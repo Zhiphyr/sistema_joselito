@@ -24,7 +24,7 @@ class UsuarioModel {
             FROM usuarios u
             INNER JOIN perfiles p ON u.id_perfil = p.id_perfil
             WHERE u.estado IN (0, 1) AND u.id_perfil != 1
-            ORDER BY u.id_usuario DESC
+            ORDER BY u.id_usuario ASC
         `;
         const [rows] = await db.query(query);
         return rows;

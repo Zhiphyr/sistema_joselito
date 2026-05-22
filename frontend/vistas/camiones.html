@@ -1,0 +1,101 @@
+<div class="module-header">
+    <div>
+        <h2>Gestión de Camiones</h2>
+        <p>Administra las unidades de la flota de transporte</p>
+    </div>
+    <button class="btn-primary" id="btnNuevoCamion" style="width: auto;">
+        <i class="fas fa-plus"></i> Nuevo Camión
+    </button>
+</div>
+
+<div class="welcome-card sin-padding">
+
+    <div class="tabla-toolbar">
+        <label for="inputBuscarCamion">Buscar:</label>
+        <input type="text" id="inputBuscarCamion" class="form-control" placeholder="Placa, nombre o teléfono...">
+    </div>
+
+    <div class="tabla-scroll">
+        <table class="tabla-modulo">
+            <thead>
+                <tr>
+                    <th class="tabla-th" style="width: 60px;">ID</th>
+                    <th class="tabla-th">Nombre / Unidad</th>
+                    <th class="tabla-th" style="width: 140px;">Placa</th>
+                    <th class="tabla-th">Conductor</th>
+                    <th class="tabla-th" style="width: 120px;">Estado</th>
+                    <th class="tabla-th" style="width: 160px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-camiones"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal CRUD Camión -->
+<div id="modalCamion" class="modal-overlay" style="display: none;">
+    <div class="modal-container" style="max-width: 480px;">
+        <div class="modal-header">
+            <h3 id="modalTitleCamion">Nuevo Camión</h3>
+            <button class="btn-close" id="btnCerrarModalCamion"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <form id="formCamion">
+                <input type="hidden" id="id_camion" name="id_camion">
+
+                <div class="form-group">
+                    <label for="nombre_camion">Nombre / Unidad <span class="required">*</span></label>
+                    <input type="text" id="nombre_camion" name="nombre_camion" class="form-control" required
+                        autocomplete="off" placeholder="Ej. Volvo FH 2022 - Blanco">
+                </div>
+
+                <div class="form-group">
+                    <label for="placa_camion">Placa <span class="required">*</span></label>
+                    <input type="text" id="placa_camion" name="placa_camion" class="form-control" required
+                        autocomplete="off" placeholder="Ej. ABC-123"
+                        style="font-family: monospace; text-transform: uppercase; letter-spacing: 0.08em;">
+                </div>
+
+                <div class="form-group">
+                    <label for="telefono_camion">Teléfono de la Unidad <span class="required">*</span></label>
+                    <input type="text" id="telefono_camion" name="telefono_camion" class="form-control" required
+                        autocomplete="off" placeholder="Ej. 987654321">
+                </div>
+
+                <div class="form-group" style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
+                    <div>
+                        <label for="tipo_documento_camion">Tipo <span class="required">*</span></label>
+                        <select id="tipo_documento_camion" name="tipo_documento_camion" class="form-control" required>
+                            <option value="DNI">DNI</option>
+                            <option value="RUC">RUC</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="numero_documento_camion">N° Documento <span class="required">*</span></label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="numero_documento_camion" name="numero_documento_camion" class="form-control" required placeholder="N° Doc" style="flex: 1;">
+                            <button type="button" id="btnBuscarDocCamion" class="btn-primary" style="padding: 0 16px; width: auto;" title="Consultar">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="conductor_camion">Conductor / Razón Social <span class="required">*</span></label>
+                    <input type="text" id="conductor_camion" name="conductor_camion" class="form-control" required readonly placeholder="Autocompletado..." style="background-color: #f1f5f9; cursor: not-allowed;">
+                </div>
+
+                <div class="form-group">
+                    <label for="direccion_camion">Dirección <span class="required">*</span></label>
+                    <input type="text" id="direccion_camion" name="direccion_camion" class="form-control" required readonly placeholder="Autocompletado..." style="background-color: #f1f5f9; cursor: not-allowed;">
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+                    <button type="button" class="btn-secondary" id="btnCancelarModalCamion">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="width: auto; padding: 10px 24px;">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

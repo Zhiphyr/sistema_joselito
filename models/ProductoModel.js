@@ -6,7 +6,7 @@ class ProductoModel {
             SELECT id_producto, nombre, descripcion, estado
             FROM productos
             WHERE estado IN (0, 1)
-            ORDER BY id_producto DESC
+            ORDER BY id_producto ASC
         `;
         const [rows] = await db.query(query);
         return rows;

@@ -1,0 +1,71 @@
+<div class="module-header">
+    <div>
+        <h2>Gestión de Rutas</h2>
+        <p>Administra los trayectos y destinos de operación</p>
+    </div>
+    <button class="btn-primary" id="btnNuevaRuta" style="width: auto;">
+        <i class="fas fa-plus"></i> Nueva Ruta
+    </button>
+</div>
+
+<div class="welcome-card sin-padding">
+
+    <div class="tabla-toolbar">
+        <label for="inputBuscarRuta">Buscar:</label>
+        <input type="text" id="inputBuscarRuta" class="form-control" placeholder="Buscar por origen o destino...">
+    </div>
+
+    <div class="tabla-scroll">
+        <table class="tabla-modulo">
+            <thead>
+                <tr>
+                    <th class="tabla-th" style="width: 60px;">ID</th>
+                    <th class="tabla-th">Trayecto</th>
+                    <th class="tabla-th">Descripción</th>
+                    <th class="tabla-th" style="width: 120px;">Estado</th>
+                    <th class="tabla-th" style="width: 160px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-rutas"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal CRUD Ruta -->
+<div id="modalRuta" class="modal-overlay" style="display: none;">
+    <div class="modal-container" style="max-width: 480px;">
+        <div class="modal-header">
+            <h3 id="modalTitleRuta">Nueva Ruta</h3>
+            <button class="btn-close" id="btnCerrarModalRuta"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <form id="formRuta">
+                <input type="hidden" id="id_ruta" name="id_ruta">
+
+                <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div>
+                        <label for="ciudad_origen_ruta">Ciudad de Origen <span class="required">*</span></label>
+                        <input type="text" id="ciudad_origen_ruta" name="ciudad_origen_ruta" class="form-control" required
+                            autocomplete="off" placeholder="Ej. Lima">
+                    </div>
+                    <div>
+                        <label for="ciudad_destino_ruta">Ciudad de Destino <span class="required">*</span></label>
+                        <input type="text" id="ciudad_destino_ruta" name="ciudad_destino_ruta" class="form-control" required
+                            autocomplete="off" placeholder="Ej. Arequipa">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="descripcion_ruta">Descripción / Puntos de Control</label>
+                    <textarea id="descripcion_ruta" name="descripcion_ruta" class="form-control" rows="3"
+                        placeholder="Ej. Ruta Panamericana Sur, paradas en Ica y Nazca."></textarea>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+                    <button type="button" class="btn-secondary" id="btnCancelarModalRuta">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="width: auto; padding: 10px 24px;">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

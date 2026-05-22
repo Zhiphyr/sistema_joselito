@@ -18,7 +18,7 @@ class OpcionModel {
             SELECT id_opcion, nombre, ruta, icono, estado 
             FROM opciones 
             WHERE estado IN (0, 1) 
-            ORDER BY id_opcion DESC
+            ORDER BY id_opcion ASC
         `;
         const [rows] = await db.query(query);
         return rows;
