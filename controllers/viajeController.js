@@ -26,8 +26,8 @@ const registrarViaje = async (req, res) => {
         if (cargas && cargas.length > 0) {
             for (const carga of cargas) {
                 const sqlCarga = `
-                    INSERT INTO Carga (id_viaje, id_remitente, id_destinatario, flete_total, id_usuario)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO Carga (id_viaje, id_remitente, id_destinatario, flete_total, estado_entrega, id_usuario)
+                    VALUES (?, ?, ?, ?, 'En ruta', ?)
                 `;
                 const [resultCarga] = await connection.query(sqlCarga, [
                     idViajeInsertado,
