@@ -20,6 +20,8 @@ async function init_registro_viajes() {
     // Cargar catálogos (camiones, rutas, clientes, productos activos)
     await cargarCatalogosViajes();
     
+    restaurarEstadoDesdeLocalStorage();
+    
     const btnCrear = document.getElementById('btnCrearNuevoViaje');
     if (btnCrear) {
         btnCrear.addEventListener('click', () => {
@@ -146,7 +148,7 @@ function mostrarPantallaVacia() {
 /**
  * Crea una nueva pestaña y la activa
  */
-function crearNuevaPestaniaViaje() {
+function crearNuevaPestaniaViaje(esRestauracion = false) {
     contadorViajes++;
     const idViaje = `vista-viaje-${contadorViajes}`;
     
@@ -249,8 +251,33 @@ function crearNuevaPestaniaViaje() {
     if (inputFleteGlobal) inputFleteGlobal.addEventListener('input', validarTarifas);
     if (inputTarifa) inputTarifa.addEventListener('input', validarTarifas);
 
+    // Eventos para LocalStorage
+    const inputsAEscuchar = [
+        selectCamion, selectRuta, 
+        divContenido.querySelector('.fecha-salida-input'),
+        inputFleteGlobal, inputTarifa
+    ];
+    inputsAEscuchar.forEach(inp => {
+        if(inp) {
+            inp.addEventListener('change', () => guardarEstadoEnLocalStorage(idViaje));
+            if(inp.type === 'number' || inp.type === 'text' || inp.type === 'date') {
+                inp.addEventListener('input', () => guardarEstadoEnLocalStorage(idViaje));
+            }
+        }
+    });
+
+    if (btnRegistrarViajeFinal) {
+        btnRegistrarViajeFinal.addEventListener('click', function() {
+            registrarViajeBackend(this);
+        });
+    }
+
     // 3. Activar la nueva pestaña
     activarPestania(idViaje);
+    
+    if (!esRestauracion) {
+        guardarEstadoEnLocalStorage(idViaje);
+    }
 }
 
 /**
@@ -286,6 +313,12 @@ function cerrarPestania(id, btnElement) {
     
     // Limpiar memoria
     delete window.cargasPorViaje[id];
+
+    // Limpiar LocalStorage
+    localStorage.removeItem(`joselito_viaje_${id}`);
+    let pestañasActivas = JSON.parse(localStorage.getItem('joselito_pestañas_viajes') || '[]');
+    pestañasActivas = pestañasActivas.filter(p => p !== id);
+    localStorage.setItem('joselito_pestañas_viajes', JSON.stringify(pestañasActivas));
 
     // Destruir botón y formulario del DOM
     btnElement.remove();
@@ -616,6 +649,7 @@ function guardarCargaEnMemoria() {
 
         cerrarModalNuevaCarga();
         renderizarCargasViaje(idViajeActual);
+        guardarEstadoEnLocalStorage(idViajeActual);
     };
 
     if (productoConPerdida !== null) {
@@ -783,6 +817,7 @@ function eliminarCargaDeMemoria(idViaje, idCargaTemp) {
                 if (window.cargasPorViaje[idViaje]) {
                     window.cargasPorViaje[idViaje] = window.cargasPorViaje[idViaje].filter(c => c.id_carga_temp !== idCargaTemp);
                     renderizarCargasViaje(idViaje);
+                    guardarEstadoEnLocalStorage(idViaje);
                 }
             }
         });
@@ -791,6 +826,7 @@ function eliminarCargaDeMemoria(idViaje, idCargaTemp) {
             if (window.cargasPorViaje[idViaje]) {
                 window.cargasPorViaje[idViaje] = window.cargasPorViaje[idViaje].filter(c => c.id_carga_temp !== idCargaTemp);
                 renderizarCargasViaje(idViaje);
+                guardarEstadoEnLocalStorage(idViaje);
             }
         }
     }
@@ -829,6 +865,136 @@ function editarCargaDeMemoria(idViaje, idCargaTemp) {
 
     // Mostrar Modal
     document.getElementById('modalNuevaCarga').style.display = 'flex';
+}
+
+/* ==========================================================
+   PERSISTENCIA (LOCALSTORAGE) Y BACKEND (REGISTRO FINAL)
+   ========================================================== */
+
+function guardarEstadoEnLocalStorage(idViaje) {
+    const vista = document.getElementById(idViaje);
+    if (!vista) return;
+
+    const data = {
+        idViaje: idViaje,
+        camion: vista.querySelector('.select-camion') ? vista.querySelector('.select-camion').value : '',
+        ruta: vista.querySelector('.select-ruta') ? vista.querySelector('.select-ruta').value : '',
+        fecha_salida: vista.querySelector('.fecha-salida-input') ? vista.querySelector('.fecha-salida-input').value : '',
+        flete_global: vista.querySelector('.flete-global-input') ? vista.querySelector('.flete-global-input').value : '',
+        tarifa_transportista: vista.querySelector('.tarifa-transportista-input') ? vista.querySelector('.tarifa-transportista-input').value : '',
+        cargas: window.cargasPorViaje[idViaje] || []
+    };
+
+    localStorage.setItem(`joselito_viaje_${idViaje}`, JSON.stringify(data));
+    
+    let pestañasActivas = JSON.parse(localStorage.getItem('joselito_pestañas_viajes') || '[]');
+    if (!pestañasActivas.includes(idViaje)) {
+        pestañasActivas.push(idViaje);
+        localStorage.setItem('joselito_pestañas_viajes', JSON.stringify(pestañasActivas));
+    }
+}
+
+function restaurarEstadoDesdeLocalStorage() {
+    const pestañasActivas = JSON.parse(localStorage.getItem('joselito_pestañas_viajes') || '[]');
+    
+    if (pestañasActivas.length > 0) {
+        mostrarPantallaInicioViaje();
+        
+        let maxContador = 0;
+        
+        pestañasActivas.forEach(idViaje => {
+            const dataStr = localStorage.getItem(`joselito_viaje_${idViaje}`);
+            if (dataStr) {
+                const data = JSON.parse(dataStr);
+                
+                const num = parseInt(idViaje.replace('vista-viaje-', ''));
+                if (num > maxContador) maxContador = num;
+                
+                contadorViajes = num - 1; 
+                crearNuevaPestaniaViaje(true); 
+                
+                const vista = document.getElementById(idViaje);
+                if (vista) {
+                    if(data.camion) vista.querySelector('.select-camion').value = data.camion;
+                    if(data.ruta) vista.querySelector('.select-ruta').value = data.ruta;
+                    if(data.fecha_salida) vista.querySelector('.fecha-salida-input').value = data.fecha_salida;
+                    if(data.flete_global) vista.querySelector('.flete-global-input').value = data.flete_global;
+                    if(data.tarifa_transportista) vista.querySelector('.tarifa-transportista-input').value = data.tarifa_transportista;
+                    
+                    window.cargasPorViaje[idViaje] = data.cargas || [];
+                    renderizarCargasViaje(idViaje);
+                    
+                    if (data.flete_global) {
+                        vista.querySelector('.flete-global-input').dispatchEvent(new Event('input'));
+                    }
+                }
+            }
+        });
+        
+        contadorViajes = maxContador;
+        activarPestania(pestañasActivas[pestañasActivas.length - 1]);
+    }
+}
+
+async function registrarViajeBackend(btn) {
+    const idViaje = btn.closest('.vista-viaje').id;
+    const vista = document.getElementById(idViaje);
+    
+    const camion = vista.querySelector('.select-camion').value;
+    const ruta = vista.querySelector('.select-ruta').value;
+    const fecha_salida = vista.querySelector('.fecha-salida-input').value;
+    const flete_global = vista.querySelector('.flete-global-input').value;
+    const tarifa_transportista = vista.querySelector('.tarifa-transportista-input').value;
+    const cargas = window.cargasPorViaje[idViaje] || [];
+
+    if (!camion || !ruta || !fecha_salida || !flete_global || !tarifa_transportista) {
+        Swal.fire({ icon: 'warning', title: 'Datos incompletos', text: 'Por favor, llene todos los campos de Detalles del Viaje.' });
+        return;
+    }
+    
+    if (cargas.length === 0) {
+        Swal.fire({ icon: 'warning', title: 'Sin cargas', text: 'Agregue al menos una carga al viaje.' });
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i> Procesando...';
+    
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const res = await fetch('/api/viajes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-user-profile': sessionData.id_perfil || 1
+            },
+            body: JSON.stringify({
+                camion,
+                ruta,
+                fecha_salida,
+                flete_global,
+                tarifa_transportista,
+                cargas
+            })
+        });
+        
+        const data = await res.json();
+        if (res.ok && data.success) {
+            Swal.fire({ icon: 'success', title: 'Viaje Registrado', text: 'El viaje ha sido guardado exitosamente en el sistema.' }).then(() => {
+                const tabBtn = document.querySelector(`.tab-btn[data-target-id="${idViaje}"]`);
+                if(tabBtn) cerrarPestania(idViaje, tabBtn);
+            });
+        } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: data.message || 'Error al registrar el viaje.' });
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check" style="margin-right: 8px;"></i> Registrar Viaje';
+        }
+    } catch (error) {
+        console.error('Error al registrar viaje:', error);
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo comunicar con el servidor.' });
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check" style="margin-right: 8px;"></i> Registrar Viaje';
+    }
 }
 
 // Hacer disponible globalmente

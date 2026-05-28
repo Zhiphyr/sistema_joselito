@@ -23,6 +23,7 @@ const clienteRoutes = require('./routes/clienteRoutes');
 const productoRoutes = require('./routes/productoRoutes');
 const camionRoutes = require('./routes/camionRoutes');
 const rutaRoutes = require('./routes/rutaRoutes');
+const viajeRoutes = require('./routes/viajeRoutes');
 
 // Registro de rutas
 app.use('/api/auth', authRoutes);
@@ -34,6 +35,7 @@ app.use('/api/clientes', clienteRoutes);
 app.use('/api/productos', productoRoutes);
 app.use('/api/camiones', camionRoutes);
 app.use('/api/rutas', rutaRoutes);
+app.use('/api/viajes', viajeRoutes);
 
 // Ruta de prueba
 app.get('/api/ping', (req, res) => {
