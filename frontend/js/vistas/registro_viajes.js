@@ -7,6 +7,7 @@ window.opcionesProductos = [];
 // Estado en memoria de las cargas por cada viaje activo. Formato: { "vista-viaje-1": [ { ...carga1 }, { ...carga2 } ] }
 window.cargasPorViaje = {};
 window.idViajeModalActivo = null;
+window.idCargaEditandoActiva = null;
 
 /**
  * Inicializador de la vista Registro de Viajes
@@ -211,6 +212,43 @@ function crearNuevaPestaniaViaje() {
 
     contenedorPestanias.appendChild(clone);
 
+    // Eventos para Validación en Vivo de Tarifas
+    const inputFleteGlobal = divContenido.querySelector('.flete-global-input');
+    const inputTarifa = divContenido.querySelector('.tarifa-transportista-input');
+    const msgError = divContenido.querySelector('.error-tarifa-msg');
+    const btnRegistrarViajeFinal = divContenido.querySelector('.btn-registrar-viaje-final');
+
+    const validarTarifas = () => {
+        const fg = parseFloat(inputFleteGlobal.value);
+        const tt = parseFloat(inputTarifa.value);
+
+        // Actualización reactiva de totales financieros si cambia la tarifa
+        const cargas = window.cargasPorViaje[idViaje] || [];
+        actualizarTotalesGenerales(divContenido, cargas);
+
+        if (!isNaN(fg) && !isNaN(tt)) {
+            if (tt >= fg) {
+                msgError.style.display = 'block';
+                btnRegistrarViajeFinal.disabled = true;
+                btnRegistrarViajeFinal.style.opacity = '0.5';
+                btnRegistrarViajeFinal.style.cursor = 'not-allowed';
+            } else {
+                msgError.style.display = 'none';
+                btnRegistrarViajeFinal.disabled = false;
+                btnRegistrarViajeFinal.style.opacity = '1';
+                btnRegistrarViajeFinal.style.cursor = 'pointer';
+            }
+        } else {
+            msgError.style.display = 'none';
+            btnRegistrarViajeFinal.disabled = false;
+            btnRegistrarViajeFinal.style.opacity = '1';
+            btnRegistrarViajeFinal.style.cursor = 'pointer';
+        }
+    };
+
+    if (inputFleteGlobal) inputFleteGlobal.addEventListener('input', validarTarifas);
+    if (inputTarifa) inputTarifa.addEventListener('input', validarTarifas);
+
     // 3. Activar la nueva pestaña
     activarPestania(idViaje);
 }
@@ -280,6 +318,7 @@ function abrirModalNuevaCarga(btnElement) {
     if (!vistaViaje) return;
     
     window.idViajeModalActivo = vistaViaje.id;
+    window.idCargaEditandoActiva = null; // Modo creación
 
     // 2. Leer Flete Global
     const inputFleteGlobal = vistaViaje.querySelector('.flete-global-input');
@@ -295,7 +334,22 @@ function abrirModalNuevaCarga(btnElement) {
         return;
     }
 
+    // 2.5 Leer Tarifa Transportista
+    const inputTarifaTransp = vistaViaje.querySelector('.tarifa-transportista-input');
+    const tarifaTransp = parseFloat(inputTarifaTransp.value);
+
+    if (isNaN(tarifaTransp) || tarifaTransp <= 0) {
+        if (window.Swal) {
+            Swal.fire({ icon: 'warning', title: 'Atención', text: 'Por favor, defina la Tarifa del Transportista antes de registrar cargas.' });
+        } else {
+            alert('Por favor, defina la Tarifa del Transportista antes de registrar cargas.');
+        }
+        inputTarifaTransp.focus();
+        return;
+    }
+
     // 3. Preparar UI del modal
+    document.querySelector('#modalNuevaCarga h3').textContent = "Registrar Nueva Carga";
     document.getElementById('texto-flete-global-modal').textContent = `S/ ${fleteGlobal.toFixed(2)}`;
     document.getElementById('select-remitente-modal').value = '';
     document.getElementById('select-destinatario-modal').value = '';
@@ -313,9 +367,10 @@ function abrirModalNuevaCarga(btnElement) {
 function cerrarModalNuevaCarga() {
     document.getElementById('modalNuevaCarga').style.display = 'none';
     window.idViajeModalActivo = null;
+    window.idCargaEditandoActiva = null;
 }
 
-function agregarBloqueProducto() {
+function agregarBloqueProducto(prodInicial = null) {
     const contenedor = document.getElementById('contenedor-items-carga');
     const idBloque = 'bloque-prod-' + Date.now() + Math.floor(Math.random() * 100);
 
@@ -332,7 +387,7 @@ function agregarBloqueProducto() {
                 <i class="fas fa-trash-alt"></i>
             </button>
 
-            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div style="display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
                 <div class="form-group" style="margin-bottom: 0;">
                     <label style="font-size: 12px;">Producto</label>
                     <select class="form-control prod-select" required>
@@ -340,11 +395,15 @@ function agregarBloqueProducto() {
                     </select>
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 12px;">Marca Visual (Saco)</label>
+                    <input type="text" class="form-control prod-marca" placeholder="Ej. Marca Azul" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
                     <label style="font-size: 12px;">Cantidad</label>
                     <input type="number" min="1" step="1" class="form-control prod-cant" placeholder="0" required>
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
-                    <label style="font-size: 12px;">Peso x Unid. (kg)</label>
+                    <label style="font-size: 12px;">Peso x U. (kg)</label>
                     <input type="number" min="0.01" step="0.01" class="form-control prod-peso" placeholder="0.00" required>
                 </div>
             </div>
@@ -383,8 +442,25 @@ function agregarBloqueProducto() {
     
     const inputCant = bloqueEl.querySelector('.prod-cant');
     const inputPeso = bloqueEl.querySelector('.prod-peso');
+    const inputMarca = bloqueEl.querySelector('.prod-marca');
     const checkFlete = bloqueEl.querySelector('.prod-check-flete');
     const inputFleteCustom = bloqueEl.querySelector('.prod-flete-custom');
+
+    // Poblar si es edición
+    if (prodInicial) {
+        const selectEl = bloqueEl.querySelector('.prod-select');
+        selectEl.value = prodInicial.id_producto;
+        inputMarca.value = prodInicial.marca_visual || '';
+        inputCant.value = prodInicial.cantidad;
+        inputPeso.value = prodInicial.peso_unidad;
+        
+        if (prodInicial.es_personalizado) {
+            checkFlete.checked = true;
+            inputFleteCustom.disabled = false;
+            inputFleteCustom.required = true;
+            inputFleteCustom.value = prodInicial.tarifa_flete;
+        }
+    }
 
     const inputsReactivoss = [inputCant, inputPeso, inputFleteCustom];
     inputsReactivoss.forEach(inp => inp.addEventListener('input', () => calcularTotalesBloque(bloqueEl)));
@@ -400,6 +476,9 @@ function agregarBloqueProducto() {
         }
         calcularTotalesBloque(bloqueEl);
     });
+
+    // Calcular inicial
+    calcularTotalesBloque(bloqueEl);
 }
 
 function eliminarBloqueProducto(idBloque) {
@@ -459,14 +538,19 @@ function guardarCargaEnMemoria() {
     let hayErrores = false;
     let sumaPesoTotal = 0;
     let sumaFleteTotal = 0;
+    
+    const vistaViaje = document.getElementById(window.idViajeModalActivo);
+    const tarifaTransportista = parseFloat(vistaViaje.querySelector('.tarifa-transportista-input').value) || 0;
+    let productoConPerdida = null;
 
     bloques.forEach(b => {
         const idProd = b.querySelector('.prod-select').value;
         const nombreProd = b.querySelector('.prod-select').options[b.querySelector('.prod-select').selectedIndex].text;
+        const marca = b.querySelector('.prod-marca').value.trim();
         const cant = parseFloat(b.querySelector('.prod-cant').value);
         const pesoU = parseFloat(b.querySelector('.prod-peso').value);
 
-        if (!idProd || isNaN(cant) || cant <= 0 || isNaN(pesoU) || pesoU <= 0) {
+        if (!idProd || !marca || isNaN(cant) || cant <= 0 || isNaN(pesoU) || pesoU <= 0) {
             hayErrores = true;
         } else {
             const pesoTot = parseFloat(b.dataset.pesoTotal || 0);
@@ -475,12 +559,17 @@ function guardarCargaEnMemoria() {
 
             const isCustom = b.querySelector('.prod-check-flete').checked;
 
+            if (isCustom && tarifa < tarifaTransportista) {
+                productoConPerdida = tarifa;
+            }
+
             sumaPesoTotal += pesoTot;
             sumaFleteTotal += fleteTot;
 
             productos.push({
                 id_producto: idProd,
                 nombre_producto: nombreProd,
+                marca_visual: marca,
                 cantidad: cant,
                 peso_unidad: pesoU,
                 peso_total: pesoTot,
@@ -492,34 +581,67 @@ function guardarCargaEnMemoria() {
     });
 
     if (hayErrores) {
-        Swal.fire({ icon: 'error', title: 'Datos inválidos', text: 'Revise que todos los productos seleccionados tengan cantidad y peso mayor a cero.' });
+        Swal.fire({ icon: 'error', title: 'Datos inválidos', text: 'Revise que todos los productos seleccionados tengan marca visual, cantidad y peso mayor a cero.' });
         return;
     }
 
-    const remNombre = document.getElementById('select-remitente-modal').options[document.getElementById('select-remitente-modal').selectedIndex].text;
-    const destNombre = document.getElementById('select-destinatario-modal').options[document.getElementById('select-destinatario-modal').selectedIndex].text;
+    const procesarGuardado = () => {
+        const remNombre = document.getElementById('select-remitente-modal').options[document.getElementById('select-remitente-modal').selectedIndex].text;
+        const destNombre = document.getElementById('select-destinatario-modal').options[document.getElementById('select-destinatario-modal').selectedIndex].text;
 
-    const nuevaCarga = {
-        id_carga_temp: 'carga-' + Date.now(),
-        id_remitente: idRemitente,
-        nombre_remitente: remNombre,
-        id_destinatario: idDestinatario,
-        nombre_destinatario: destNombre,
-        productos: productos,
-        resumen: {
-            total_peso: sumaPesoTotal,
-            total_flete: sumaFleteTotal
+        const nuevaCarga = {
+            id_carga_temp: 'carga-' + Date.now(),
+            id_remitente: idRemitente,
+            nombre_remitente: remNombre,
+            id_destinatario: idDestinatario,
+            nombre_destinatario: destNombre,
+            productos: productos,
+            resumen: {
+                total_peso: sumaPesoTotal,
+                total_flete: sumaFleteTotal
+            }
+        };
+
+        const idViajeActual = window.idViajeModalActivo;
+        
+        if (window.idCargaEditandoActiva) {
+            const index = window.cargasPorViaje[idViajeActual].findIndex(c => c.id_carga_temp === window.idCargaEditandoActiva);
+            if (index !== -1) {
+                nuevaCarga.id_carga_temp = window.idCargaEditandoActiva;
+                window.cargasPorViaje[idViajeActual][index] = nuevaCarga;
+            }
+        } else {
+            window.cargasPorViaje[idViajeActual].push(nuevaCarga);
         }
+
+        cerrarModalNuevaCarga();
+        renderizarCargasViaje(idViajeActual);
     };
 
-    // Guardar en memoria
-    const idViajeActual = window.idViajeModalActivo;
-    window.cargasPorViaje[idViajeActual].push(nuevaCarga);
-
-    cerrarModalNuevaCarga();
-    
-    // Renderizar
-    renderizarCargasViaje(idViajeActual);
+    if (productoConPerdida !== null) {
+        if (window.Swal) {
+            Swal.fire({
+                title: 'Atención',
+                text: `El flete personalizado (S/ ${productoConPerdida.toFixed(2)}) es menor al costo del transportista (S/ ${tarifaTransportista.toFixed(2)}). Este producto generará pérdidas. ¿Desea registrarlo de todos modos?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Sí, registrar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    procesarGuardado();
+                }
+            });
+        } else {
+            if (confirm(`Atención: El flete personalizado (S/ ${productoConPerdida.toFixed(2)}) es menor al costo del transportista (S/ ${tarifaTransportista.toFixed(2)}). Este producto generará pérdidas. ¿Desea registrarlo de todos modos?`)) {
+                procesarGuardado();
+            }
+        }
+    } else {
+        procesarGuardado();
+    }
 }
 
 function renderizarCargasViaje(idViaje) {
@@ -551,6 +673,7 @@ function renderizarCargasViaje(idViaje) {
             tbodyHtml += `
                 <tr style="border-bottom: 1px solid var(--border-light);">
                     <td style="padding: 14px 16px; font-size: 13px; font-weight: 600; color: var(--text-primary); text-transform: uppercase;">${p.nombre_producto}${badgePersonalizado}</td>
+                    <td style="padding: 14px 16px; font-size: 13px; color: var(--text-secondary);">${p.marca_visual}</td>
                     <td style="padding: 14px 16px; font-size: 13px; text-align: center; color: var(--text-secondary);">${p.cantidad}</td>
                     <td style="padding: 14px 16px; font-size: 13px; text-align: right; color: var(--text-secondary);">${p.peso_unidad.toFixed(0)} kg</td>
                     <td style="padding: 14px 16px; font-size: 13px; text-align: right; font-weight: 700; color: var(--text-primary);">${p.peso_total.toFixed(2)} kg</td>
@@ -568,8 +691,8 @@ function renderizarCargasViaje(idViaje) {
                         ${carga.nombre_remitente} <span style="color: var(--text-muted); margin: 0 12px;">&rarr;</span> ${carga.nombre_destinatario}
                     </div>
                     <div>
-                        <button class="btn-action btn-edit" title="Editar" style="color: var(--text-muted);"><i class="fas fa-pencil-alt"></i></button>
-                        <button class="btn-action btn-delete" title="Eliminar" style="color: var(--text-muted);"><i class="fas fa-trash-alt"></i></button>
+                        <button class="btn-action btn-edit" onclick="editarCargaDeMemoria('${idViaje}', '${carga.id_carga_temp}')" title="Editar" style="color: var(--text-muted); cursor: pointer;"><i class="fas fa-pencil-alt"></i></button>
+                        <button class="btn-action btn-delete" onclick="eliminarCargaDeMemoria('${idViaje}', '${carga.id_carga_temp}')" title="Eliminar" style="color: var(--text-muted); cursor: pointer;"><i class="fas fa-trash-alt"></i></button>
                     </div>
                 </div>
                 
@@ -578,6 +701,7 @@ function renderizarCargasViaje(idViaje) {
                         <thead style="border-bottom: 1px solid var(--border-light);">
                             <tr>
                                 <th style="padding: 12px 16px; text-align: left; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Producto</th>
+                                <th style="padding: 12px 16px; text-align: left; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Marca Visual</th>
                                 <th style="padding: 12px 16px; text-align: center; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Cant.</th>
                                 <th style="padding: 12px 16px; text-align: right; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Peso (u)</th>
                                 <th style="padding: 12px 16px; text-align: right; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Kilos Tot.</th>
@@ -590,7 +714,7 @@ function renderizarCargasViaje(idViaje) {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td style="padding: 16px; text-align: left; font-size: 14px; font-weight: 700; color: var(--text-primary);">Totales de Carga</td>
+                                <td colspan="2" style="padding: 16px; text-align: left; font-size: 14px; font-weight: 700; color: var(--text-primary);">Totales de Carga</td>
                                 <td style="padding: 16px; text-align: center; font-size: 14px; font-weight: 700; color: var(--brand-blue);">${totalCant} und</td>
                                 <td></td>
                                 <td style="padding: 16px; text-align: right; font-size: 14px; font-weight: 700; color: var(--brand-blue);">${carga.resumen.total_peso.toFixed(2)} kg</td>
@@ -618,11 +742,19 @@ function actualizarTotalesGenerales(vista, listaCargas) {
         fleteTotalViaje += c.resumen.total_flete;
     });
 
+    const tarifaTransp = parseFloat(vista.querySelector('.tarifa-transportista-input').value) || 0;
+    const pagoTransportista = pesoTotalViaje * tarifaTransp;
+    const ganancia = fleteTotalViaje - pagoTransportista;
+
     const spanPeso = vista.querySelector('.texto-peso-total-viaje');
     const spanFlete = vista.querySelector('.texto-flete-total-viaje');
+    const spanPago = vista.querySelector('.texto-pago-transportista');
+    const spanGanancia = vista.querySelector('.texto-ganancia-proyectada');
     
     if (spanPeso) spanPeso.textContent = pesoTotalViaje.toFixed(2);
     if (spanFlete) spanFlete.textContent = fleteTotalViaje.toFixed(2);
+    if (spanPago) spanPago.textContent = pagoTransportista.toFixed(2);
+    if (spanGanancia) spanGanancia.textContent = ganancia.toFixed(2);
 
     const badgeContador = vista.querySelector('.badge-contador-cargas');
     if (badgeContador) {
@@ -633,6 +765,70 @@ function actualizarTotalesGenerales(vista, listaCargas) {
             badgeContador.style.display = 'none';
         }
     }
+}
+
+function eliminarCargaDeMemoria(idViaje, idCargaTemp) {
+    if (window.Swal) {
+        Swal.fire({
+            title: '¿Eliminar carga?',
+            text: "Se quitará esta carga del viaje actual",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                if (window.cargasPorViaje[idViaje]) {
+                    window.cargasPorViaje[idViaje] = window.cargasPorViaje[idViaje].filter(c => c.id_carga_temp !== idCargaTemp);
+                    renderizarCargasViaje(idViaje);
+                }
+            }
+        });
+    } else {
+        if (confirm("¿Estás seguro de eliminar esta carga?")) {
+            if (window.cargasPorViaje[idViaje]) {
+                window.cargasPorViaje[idViaje] = window.cargasPorViaje[idViaje].filter(c => c.id_carga_temp !== idCargaTemp);
+                renderizarCargasViaje(idViaje);
+            }
+        }
+    }
+}
+
+function editarCargaDeMemoria(idViaje, idCargaTemp) {
+    const vistaViaje = document.getElementById(idViaje);
+    if (!vistaViaje) return;
+
+    // Buscar la carga en memoria
+    const listaCargas = window.cargasPorViaje[idViaje] || [];
+    const cargaAEditar = listaCargas.find(c => c.id_carga_temp === idCargaTemp);
+    if (!cargaAEditar) return;
+
+    // Preparar estado
+    window.idViajeModalActivo = idViaje;
+    window.idCargaEditandoActiva = idCargaTemp; 
+
+    // Leer Flete Global
+    const inputFleteGlobal = vistaViaje.querySelector('.flete-global-input');
+    const fleteGlobal = parseFloat(inputFleteGlobal.value) || 0;
+
+    // Preparar UI del modal
+    document.querySelector('#modalNuevaCarga h3').textContent = "Editar Carga";
+    document.getElementById('texto-flete-global-modal').textContent = `S/ ${fleteGlobal.toFixed(2)}`;
+    document.getElementById('select-remitente-modal').value = cargaAEditar.id_remitente;
+    document.getElementById('select-destinatario-modal').value = cargaAEditar.id_destinatario;
+    
+    const contenedorItems = document.getElementById('contenedor-items-carga');
+    contenedorItems.innerHTML = ''; // Limpiar bloques anteriores
+
+    // Inyectar bloques con los datos existentes
+    cargaAEditar.productos.forEach(prod => {
+        agregarBloqueProducto(prod);
+    });
+
+    // Mostrar Modal
+    document.getElementById('modalNuevaCarga').style.display = 'flex';
 }
 
 // Hacer disponible globalmente
@@ -646,3 +842,5 @@ window.cerrarModalNuevaCarga = cerrarModalNuevaCarga;
 window.agregarBloqueProducto = agregarBloqueProducto;
 window.eliminarBloqueProducto = eliminarBloqueProducto;
 window.guardarCargaEnMemoria = guardarCargaEnMemoria;
+window.eliminarCargaDeMemoria = eliminarCargaDeMemoria;
+window.editarCargaDeMemoria = editarCargaDeMemoria;
