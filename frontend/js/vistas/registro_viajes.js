@@ -260,7 +260,7 @@ function crearNuevaPestaniaViaje(esRestauracion = false) {
     inputsAEscuchar.forEach(inp => {
         if(inp) {
             inp.addEventListener('change', () => guardarEstadoEnLocalStorage(idViaje));
-            if(inp.type === 'number' || inp.type === 'text' || inp.type === 'date') {
+            if(inp.type === 'number' || inp.type === 'text' || inp.type === 'datetime-local') {
                 inp.addEventListener('input', () => guardarEstadoEnLocalStorage(idViaje));
             }
         }
