@@ -26,14 +26,23 @@ async function init_historial_viajes() {
                 const idViaje = e.target.getAttribute('data-id');
                 abrirModalDetallesViaje(idViaje);
             }
+            if (e.target.classList.contains('btn-ver-cargas')) {
+                const idViaje = e.target.getAttribute('data-id');
+                abrirModalCargasViaje(idViaje);
+            }
         });
     }
 
-    // Eventos para cerrar el modal de detalles
+    // Eventos para cerrar los modales
     document.getElementById('btn-cerrar-modal-x')?.addEventListener('click', cerrarModalDetallesViaje);
     document.getElementById('btn-cerrar-modal-btn')?.addEventListener('click', cerrarModalDetallesViaje);
     document.getElementById('modal-detalles-viaje')?.addEventListener('click', (e) => {
         if(e.target.id === 'modal-detalles-viaje') cerrarModalDetallesViaje();
+    });
+
+    document.getElementById('btn-cerrar-modal-cargas-x')?.addEventListener('click', cerrarModalCargasViaje);
+    document.getElementById('modal-cargas-viaje')?.addEventListener('click', (e) => {
+        if(e.target.id === 'modal-cargas-viaje') cerrarModalCargasViaje();
     });
     
     await cargarHistorialViajes();
@@ -94,6 +103,120 @@ function abrirModalDetallesViaje(idStr) {
 
 function cerrarModalDetallesViaje() {
     document.getElementById('modal-detalles-viaje').style.display = 'none';
+}
+
+async function abrirModalCargasViaje(idStr) {
+    const idViaje = Number(idStr);
+    const modalCargas = document.getElementById('modal-cargas-viaje');
+    const modalBody = document.getElementById('modal-cargas-body');
+    
+    document.getElementById('modal-cargas-titulo').textContent = `Cargas del Viaje #${idViaje}`;
+    document.getElementById('modal-cargas-subtitulo').textContent = `Total de cargas registradas: Cargando...`;
+    modalBody.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+    
+    modalCargas.style.display = 'flex';
+
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const response = await fetch(`/api/viajes/${idViaje}/cargas`, {
+            headers: { 'x-user-profile': sessionData.id_perfil || 1 }
+        });
+        const res = await response.json();
+
+        if (response.ok && res.success) {
+            const cargas = res.data;
+            document.getElementById('modal-cargas-subtitulo').textContent = `Total de cargas registradas: ${cargas.length}`;
+            
+            if (cargas.length === 0) {
+                modalBody.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">No hay cargas asociadas a este viaje.</div>';
+                return;
+            }
+
+            let htmlContent = '';
+
+            cargas.forEach((carga, index) => {
+                let totalSacos = 0;
+                let totalKilos = 0;
+                let totalFlete = 0;
+
+                let filasProductos = '';
+                if (carga.detalles && carga.detalles.length > 0) {
+                    carga.detalles.forEach(prod => {
+                        totalSacos += Number(prod.cantidad_sacos);
+                        totalKilos += Number(prod.peso_total);
+                        totalFlete += Number(prod.flete_subtotal);
+
+                        filasProductos += `
+                            <tr>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-weight: 600; color: var(--text-primary); white-space: nowrap;">${prod.producto || '-'}</td>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; color: var(--text-secondary); white-space: nowrap;">${prod.marca_visual || 'Sin Marca'}</td>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; white-space: nowrap;">${prod.cantidad_sacos}</td>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; white-space: nowrap;">${prod.peso_unitario} kg</td>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; font-weight: 700; color: var(--text-primary); white-space: nowrap;">${Number(prod.peso_total).toFixed(2)} kg</td>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; white-space: nowrap;">S/ ${Number(prod.precio_peso).toFixed(2)}</td>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: right; font-weight: 700; color: var(--text-primary); white-space: nowrap;">S/ ${Number(prod.flete_subtotal).toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    filasProductos = `<tr><td colspan="7" style="padding: 16px; text-align: center; color: var(--text-muted);">No hay productos registrados en esta carga.</td></tr>`;
+                }
+
+                const filaTotales = `
+                    <tr style="background: #f8fafc;">
+                        <td colspan="2" style="padding: 16px; font-weight: 700; color: var(--text-primary); white-space: nowrap;">Totales de Carga</td>
+                        <td style="padding: 16px; text-align: center; font-weight: 700; color: var(--brand-blue); white-space: nowrap;">${totalSacos} und</td>
+                        <td style="padding: 16px; text-align: center; white-space: nowrap;"></td>
+                        <td style="padding: 16px; text-align: center; font-weight: 700; color: var(--brand-blue); white-space: nowrap;">${totalKilos.toFixed(2)} kg</td>
+                        <td style="padding: 16px; text-align: center; white-space: nowrap;"></td>
+                        <td style="padding: 16px; text-align: right; font-weight: 700; color: #16a34a; font-size: 15px; white-space: nowrap;">S/ ${totalFlete.toFixed(2)}</td>
+                    </tr>
+                `;
+
+                htmlContent += `
+                    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+                        <div style="padding: 16px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 12px; background: #fafafa;">
+                            <span style="background: #e0f2fe; color: var(--brand-blue); font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 4px;">Carga ${index + 1}</span>
+                            <span style="font-weight: 600; color: var(--text-primary); font-size: 14px;">${carga.remitente_nombre} (${carga.remitente_doc})</span>
+                            <i class="fas fa-arrow-right" style="color: var(--text-muted); font-size: 12px;"></i>
+                            <span style="font-weight: 600; color: var(--text-primary); font-size: 14px;">${carga.destinatario_nombre} (${carga.destinatario_doc})</span>
+                        </div>
+                        <div style="overflow-x: auto; width: 100%;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 750px;">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">Producto</th>
+                                        <th style="text-align: left; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">Marca Visual</th>
+                                        <th style="text-align: center; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">Cant.</th>
+                                        <th style="text-align: center; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">Peso (U)</th>
+                                        <th style="text-align: center; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">Kilos Tot.</th>
+                                        <th style="text-align: center; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">Flete x Kg</th>
+                                        <th style="text-align: right; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">Flete Tot.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${filasProductos}
+                                    ${filaTotales}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            });
+
+            modalBody.innerHTML = htmlContent;
+
+        } else {
+            modalBody.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc2626;"><i class="fas fa-exclamation-triangle"></i> Error al cargar los detalles.</div>';
+        }
+    } catch (error) {
+        console.error('Error al cargar cargas del viaje:', error);
+        modalBody.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc2626;"><i class="fas fa-exclamation-triangle"></i> Error de conexión.</div>';
+    }
+}
+
+function cerrarModalCargasViaje() {
+    document.getElementById('modal-cargas-viaje').style.display = 'none';
 }
 
 async function cargarHistorialViajes() {

@@ -118,7 +118,59 @@ const obtenerHistorialViajes = async (req, res) => {
     }
 };
 
+const obtenerCargasPorViaje = async (req, res) => {
+    try {
+        const idViaje = req.params.id;
+        
+        // Consultar las cargas con remitente y destinatario
+        const sqlCargas = `
+            SELECT 
+                c.id_carga, 
+                rem.nombre_razon_social AS remitente_nombre, rem.numero_documento AS remitente_doc,
+                dest.nombre_razon_social AS destinatario_nombre, dest.numero_documento AS destinatario_doc
+            FROM Carga c
+            JOIN clientes rem ON c.id_remitente = rem.id_cliente
+            JOIN clientes dest ON c.id_destinatario = dest.id_cliente
+            WHERE c.id_viaje = ? AND c.estado != 2
+            ORDER BY c.id_carga ASC
+        `;
+        const [cargas] = await db.query(sqlCargas, [idViaje]);
+
+        if (cargas.length === 0) {
+            return res.status(200).json({ success: true, data: [] });
+        }
+
+        const idsCargas = cargas.map(c => c.id_carga);
+
+        // Consultar los detalles de todas esas cargas
+        const sqlDetalles = `
+            SELECT 
+                dc.id_carga, p.nombre AS producto, dc.marca_visual, 
+                dc.cantidad_sacos, dc.peso_unitario, dc.peso_total, 
+                dc.precio_peso, dc.flete_subtotal
+            FROM Detalle_Carga dc
+            JOIN productos p ON dc.id_producto = p.id_producto
+            WHERE dc.id_carga IN (?) AND dc.estado != 2
+        `;
+        const [detalles] = await db.query(sqlDetalles, [idsCargas]);
+
+        // Mapear los detalles a cada carga correspondiente
+        const dataFinal = cargas.map(carga => {
+            return {
+                ...carga,
+                detalles: detalles.filter(d => d.id_carga === carga.id_carga)
+            };
+        });
+
+        return res.status(200).json({ success: true, data: dataFinal });
+    } catch (error) {
+        console.error('Error en obtenerCargasPorViaje:', error);
+        return res.status(500).json({ success: false, message: 'Error al obtener las cargas del viaje' });
+    }
+};
+
 module.exports = {
     registrarViaje,
-    obtenerHistorialViajes
+    obtenerHistorialViajes,
+    obtenerCargasPorViaje
 };
