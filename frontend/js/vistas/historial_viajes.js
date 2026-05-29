@@ -176,10 +176,10 @@ async function abrirModalCargasViaje(idStr) {
                 htmlContent += `
                     <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
                         <div style="padding: 16px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 12px; background: #fafafa;">
-                            <span style="background: #e0f2fe; color: var(--brand-blue); font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 4px;">Carga ${index + 1}</span>
-                            <span style="font-weight: 600; color: var(--text-primary); font-size: 14px;">${carga.remitente_nombre} (${carga.remitente_doc})</span>
+                            <span style="background: #e0f2fe; color: var(--brand-blue); font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 4px; flex-shrink: 0; white-space: nowrap;">Carga ${index + 1}</span>
+                            <span style="font-weight: 600; color: var(--text-primary); font-size: 14px;">${carga.remitente_nombre}</span>
                             <i class="fas fa-arrow-right" style="color: var(--text-muted); font-size: 12px;"></i>
-                            <span style="font-weight: 600; color: var(--text-primary); font-size: 14px;">${carga.destinatario_nombre} (${carga.destinatario_doc})</span>
+                            <span style="font-weight: 600; color: var(--text-primary); font-size: 14px;">${carga.destinatario_nombre}</span>
                         </div>
                         <div style="overflow-x: auto; width: 100%;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 750px;">
