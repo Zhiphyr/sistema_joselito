@@ -126,6 +126,7 @@ const obtenerCargasPorViaje = async (req, res) => {
         const sqlCargas = `
             SELECT 
                 c.id_carga, 
+                c.estado_cobro, c.estado_entrega,
                 rem.nombre_razon_social AS remitente_nombre, rem.numero_documento AS remitente_doc,
                 dest.nombre_razon_social AS destinatario_nombre, dest.numero_documento AS destinatario_doc
             FROM Carga c

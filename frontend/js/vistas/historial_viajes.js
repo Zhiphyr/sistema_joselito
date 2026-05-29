@@ -139,6 +139,16 @@ async function abrirModalCargasViaje(idStr) {
                 let totalKilos = 0;
                 let totalFlete = 0;
 
+                let colorCobro = '#64748b', bgCobro = '#f1f5f9', borderCobro = '#e2e8f0';
+                if (carga.estado_cobro === 'Completado') { colorCobro = '#16a34a'; bgCobro = '#dcfce7'; borderCobro = '#bbf7d0'; }
+                else if (carga.estado_cobro === 'Parcial') { colorCobro = '#d97706'; bgCobro = '#fef3c7'; borderCobro = '#fde68a'; }
+                else { colorCobro = '#dc2626'; bgCobro = '#fee2e2'; borderCobro = '#fecaca'; } // Pendiente o default
+
+                let colorEntrega = '#64748b', bgEntrega = '#f1f5f9', borderEntrega = '#e2e8f0';
+                if (carga.estado_entrega === 'Entregado') { colorEntrega = '#16a34a'; bgEntrega = '#dcfce7'; borderEntrega = '#bbf7d0'; }
+                else if (carga.estado_entrega === 'En ruta') { colorEntrega = '#2563eb'; bgEntrega = '#dbeafe'; borderEntrega = '#bfdbfe'; }
+                else { colorEntrega = '#d97706'; bgEntrega = '#fef3c7'; borderEntrega = '#fde68a'; } // En Almacen...
+
                 let filasProductos = '';
                 if (carga.detalles && carga.detalles.length > 0) {
                     carga.detalles.forEach(prod => {
@@ -175,11 +185,20 @@ async function abrirModalCargasViaje(idStr) {
 
                 htmlContent += `
                     <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
-                        <div style="padding: 16px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 12px; background: #fafafa;">
+                        <div style="padding: 16px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 12px; background: #fafafa; flex-wrap: wrap;">
                             <span style="background: #e0f2fe; color: var(--brand-blue); font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 4px; flex-shrink: 0; white-space: nowrap;">Carga ${index + 1}</span>
-                            <span style="font-weight: 600; color: var(--text-primary); font-size: 14px;">${carga.remitente_nombre}</span>
+                            <span style="font-weight: 600; color: var(--text-primary); font-size: 12px;">${carga.remitente_nombre}</span>
                             <i class="fas fa-arrow-right" style="color: var(--text-muted); font-size: 12px;"></i>
-                            <span style="font-weight: 600; color: var(--text-primary); font-size: 14px;">${carga.destinatario_nombre}</span>
+                            <span style="font-weight: 600; color: var(--text-primary); font-size: 12px;">${carga.destinatario_nombre}</span>
+                            
+                            <div style="margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap;">
+                                <span style="background: ${bgEntrega}; color: ${colorEntrega}; border: 1px solid ${borderEntrega}; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+                                    <i class="fas fa-box"></i> ${carga.estado_entrega || 'En Almacen'}
+                                </span>
+                                <span style="background: ${bgCobro}; color: ${colorCobro}; border: 1px solid ${borderCobro}; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+                                    <i class="fas fa-hand-holding-usd"></i> Cobro: ${carga.estado_cobro || 'Pendiente'}
+                                </span>
+                            </div>
                         </div>
                         <div style="overflow-x: auto; width: 100%;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 750px;">
@@ -342,12 +361,17 @@ function renderizarTarjetasViaje(viajes) {
                         </p>
                     </div>
                     <div>
-                        <p style="margin: 0 0 4px 0; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Estado Operativo</p>
-                        <p style="margin: 0; font-size: 16px; color: ${colorEstado}; font-weight: 700;">${viaje.estado_operativo}</p>
+                        <p style="margin: 0 0 4px 0; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
+                            <i class="far fa-calendar-check"></i> Fecha Llegada
+                        </p>
+                        <p style="margin: 0; font-size: 14px; color: var(--text-primary); font-weight: 500;">
+                            ${viaje.estado_operativo === 'Llegó a Destino' && viaje.fecha_llegada ? formatFechaCompleta(viaje.fecha_llegada) : `<span style="color: ${colorEstado}; font-weight: 600;">${viaje.estado_operativo}</span>`}
+                        </p>
                     </div>
                 </div>
 
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 140px; border-left: 1px solid var(--border-light); padding-left: 24px;">
+                    <span style="background: ${bgEstado}; color: ${colorEstado}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">${viaje.estado_operativo}</span>
                     <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: auto;">
                         <button class="btn-viaje btn-ver-detalles" data-id="${viaje.id_viaje}">Ver detalles</button>
                         <button class="btn-viaje btn-ver-cargas" data-id="${viaje.id_viaje}">Ver cargas</button>
