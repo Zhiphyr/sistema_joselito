@@ -10,12 +10,20 @@ async function init_historial_viajes() {
     // Configurar listeners de filtrado
     const inputBuscar = document.getElementById('input-buscar-viaje');
     const selectEstado = document.getElementById('select-estado-viaje');
+    const inputFechaSalida = document.getElementById('input-fecha-salida');
+    const inputFechaLlegada = document.getElementById('input-fecha-llegada');
     
     if (inputBuscar) {
         inputBuscar.addEventListener('input', aplicarFiltrosHistorial);
     }
     if (selectEstado) {
         selectEstado.addEventListener('change', aplicarFiltrosHistorial);
+    }
+    if (inputFechaSalida) {
+        inputFechaSalida.addEventListener('change', aplicarFiltrosHistorial);
+    }
+    if (inputFechaLlegada) {
+        inputFechaLlegada.addEventListener('change', aplicarFiltrosHistorial);
     }
     
     // Delegación de eventos para los botones de las tarjetas
@@ -268,6 +276,8 @@ async function cargarHistorialViajes() {
 function aplicarFiltrosHistorial() {
     const textoBuscar = document.getElementById('input-buscar-viaje')?.value.toLowerCase() || '';
     const estadoFiltro = document.getElementById('select-estado-viaje')?.value || 'todos';
+    const fechaSalidaFiltro = document.getElementById('input-fecha-salida')?.value;
+    const fechaLlegadaFiltro = document.getElementById('input-fecha-llegada')?.value;
     
     let filtrados = historialViajesTodos.filter(viaje => {
         // Filtrar por texto (ID, Placa o Chofer)
@@ -283,6 +293,22 @@ function aplicarFiltrosHistorial() {
             const estadoActual = viaje.estado_operativo === 'En Ruta' ? 'en_ruta' : 
                                  viaje.estado_operativo === 'Llegó a Destino' ? 'llego_destino' : 'finalizado';
             if (estadoActual !== estadoFiltro) return false;
+        }
+
+        // Filtrar por fecha de salida
+        if (fechaSalidaFiltro) {
+            if (!viaje.fecha_salida) return false;
+            const dSalida = new Date(viaje.fecha_salida);
+            const localDateSalida = `${dSalida.getFullYear()}-${String(dSalida.getMonth() + 1).padStart(2, '0')}-${String(dSalida.getDate()).padStart(2, '0')}`;
+            if (localDateSalida !== fechaSalidaFiltro) return false;
+        }
+
+        // Filtrar por fecha de llegada
+        if (fechaLlegadaFiltro) {
+            if (!viaje.fecha_llegada) return false;
+            const dLlegada = new Date(viaje.fecha_llegada);
+            const localDateLlegada = `${dLlegada.getFullYear()}-${String(dLlegada.getMonth() + 1).padStart(2, '0')}-${String(dLlegada.getDate()).padStart(2, '0')}`;
+            if (localDateLlegada !== fechaLlegadaFiltro) return false;
         }
         
         return true;
