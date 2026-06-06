@@ -51,3 +51,76 @@
 
 <!-- Si tu sistema requiere que el script se inserte, puedes descomentar: -->
 <script src="/js/vistas/recepcion_entregas.js"></script>
+
+<!-- Modal Entrega Parcial -->
+<div id="modal-entrega-parcial" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1060; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+    <div style="background: #f8fafc; border-radius: 12px; width: 100%; max-width: 650px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; max-height: 90vh;">
+        
+        <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; background: white; border-radius: 12px 12px 0 0;">
+            <h3 id="modal-parcial-titulo" style="margin: 0; font-size: 18px; color: var(--text-primary); font-weight: 700;">Gestión de Entrega - Carga #---</h3>
+            <button id="btn-cerrar-modal-parcial-x" style="background: white; border: 1px solid #e2e8f0; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-muted); cursor: pointer; transition: all 0.2s;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div style="padding: 24px; overflow-y: auto; flex: 1;">
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px; display: flex; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+                <div>
+                    <span style="display: block; font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">REMITENTE</span>
+                    <span id="modal-parcial-remitente" style="font-size: 14px; color: var(--text-secondary);"></span>
+                </div>
+                <div style="text-align: right;">
+                    <span style="display: block; font-size: 10px; font-weight: 700; color: #2563eb; text-transform: uppercase; margin-bottom: 4px;">DESTINATARIO (RECIBE)</span>
+                    <span id="modal-parcial-destinatario" style="font-size: 16px; font-weight: 800; color: #1e3a8a;"></span>
+                </div>
+            </div>
+
+            <!-- Paso 1 -->
+            <div id="modal-parcial-step1">
+                <h4 style="margin: 0 0 16px 0; font-size: 15px; font-weight: 700; color: var(--text-primary);">Detalle de Productos a Entregar</h4>
+                <div id="modal-parcial-productos">
+                    <!-- Productos dinámicos -->
+                </div>
+            </div>
+
+            <!-- Paso 2: Resumen -->
+            <div id="modal-parcial-step2" style="display: none;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <!-- Aceptados -->
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px;">
+                        <h4 style="margin: 0 0 16px 0; font-size: 14px; font-weight: 700; color: #16a34a; display: flex; align-items: center; gap: 8px;">
+                            <i class="far fa-check-circle"></i> Nueva Carga (Aceptados)
+                        </h4>
+                        <div id="resumen-aceptados-container" style="display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Items -->
+                        </div>
+                    </div>
+                    <!-- Rechazados -->
+                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px;">
+                        <h4 style="margin: 0 0 16px 0; font-size: 14px; font-weight: 700; color: #dc2626; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-times"></i> Carga Original (Rechazados)
+                        </h4>
+                        <div id="resumen-rechazados-container" style="display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Items -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; align-items: center; gap: 12px; background: white; border-radius: 0 0 12px 12px;">
+            <div id="footer-step1" style="display: flex; gap: 12px; width: 100%; justify-content: flex-end;">
+                <button id="btn-cerrar-modal-parcial-btn" style="padding: 10px 20px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--text-primary); cursor: pointer; transition: all 0.2s;">Cancelar</button>
+                <button id="btn-ver-resumen-parcial" style="padding: 10px 24px; background: #2563eb; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; color: white; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
+                    Ver Resumen <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+            <div id="footer-step2" style="display: none; gap: 12px; width: 100%; justify-content: flex-end;">
+                <button id="btn-volver-editar-parcial" style="padding: 10px 20px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--text-primary); cursor: pointer; transition: all 0.2s;">Volver a Editar</button>
+                <button id="btn-confirmar-entrega-parcial" style="padding: 10px 24px; background: #00b341; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; color: white; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
+                    <i class="far fa-check-circle"></i> Confirmar Entrega
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
