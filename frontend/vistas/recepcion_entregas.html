@@ -1,0 +1,53 @@
+<div class="vista-contenedor" style="max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; height: 100%; box-sizing: border-box;">
+    
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h2 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 24px; font-weight: 700;">Recepción y Entregas</h2>
+            <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">Gestión de viajes en ruta y llegadas a destino.</p>
+        </div>
+    </div>
+
+    <!-- Contenedor principal para el módulo -->
+    <div id="contenedor-viajes-recepcion" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; overflow-y: auto; padding-right: 8px; padding-bottom: 24px; flex: 1; align-content: flex-start;">
+        <!-- Las tarjetas se renderizarán dinámicamente aquí -->
+    </div>
+
+</div>
+
+<!-- Modal Gestionar Entregas -->
+<div id="modal-gestionar-entregas" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1050; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+    <div style="background: white; border-radius: 12px; width: 100%; max-width: 800px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; max-height: 90vh;">
+        
+        <!-- Header Modal -->
+        <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <div style="color: var(--brand-blue); font-size: 20px;">
+                    <i class="fas fa-tasks"></i>
+                </div>
+                <h3 style="margin: 0; font-size: 18px; color: var(--text-primary); font-weight: 700; display: flex; align-items: center; gap: 12px;">
+                    Gestionar Entregas 
+                    <span id="modal-gestionar-titulo-viaje" style="background: #e0f2fe; color: var(--brand-blue); padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;">Viaje #---</span>
+                </h3>
+            </div>
+            <button id="btn-cerrar-modal-gestionar-x" style="background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; padding: 4px;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Body Modal (Scrollable) -->
+        <div id="modal-gestionar-body" style="padding: 24px; overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 24px; background: #f8fafc;">
+            <!-- Contenido dinámico renderizado desde JS -->
+        </div>
+
+        <!-- Footer Modal -->
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; align-items: center; background: white; border-radius: 0 0 12px 12px;">
+            <button id="btn-cerrar-modal-gestionar-btn" style="padding: 8px 24px; background: white; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; font-weight: 600; color: var(--text-primary); cursor: pointer; transition: all 0.2s;">
+                Cerrar
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<!-- Si tu sistema requiere que el script se inserte, puedes descomentar: -->
+<script src="/js/vistas/recepcion_entregas.js"></script>

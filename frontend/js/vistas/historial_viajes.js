@@ -71,9 +71,15 @@ function abrirModalDetallesViaje(idStr) {
     if (viaje.estado_operativo === 'En Ruta') {
         spanEstado.style.background = '#e0f2fe';
         spanEstado.style.color = 'var(--brand-blue)';
-    } else {
+    } else if (viaje.estado_operativo === 'Llegó a Destino') {
         spanEstado.style.background = '#dcfce7';
         spanEstado.style.color = '#16a34a';
+    } else if (viaje.estado_operativo === 'Finalizado') {
+        spanEstado.style.background = '#f1f5f9';
+        spanEstado.style.color = '#475569';
+    } else { // Incidencia
+        spanEstado.style.background = '#fee2e2';
+        spanEstado.style.color = '#dc2626';
     }
 
     // Fechas
@@ -291,7 +297,8 @@ function aplicarFiltrosHistorial() {
         // Filtrar por estado
         if (estadoFiltro !== 'todos') {
             const estadoActual = viaje.estado_operativo === 'En Ruta' ? 'en_ruta' : 
-                                 viaje.estado_operativo === 'Llegó a Destino' ? 'llego_destino' : 'finalizado';
+                                 viaje.estado_operativo === 'Llegó a Destino' ? 'llego_destino' : 
+                                 viaje.estado_operativo === 'Finalizado' ? 'finalizado' : 'incidencia';
             if (estadoActual !== estadoFiltro) return false;
         }
 
@@ -338,9 +345,11 @@ function renderizarTarjetasViaje(viajes) {
     }
     
     viajes.forEach(viaje => {
-        const esEnRuta = viaje.estado_operativo === 'En Ruta';
-        const colorEstado = esEnRuta ? 'var(--brand-blue)' : '#16a34a';
-        const bgEstado = esEnRuta ? '#e0f2fe' : '#dcfce7';
+        let colorEstado, bgEstado;
+        if (viaje.estado_operativo === 'En Ruta') { colorEstado = 'var(--brand-blue)'; bgEstado = '#e0f2fe'; }
+        else if (viaje.estado_operativo === 'Llegó a Destino') { colorEstado = '#16a34a'; bgEstado = '#dcfce7'; }
+        else if (viaje.estado_operativo === 'Finalizado') { colorEstado = '#475569'; bgEstado = '#f1f5f9'; }
+        else { colorEstado = '#dc2626'; bgEstado = '#fee2e2'; } // Incidencia
 
         const tarjetaHtml = `
             <div class="card-viaje" style="background: #ffffff; border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: flex; gap: 24px;">
@@ -391,7 +400,7 @@ function renderizarTarjetasViaje(viajes) {
                             <i class="far fa-calendar-check"></i> Fecha Llegada
                         </p>
                         <p style="margin: 0; font-size: 14px; color: var(--text-primary); font-weight: 500;">
-                            ${viaje.estado_operativo === 'Llegó a Destino' && viaje.fecha_llegada ? formatFechaCompleta(viaje.fecha_llegada) : `<span style="color: ${colorEstado}; font-weight: 600;">${viaje.estado_operativo}</span>`}
+                            ${(viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.fecha_llegada ? formatFechaCompleta(viaje.fecha_llegada) : `<span style="color: ${colorEstado}; font-weight: 600;">${viaje.estado_operativo}</span>`}
                         </p>
                     </div>
                 </div>

@@ -86,7 +86,7 @@ const obtenerHistorialViajes = async (req, res) => {
                 v.fecha_salida,
                 v.fecha_llegada,
                 v.tarifa_transportista,
-                IF(v.fecha_llegada IS NULL, 'En Ruta', 'Llegó a Destino') as estado_operativo,
+                v.estado_operativo,
                 c.placa as vehiculo,
                 c.nombre as vehiculo_nombre,
                 c.conductor as chofer,
@@ -170,8 +170,160 @@ const obtenerCargasPorViaje = async (req, res) => {
     }
 };
 
+const obtenerViajesRecepcion = async (req, res) => {
+    try {
+        const sql = `
+            SELECT 
+                v.id_viaje,
+                v.fecha_salida,
+                v.fecha_llegada,
+                v.estado_operativo,
+                c.placa as vehiculo,
+                c.nombre as vehiculo_nombre,
+                c.conductor as chofer,
+                r.ciudad_origen,
+                r.ciudad_destino,
+                COUNT(DISTINCT cg.id_carga) as total_cargas,
+                COALESCE(SUM(dc.peso_total), 0) as peso_total_kg
+            FROM Viaje v
+            JOIN Camiones c ON v.id_camion = c.id_camion
+            JOIN rutas r ON v.id_ruta = r.id_ruta
+            LEFT JOIN Carga cg ON v.id_viaje = cg.id_viaje AND cg.estado != 2
+            LEFT JOIN Detalle_Carga dc ON cg.id_carga = dc.id_carga AND dc.estado != 2
+            WHERE v.estado != 2 AND v.estado_operativo IN ('En Ruta', 'Llegó a Destino')
+            GROUP BY v.id_viaje
+            ORDER BY v.fecha_salida DESC
+        `;
+        
+        const [viajes] = await db.query(sql);
+        
+        return res.status(200).json({ success: true, data: viajes });
+    } catch (error) {
+        console.error('Error en obtenerViajesRecepcion:', error);
+        return res.status(500).json({ success: false, message: 'Error al obtener viajes de recepción' });
+    }
+};
+
+const marcarLlegadaViaje = async (req, res) => {
+    let connection;
+    try {
+        const idViaje = req.params.id;
+        
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+        
+        // Actualizamos estado_operativo y fecha_llegada
+        const sqlViaje = `
+            UPDATE Viaje 
+            SET estado_operativo = 'Llegó a Destino', 
+                fecha_llegada = NOW() 
+            WHERE id_viaje = ? AND estado_operativo = 'En Ruta'
+        `;
+        
+        const [resultViaje] = await connection.query(sqlViaje, [idViaje]);
+        
+        if (resultViaje.affectedRows === 0) {
+            await connection.rollback();
+            connection.release();
+            return res.status(400).json({ success: false, message: 'El viaje no se encontró o ya no está en ruta.' });
+        }
+        
+        // Actualizamos el estado_entrega de las cargas asociadas a este viaje
+        const sqlCargas = `
+            UPDATE Carga
+            SET estado_entrega = 'En Almacen de Destino'
+            WHERE id_viaje = ? AND estado_entrega = 'En ruta'
+        `;
+        
+        await connection.query(sqlCargas, [idViaje]);
+        
+        await connection.commit();
+        connection.release();
+        
+        return res.status(200).json({ success: true, message: 'Llegada marcada y cargas actualizadas a Almacén de Destino.' });
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+            connection.release();
+        }
+        console.error('Error en marcarLlegadaViaje:', error);
+        return res.status(500).json({ success: false, message: 'Error interno al marcar la llegada del viaje.' });
+    }
+};
+
+const entregarCarga = async (req, res) => {
+    let connection;
+    try {
+        const idCarga = req.params.id;
+        
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. Obtener id_viaje de esta carga
+        const sqlGetViaje = `SELECT id_viaje FROM Carga WHERE id_carga = ?`;
+        const [cargaRows] = await connection.query(sqlGetViaje, [idCarga]);
+        
+        if (cargaRows.length === 0) {
+            await connection.rollback();
+            connection.release();
+            return res.status(400).json({ success: false, message: 'La carga no existe.' });
+        }
+        
+        const idViaje = cargaRows[0].id_viaje;
+        
+        // 2. Actualizar estado de la carga
+        const sqlUpdateCarga = `
+            UPDATE Carga
+            SET estado_entrega = 'Entregado'
+            WHERE id_carga = ?
+        `;
+        
+        const [result] = await connection.query(sqlUpdateCarga, [idCarga]);
+        
+        // 3. Verificar si quedan cargas pendientes de entrega
+        const sqlCheckAll = `
+            SELECT COUNT(*) AS pendientes 
+            FROM Carga 
+            WHERE id_viaje = ? AND estado_entrega != 'Entregado' AND estado != 2
+        `;
+        const [checkRows] = await connection.query(sqlCheckAll, [idViaje]);
+        
+        let viajeFinalizado = false;
+        
+        if (checkRows[0].pendientes === 0) {
+            // 4. Si todas están entregadas, el viaje finaliza
+            const sqlUpdateViaje = `
+                UPDATE Viaje 
+                SET estado_operativo = 'Finalizado' 
+                WHERE id_viaje = ?
+            `;
+            await connection.query(sqlUpdateViaje, [idViaje]);
+            viajeFinalizado = true;
+        }
+        
+        await connection.commit();
+        connection.release();
+        
+        return res.status(200).json({ 
+            success: true, 
+            message: 'Carga marcada como entregada.',
+            viajeFinalizado: viajeFinalizado
+        });
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+            connection.release();
+        }
+        console.error('Error en entregarCarga:', error);
+        return res.status(500).json({ success: false, message: 'Error interno al registrar la entrega.' });
+    }
+};
+
 module.exports = {
     registrarViaje,
     obtenerHistorialViajes,
-    obtenerCargasPorViaje
+    obtenerCargasPorViaje,
+    obtenerViajesRecepcion,
+    marcarLlegadaViaje,
+    entregarCarga
 };
