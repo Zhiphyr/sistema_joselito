@@ -410,6 +410,14 @@ function renderizarCargasGestionar(cargas, idViaje, estadoOperativo) {
                     </button>
                 </div>
             `;
+        } else if (carga.estado_entrega === 'Rechazado') {
+            btnAccionHtml = `
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-entregar-cliente entregado" disabled style="width: 100%; background: #fee2e2; color: #dc2626; border-color: #fecaca;">
+                        <i class="fas fa-times"></i> Carga Rechazada
+                    </button>
+                </div>
+            `;
         } else {
             btnAccionHtml = `
                 <div style="display: flex; gap: 8px;">
@@ -795,11 +803,11 @@ function abrirModalEntregaParcial(idCargaStr) {
                 <div style="display: flex; gap: 16px;">
                     <div>
                         <label style="display: block; font-size: 10px; font-weight: 700; color: #16a34a; margin-bottom: 4px; text-transform: uppercase;">Aceptados</label>
-                        <input type="number" class="input-parcial-aceptado" data-index="${index}" data-total="${maxSacos}" value="${maxSacos}" min="0" max="${maxSacos}" style="width: 80px; padding: 8px; border: 1px solid #16a34a; border-radius: 6px; font-size: 14px; font-weight: 600; color: #16a34a; outline: none; background: #f0fdf4;">
+                        <input type="number" class="input-parcial-aceptado" data-id-detalle="${prod.id_detalle}" data-index="${index}" data-total="${maxSacos}" value="${maxSacos}" min="0" max="${maxSacos}" style="width: 80px; padding: 8px; border: 1px solid #16a34a; border-radius: 6px; font-size: 14px; font-weight: 600; color: #16a34a; outline: none; background: #f0fdf4;">
                     </div>
                     <div>
                         <label style="display: block; font-size: 10px; font-weight: 700; color: #dc2626; margin-bottom: 4px; text-transform: uppercase;">Rechazados</label>
-                        <input type="number" class="input-parcial-rechazado" data-index="${index}" data-total="${maxSacos}" value="0" min="0" max="${maxSacos}" style="width: 80px; padding: 8px; border: 1px solid #dc2626; border-radius: 6px; font-size: 14px; font-weight: 600; color: #dc2626; outline: none; background: white;">
+                        <input type="number" class="input-parcial-rechazado" data-id-detalle="${prod.id_detalle}" data-index="${index}" data-total="${maxSacos}" value="0" min="0" max="${maxSacos}" style="width: 80px; padding: 8px; border: 1px solid #dc2626; border-radius: 6px; font-size: 14px; font-weight: 600; color: #dc2626; outline: none; background: white;">
                     </div>
                 </div>
             </div>
@@ -811,10 +819,40 @@ function abrirModalEntregaParcial(idCargaStr) {
     document.getElementById('modal-entrega-parcial').style.display = 'flex';
 }
 
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
     const btnParcial = e.target.closest('.btn-entrega-parcial');
     if (btnParcial) {
         const idCarga = btnParcial.getAttribute('data-id');
+        const estadoViaje = btnParcial.getAttribute('data-estado-viaje');
+        const carga = cargasGestionActual.find(c => c.id_carga === Number(idCarga));
+        const estadoCobro = carga ? carga.estado_cobro : 'Pendiente';
+
+        if (estadoViaje === 'En Ruta') {
+            const confirmParada = await Swal.fire({
+                title: 'Parada Intermedia',
+                text: '¿Desea registrar la entrega de esta carga como una parada intermedia?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, registrar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#2563eb'
+            });
+            if (!confirmParada.isConfirmed) return;
+        }
+        
+        if (estadoCobro === 'Pendiente' || estadoCobro === 'Parcial') {
+            const confirmDeuda = await Swal.fire({
+                title: 'Pago Pendiente',
+                text: 'Esta carga tiene un pago pendiente. ¿Desea enviar la deuda a la lista de Fletes por Cobrar?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, aceptar y continuar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#d97706'
+            });
+            if (!confirmDeuda.isConfirmed) return;
+        }
+
         abrirModalEntregaParcial(idCarga);
     }
     
@@ -895,7 +933,80 @@ document.addEventListener('click', (e) => {
         document.getElementById('modal-parcial-step1').style.display = 'block';
         document.getElementById('footer-step1').style.display = 'flex';
     }
+
+    if (e.target.closest('#btn-confirmar-entrega-parcial')) {
+        const titulo = document.getElementById('modal-parcial-titulo').textContent;
+        const idCarga = parseInt(titulo.split('#')[1]);
+        
+        const productosAceptados = [];
+        const productosRechazados = [];
+        
+        const rows = document.querySelectorAll('#modal-parcial-productos > div');
+        rows.forEach(row => {
+            const inputAceptado = row.querySelector('.input-parcial-aceptado');
+            const inputRechazado = row.querySelector('.input-parcial-rechazado');
+            
+            const idDetalle = inputAceptado.getAttribute('data-id-detalle');
+            const aceptados = parseInt(inputAceptado.value) || 0;
+            const rechazados = parseInt(inputRechazado.value) || 0;
+            
+            if (aceptados > 0) productosAceptados.push({ id_detalle: idDetalle, cantidad: aceptados });
+            if (rechazados > 0) productosRechazados.push({ id_detalle: idDetalle, cantidad: rechazados });
+        });
+
+        confirmarEntregaParcialBackend(idCarga, productosAceptados, productosRechazados);
+    }
 });
+
+async function confirmarEntregaParcialBackend(idCarga, productosAceptados, productosRechazados) {
+    const btnConfirmar = document.getElementById('btn-confirmar-entrega-parcial');
+    const textoOriginal = btnConfirmar.innerHTML;
+    
+    try {
+        btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+        btnConfirmar.disabled = true;
+
+        const response = await fetch(`/api/viajes/cargas/${idCarga}/entrega-parcial`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-user-profile': localStorage.getItem('user_id') || 1
+            },
+            body: JSON.stringify({
+                productosAceptados,
+                productosRechazados
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (data.viajeFinalizado) {
+                Swal.fire('¡Viaje Finalizado!', 'Se han entregado y/o procesado todas las cargas. El viaje ha culminado exitosamente.', 'success');
+                document.getElementById('modal-entrega-parcial').style.display = 'none';
+                document.getElementById('modal-gestionar-entregas').style.display = 'none';
+            } else {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Entrega Parcial Registrada',
+                    text: data.message
+                });
+                document.getElementById('modal-entrega-parcial').style.display = 'none';
+                document.getElementById('modal-gestionar-entregas').style.display = 'none';
+            }
+            // Recargar datos
+            cargarViajesRecepcion();
+        } else {
+            Swal.fire('Error', data.message || 'Error al registrar entrega parcial', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Hubo un problema de conexión al procesar la entrega parcial.', 'error');
+    } finally {
+        btnConfirmar.innerHTML = textoOriginal;
+        btnConfirmar.disabled = false;
+    }
+}
 
 document.addEventListener('input', (e) => {
     if (e.target.classList.contains('input-parcial-aceptado')) {

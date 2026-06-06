@@ -146,7 +146,7 @@ const obtenerCargasPorViaje = async (req, res) => {
         // Consultar los detalles de todas esas cargas
         const sqlDetalles = `
             SELECT 
-                dc.id_carga, p.nombre AS producto, dc.marca_visual, 
+                dc.id_detalle, dc.id_producto, dc.id_carga, p.nombre AS producto, dc.marca_visual, 
                 dc.cantidad_sacos, dc.peso_unitario, dc.peso_total, 
                 dc.precio_peso, dc.flete_subtotal
             FROM Detalle_Carga dc
@@ -280,11 +280,11 @@ const entregarCarga = async (req, res) => {
         
         const [result] = await connection.query(sqlUpdateCarga, [idCarga]);
         
-        // 3. Verificar si quedan cargas pendientes de entrega
+        // 3. Verificar si quedan cargas pendientes de entrega (ignorando Entregado y Rechazado)
         const sqlCheckAll = `
             SELECT COUNT(*) AS pendientes 
             FROM Carga 
-            WHERE id_viaje = ? AND estado_entrega != 'Entregado' AND estado != 2
+            WHERE id_viaje = ? AND estado_entrega NOT IN ('Entregado', 'Rechazado') AND estado != 2
         `;
         const [checkRows] = await connection.query(sqlCheckAll, [idViaje]);
         
@@ -319,11 +319,146 @@ const entregarCarga = async (req, res) => {
     }
 };
 
+const entregaParcialCarga = async (req, res) => {
+    let connection;
+    try {
+        const idCargaOriginal = req.params.id;
+        const { productosAceptados, productosRechazados } = req.body;
+        const userId = req.headers['x-user-profile'] || 1;
+
+        if (!productosAceptados || !productosRechazados) {
+            return res.status(400).json({ success: false, message: 'Datos incompletos para entrega parcial' });
+        }
+
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        const [cargaRows] = await connection.query(`SELECT * FROM Carga WHERE id_carga = ? AND estado != 2`, [idCargaOriginal]);
+        if (cargaRows.length === 0) throw new Error('Carga original no encontrada');
+        const cargaOriginal = cargaRows[0];
+
+        // FASE 1: Nueva Carga (Aceptados)
+        if (productosAceptados.length > 0) {
+            const [resultNuevaCarga] = await connection.query(`
+                INSERT INTO Carga (id_viaje, id_remitente, id_destinatario, flete_total, estado_cobro, estado_entrega, id_usuario)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `, [
+                cargaOriginal.id_viaje,
+                cargaOriginal.id_remitente,
+                cargaOriginal.id_destinatario,
+                0.00,
+                'Pendiente',
+                'Entregado',
+                userId
+            ]);
+            const idNuevaCarga = resultNuevaCarga.insertId;
+
+            let nuevoFleteTotal = 0;
+
+            for (const prod of productosAceptados) {
+                const [detRows] = await connection.query(`SELECT * FROM Detalle_Carga WHERE id_detalle = ?`, [prod.id_detalle]);
+                if (detRows.length > 0) {
+                    const detOriginal = detRows[0];
+                    const nuevaCantidad = Number(prod.cantidad);
+                    const nuevoPesoTotal = nuevaCantidad * Number(detOriginal.peso_unitario);
+                    const nuevoFleteSubtotal = nuevoPesoTotal * Number(detOriginal.precio_peso);
+                    
+                    nuevoFleteTotal += nuevoFleteSubtotal;
+
+                    await connection.query(`
+                        INSERT INTO Detalle_Carga (id_carga, id_producto, marca_visual, cantidad_sacos, peso_unitario, peso_total, precio_peso, flete_subtotal)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    `, [
+                        idNuevaCarga,
+                        detOriginal.id_producto,
+                        detOriginal.marca_visual,
+                        nuevaCantidad,
+                        detOriginal.peso_unitario,
+                        nuevoPesoTotal,
+                        detOriginal.precio_peso,
+                        nuevoFleteSubtotal
+                    ]);
+                }
+            }
+
+            await connection.query(`UPDATE Carga SET flete_total = ? WHERE id_carga = ?`, [nuevoFleteTotal, idNuevaCarga]);
+        }
+
+        // FASE 2: Vieja Carga (Rechazados)
+        let fleteOriginalRestante = 0;
+        
+        const [detallesOriginales] = await connection.query(`SELECT * FROM Detalle_Carga WHERE id_carga = ? AND estado != 2`, [idCargaOriginal]);
+        
+        for (const det of detallesOriginales) {
+            const prodRechazado = productosRechazados.find(p => p.id_detalle == det.id_detalle);
+            const cantRechazada = prodRechazado ? Number(prodRechazado.cantidad) : 0;
+            
+            if (cantRechazada > 0) {
+                const nuevoPesoTotal = cantRechazada * Number(det.peso_unitario);
+                const nuevoFleteSubtotal = nuevoPesoTotal * Number(det.precio_peso);
+                fleteOriginalRestante += nuevoFleteSubtotal;
+                
+                await connection.query(`
+                    UPDATE Detalle_Carga 
+                    SET cantidad_sacos = ?, peso_total = ?, flete_subtotal = ? 
+                    WHERE id_detalle = ?
+                `, [cantRechazada, nuevoPesoTotal, nuevoFleteSubtotal, det.id_detalle]);
+            } else {
+                await connection.query(`UPDATE Detalle_Carga SET estado = 2 WHERE id_detalle = ?`, [det.id_detalle]);
+            }
+        }
+
+        await connection.query(`
+            UPDATE Carga 
+            SET flete_total = ?, estado_entrega = 'Rechazado', estado_cobro = 'Anulado' 
+            WHERE id_carga = ?
+        `, [fleteOriginalRestante, idCargaOriginal]);
+
+        // Verificar si quedan cargas pendientes para finalizar el viaje
+        const sqlCheckAll = `
+            SELECT COUNT(*) AS pendientes 
+            FROM Carga 
+            WHERE id_viaje = ? AND estado_entrega NOT IN ('Entregado', 'Rechazado') AND estado != 2
+        `;
+        const [checkRows] = await connection.query(sqlCheckAll, [cargaOriginal.id_viaje]);
+        
+        let viajeFinalizado = false;
+        
+        if (checkRows[0].pendientes === 0) {
+            const sqlUpdateViaje = `
+                UPDATE Viaje 
+                SET estado_operativo = 'Finalizado' 
+                WHERE id_viaje = ?
+            `;
+            await connection.query(sqlUpdateViaje, [cargaOriginal.id_viaje]);
+            viajeFinalizado = true;
+        }
+
+        await connection.commit();
+        connection.release();
+
+        res.status(200).json({ 
+            success: true, 
+            message: 'Entrega parcial procesada correctamente.',
+            viajeFinalizado: viajeFinalizado
+        });
+
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+            connection.release();
+        }
+        console.error('Error en entregaParcialCarga:', error);
+        res.status(500).json({ success: false, message: 'Error interno al registrar entrega parcial' });
+    }
+};
+
 module.exports = {
     registrarViaje,
     obtenerHistorialViajes,
     obtenerCargasPorViaje,
     obtenerViajesRecepcion,
     marcarLlegadaViaje,
-    entregarCarga
+    entregarCarga,
+    entregaParcialCarga
 };
