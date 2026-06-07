@@ -106,6 +106,9 @@ async function cargarViajesRecepcion() {
         
         const data = await response.json();
         if (data.success) {
+            // ¡ESTA ES LA LÍNEA QUE TE FALTABA!
+            viajesRecepcionTodos = data.data; 
+            
             renderizarTarjetasRecepcion(data.data);
         } else {
             console.error('Error del servidor al obtener viajes:', data.message);
@@ -252,19 +255,18 @@ function renderizarTarjetasRecepcion(viajes) {
                 
                 <!-- Acciones -->
                 <div class="card-acciones">
-                    <button class="btn-incidencia" data-id="${viaje.id_viaje}">
-                        <i class="fas fa-exclamation-triangle"></i> Incidencia
-                    </button>
                     ${esEnRuta ? `
+                    ${botonLlegadaHtml}
                     <button class="btn-transbordo" data-id="${viaje.id_viaje}">
                         <i class="fas fa-exchange-alt"></i> Transbordo
                     </button>
-                    ${botonLlegadaHtml}
-                    <button class="btn-gestionar" data-id="${viaje.id_viaje}" data-estado="${viaje.estado_operativo}">
+                    <button class="btn-gestionar" data-id="${viaje.id_viaje}" data-estado="${viaje.estado_operativo}" style="grid-column: span 2;">
                         <i class="fas fa-tasks"></i> Entregas
                     </button>
                     ` : `
-                    ${botonLlegadaHtml}
+                    <div style="grid-column: span 2;">
+                        ${botonLlegadaHtml}
+                    </div>
                     <button class="btn-gestionar" data-id="${viaje.id_viaje}" data-estado="${viaje.estado_operativo}" style="grid-column: span 2;">
                         <i class="fas fa-tasks"></i> Entregas
                     </button>
@@ -399,6 +401,8 @@ function renderizarCargasGestionar(cargas, idViaje, estadoOperativo) {
             colorEntrega = '#16a34a'; bgEntrega = '#dcfce7'; borderEntrega = '#bbf7d0'; // Verde
         } else if (carga.estado_entrega === 'En Almacen de Destino') { 
             colorEntrega = '#d97706'; bgEntrega = '#fef3c7'; borderEntrega = '#fde68a'; // Amarillo
+        } else if (carga.estado_entrega === 'Rechazado') {
+            colorEntrega = '#dc2626'; bgEntrega = '#fef2f2'; borderEntrega = '#fecaca'; // Rojo
         }
         
         let btnAccionHtml = '';
@@ -421,11 +425,14 @@ function renderizarCargasGestionar(cargas, idViaje, estadoOperativo) {
         } else {
             btnAccionHtml = `
                 <div style="display: flex; gap: 8px;">
+                    <button class="btn-rechazar-carga" data-id="${carga.id_carga}" data-id-viaje="${idViaje}" data-flete="${carga.flete_total}">
+                        <i class="fas fa-ban"></i> Rechazar Carga
+                    </button>
                     <button class="btn-entrega-parcial" data-id="${carga.id_carga}" data-id-viaje="${idViaje}" data-estado-viaje="${estadoOperativo}">
-                        <i class="fas fa-box-open"></i> Entrega Parcial
+                        <i class="fas fa-box-open"></i> Parcial
                     </button>
                     <button class="btn-entregar-cliente pendiente" data-id="${carga.id_carga}" data-id-viaje="${idViaje}" data-estado-viaje="${estadoOperativo}" data-estado-cobro="${carga.estado_cobro || 'Pendiente'}">
-                        <i class="far fa-check-circle"></i> Entregar al Cliente
+                        <i class="far fa-check-circle"></i> Entregar
                     </button>
                 </div>
             `;
@@ -766,6 +773,45 @@ if (!document.getElementById('recepcion-styles')) {
             border-color: #94a3b8;
             color: var(--text-primary);
         }
+
+        .btn-rechazar-carga {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            border: 1px solid #fca5a5;
+            background: white;
+            color: #ef4444;
+            transition: all 0.2s;
+        }
+        .btn-rechazar-carga:hover {
+            background: #fef2f2;
+            border-color: #ef4444;
+        }
+
+        .transbordo-tab {
+            background: none;
+            border: none;
+            padding: 0 0 12px 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .transbordo-tab.active {
+            color: #ea580c;
+            border-bottom: 2px solid #ea580c;
+        }
+        .transbordo-tab:hover:not(.disabled) {
+            color: #c2410c;
+        }
     `;
     document.head.appendChild(style);
 }
@@ -864,6 +910,159 @@ document.addEventListener('click', async (e) => {
     if (e.target.id === 'modal-entrega-parcial') {
         e.target.style.display = 'none';
     }
+    
+    if (e.target.id === 'modal-transbordo' || e.target.closest('#btn-cerrar-modal-transbordo-x') || e.target.closest('#btn-cerrar-modal-transbordo-btn')) {
+        document.getElementById('modal-transbordo').style.display = 'none';
+    }
+
+    const tabTransbordo = e.target.closest('.transbordo-tab');
+    if (tabTransbordo) {
+        document.querySelectorAll('.transbordo-tab').forEach(t => {
+            t.classList.remove('active');
+            t.style.color = '#94a3b8';
+            t.style.borderBottom = 'none';
+        });
+        
+        tabTransbordo.classList.add('active');
+        tabTransbordo.style.color = '#ea580c';
+        tabTransbordo.style.borderBottom = '2px solid #ea580c';
+        
+        const tabName = tabTransbordo.getAttribute('data-tab');
+        document.getElementById('tab-transbordo-camion').style.display = tabName === 'camion' ? 'block' : 'none';
+        document.getElementById('tab-transbordo-carga').style.display = tabName === 'carga' ? 'grid' : 'none';
+    }
+
+    const btnTransbordo = e.target.closest('.btn-transbordo');
+    if (btnTransbordo) {
+        const idViaje = btnTransbordo.getAttribute('data-id');
+        abrirModalTransbordo(idViaje);
+    }
+
+    const btnTransbordarItem = e.target.closest('.btn-transbordar-item');
+    if (btnTransbordarItem) {
+        const idCarga = btnTransbordarItem.getAttribute('data-id');
+        expandirFormularioTransbordo(idCarga);
+    }
+
+    const btnCancelarTransbordoItem = e.target.closest('.btn-cancelar-transbordo-item');
+    if (btnCancelarTransbordoItem) {
+        actualizarListasTransbordo();
+    }
+
+    const btnGuardarTransbordoItem = e.target.closest('.btn-guardar-transbordo-item');
+    if (btnGuardarTransbordoItem) {
+        const idCarga = btnGuardarTransbordoItem.getAttribute('data-id');
+        const carga = window.cargasTransbordoActual.find(c => c.id_carga === Number(idCarga));
+        const card = document.getElementById(`tarjeta-transbordo-carga-${idCarga}`);
+        const inputs = card.querySelectorAll('.input-transbordo-cant');
+        
+        const transferidos = [];
+        const resto = [];
+        
+        inputs.forEach(input => {
+            const idDetalle = input.getAttribute('data-id-detalle');
+            const cantAPasar = parseInt(input.value) || 0;
+            const cantOriginal = parseInt(input.getAttribute('data-max'));
+            const isPerdidaTotal = input.closest('.producto-transbordo-row').querySelector('.chk-perdida-total').checked;
+            
+            const detalleOriginal = carga.detalles.find(d => d.id_detalle === Number(idDetalle));
+            
+            if (cantAPasar > 0) {
+                transferidos.push({
+                    ...detalleOriginal,
+                    cantidad_sacos: cantAPasar
+                });
+            }
+            
+            const cantResto = cantOriginal - cantAPasar;
+            if (cantResto > 0 || isPerdidaTotal) {
+                resto.push({
+                    ...detalleOriginal,
+                    cantidad_sacos: cantResto,
+                    perdida_total: isPerdidaTotal
+                });
+            }
+        });
+        
+        window.transbordoState[idCarga] = { transferidos, resto };
+        actualizarListasTransbordo();
+    }
+
+    const btnDeshacer = e.target.closest('.btn-deshacer-seleccion') || e.target.closest('.btn-deshacer-transbordo');
+    if (btnDeshacer) {
+        const idCarga = btnDeshacer.getAttribute('data-id');
+        delete window.transbordoState[idCarga];
+        actualizarListasTransbordo();
+    }
+
+    const chkPerdidaTotal = e.target.closest('.chk-perdida-total');
+    if (chkPerdidaTotal) {
+        const rowDiv = chkPerdidaTotal.closest('.producto-transbordo-row');
+        const inputCant = rowDiv ? rowDiv.querySelector('.input-transbordo-cant') : null;
+        const nombreDiv = rowDiv ? rowDiv.querySelector('.producto-transbordo-nombre') : null;
+        
+        if (inputCant) {
+            if (chkPerdidaTotal.checked) {
+                inputCant.value = 0;
+                inputCant.disabled = true;
+                inputCant.style.backgroundColor = '#f1f5f9';
+                if (rowDiv) rowDiv.style.backgroundColor = '#fef2f2';
+                if (nombreDiv) nombreDiv.style.color = '#dc2626';
+            } else {
+                inputCant.value = inputCant.getAttribute('data-max');
+                inputCant.disabled = false;
+                inputCant.style.backgroundColor = 'white';
+                if (rowDiv) rowDiv.style.backgroundColor = 'white';
+                if (nombreDiv) nombreDiv.style.color = '#1e293b';
+            }
+        }
+    }
+
+    const btnRechazar = e.target.closest('.btn-rechazar-carga');
+    if (btnRechazar) {
+        const idCarga = btnRechazar.getAttribute('data-id');
+        const idViaje = btnRechazar.getAttribute('data-id-viaje');
+        const fleteTotal = btnRechazar.getAttribute('data-flete');
+
+        const confirmRechazo = await Swal.fire({
+            title: 'Rechazar Carga',
+            text: `¿Estás seguro de rechazar toda la Carga #${idCarga}? Se anulará el cobro de S/ ${fleteTotal}`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, rechazar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#dc2626'
+        });
+
+        if (confirmRechazo.isConfirmed) {
+            try {
+                const response = await fetch(`/api/viajes/cargas/${idCarga}/rechazar`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-user-profile': localStorage.getItem('user_id') || 1
+                    }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    if (data.viajeFinalizado) {
+                        Swal.fire('¡Viaje Finalizado!', 'Se han entregado y/o procesado todas las cargas. El viaje ha culminado exitosamente.', 'success');
+                        document.getElementById('modal-gestionar-entregas').style.display = 'none';
+                    } else {
+                        Swal.fire('¡Carga Rechazada!', 'La carga ha sido rechazada y su cobro anulado.', 'success');
+                        abrirModalGestionarEntregas(idViaje, 'En Ruta'); 
+                    }
+                    cargarViajesRecepcion();
+                } else {
+                    Swal.fire('Error', data.message, 'error');
+                }
+            } catch (error) {
+                console.error('Error al rechazar carga:', error);
+                Swal.fire('Error', 'Hubo un problema de conexión al rechazar la carga.', 'error');
+            }
+        }
+    }
 
     if (e.target.closest('#btn-ver-resumen-parcial')) {
         const aceptadosContainer = document.getElementById('resumen-aceptados-container');
@@ -958,6 +1157,48 @@ document.addEventListener('click', async (e) => {
     }
 });
 
+document.addEventListener('input', (e) => {
+    if (e.target.classList.contains('input-transbordo-cant')) {
+        let val = parseInt(e.target.value);
+        const maxVal = parseInt(e.target.getAttribute('data-max'));
+        
+        if (isNaN(val)) return;
+
+        // Validación: no permitir mayor al máximo original
+        if (val > maxVal) {
+            val = maxVal;
+            e.target.value = maxVal;
+            
+            // Pequeño feedback visual de error
+            e.target.style.borderColor = '#ef4444';
+            setTimeout(() => e.target.style.borderColor = '#cbd5e1', 400);
+        }
+        
+        // Validación: no permitir negativos
+        if (val < 0) {
+            val = 0;
+            e.target.value = 0;
+        }
+
+        if (val === 0) {
+            const rowDiv = e.target.closest('.producto-transbordo-row');
+            if (!rowDiv) return;
+            
+            const chkPerdidaTotal = rowDiv.querySelector('.chk-perdida-total');
+            const nombreDiv = rowDiv.querySelector('.producto-transbordo-nombre');
+            
+            if (chkPerdidaTotal && !chkPerdidaTotal.checked) {
+                chkPerdidaTotal.checked = true;
+                e.target.disabled = true;
+                e.target.style.backgroundColor = '#f1f5f9';
+                e.target.style.borderColor = '#cbd5e1'; // Resetear borde por si acaso
+                rowDiv.style.backgroundColor = '#fef2f2';
+                if (nombreDiv) nombreDiv.style.color = '#dc2626';
+            }
+        }
+    }
+});
+
 async function confirmarEntregaParcialBackend(idCarga, productosAceptados, productosRechazados) {
     const btnConfirmar = document.getElementById('btn-confirmar-entrega-parcial');
     const textoOriginal = btnConfirmar.innerHTML;
@@ -1035,6 +1276,283 @@ document.addEventListener('input', (e) => {
         row.querySelector('.input-parcial-aceptado').value = aceptados;
     }
 });
+
+async function abrirModalTransbordo(idViaje) {
+    // 1. Mostrar modal inmediatamente y deshabilitar elementos
+    document.getElementById('modal-transbordo').style.display = 'flex';
+    document.getElementById('modal-transbordo-titulo-viaje').textContent = `Viaje #Cargando...`;
+    
+    const btnConfirmar = document.getElementById('btn-confirmar-transbordo');
+    const selectCamion = document.getElementById('transbordo-camion-select');
+    const inputRuta = document.getElementById('transbordo-ruta-input');
+    const inputFecha = document.getElementById('transbordo-fecha-input');
+    const inputTarifa = document.getElementById('transbordo-tarifa-input');
+    
+    btnConfirmar.disabled = true;
+    btnConfirmar.style.opacity = '0.5';
+    selectCamion.innerHTML = '<option value="">Cargando datos...</option>';
+    selectCamion.disabled = true;
+    inputRuta.value = 'Cargando...';
+    inputFecha.value = 'Cargando...';
+    inputTarifa.value = '';
+
+    const headers = {
+        'x-user-profile': localStorage.getItem('user_id') || 1
+    };
+
+    try {
+        // 2. Fetch Viaje Data
+        const resViaje = await fetch(`/api/viajes/${idViaje}`, { headers });
+        const dataViaje = await resViaje.json();
+
+        if (!dataViaje.success) {
+            throw new Error(dataViaje.message || 'Error al obtener viaje');
+        }
+
+        const viaje = dataViaje.data;
+
+        // Populate fields
+        document.getElementById('modal-transbordo-titulo-viaje').textContent = `Viaje #${viaje.id_viaje}`;
+        inputRuta.value = `${viaje.ciudad_origen} - ${viaje.ciudad_destino}`;
+        
+        const now = new Date();
+        inputFecha.value = now.toLocaleString('en-CA', { 
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hour12: false
+        }).replace(',', '');
+
+        // 3. Fetch Camiones
+        const resCamiones = await fetch('/api/camiones', { headers });
+        const dataCamiones = await resCamiones.json();
+
+        if (dataCamiones.success) {
+            selectCamion.innerHTML = '<option value="">Seleccione un camión disponible...</option>';
+            dataCamiones.data.forEach(camion => {
+                if (camion.id_camion !== viaje.id_camion && camion.estado === 1) {
+                    const opt = document.createElement('option');
+                    opt.value = camion.id_camion;
+                    opt.textContent = `${camion.vehiculo || camion.nombre} - ${camion.placa} (Cond: ${camion.conductor || 'Sin asignar'})`;
+                    selectCamion.appendChild(opt);
+                }
+            });
+            selectCamion.disabled = false;
+        } else {
+            throw new Error(dataCamiones.message || 'Error al obtener camiones');
+        }
+
+        // Habilitar confirmación (aunque sin funcionalidad aún)
+        btnConfirmar.disabled = false;
+        btnConfirmar.style.opacity = '1';
+
+        // 4. Fetch Cargas del Viaje Accidentado
+        const resCargas = await fetch(`/api/viajes/${idViaje}/cargas`, { headers });
+        const dataCargas = await resCargas.json();
+        
+        if (dataCargas.success) {
+            window.transbordoState = {};
+            window.cargasTransbordoActual = dataCargas.data;
+            actualizarListasTransbordo();
+        } else {
+            console.error('Error al obtener cargas:', dataCargas.message);
+        }
+
+    } catch (error) {
+        console.error('Error en abrirModalTransbordo:', error);
+        document.getElementById('modal-transbordo').style.display = 'none';
+        Swal.fire({
+            title: 'Error',
+            text: error.message || 'Hubo un problema de conexión al cargar los datos del transbordo.',
+            icon: 'error',
+            confirmButtonColor: '#ea580c'
+        });
+    }
+}
+
+function actualizarListasTransbordo() {
+    const listaAccidentado = document.getElementById('transbordo-cargas-accidentado-lista');
+    const listaNuevo = document.getElementById('transbordo-cargas-nuevo-lista');
+    
+    if (!listaAccidentado || !listaNuevo) return;
+    
+    listaAccidentado.innerHTML = '';
+    listaNuevo.innerHTML = '';
+    
+    if (!window.cargasTransbordoActual || window.cargasTransbordoActual.length === 0) {
+        listaAccidentado.innerHTML = '<p style="font-size: 13px; color: #64748b; font-style: italic;">No hay cargas en este viaje.</p>';
+        
+        listaNuevo.style.alignItems = 'flex-start';
+        listaNuevo.style.justifyContent = 'center';
+        listaNuevo.style.paddingTop = '24px';
+        listaNuevo.innerHTML = '<p style="margin: 0; font-size: 13px; font-style: italic; color: #3b82f6;">Aún no hay cargas asignadas para transbordo.</p>';
+        return;
+    }
+    
+    let hasTransferidos = false;
+
+    window.cargasTransbordoActual.forEach(carga => {
+        const state = window.transbordoState[carga.id_carga];
+        
+        if (!state) {
+            listaAccidentado.insertAdjacentHTML('beforeend', generarHtmlCardIzquierda(carga, false, carga.detalles));
+        } else {
+            if (state.resto && state.resto.length > 0) {
+                listaAccidentado.insertAdjacentHTML('beforeend', generarHtmlCardIzquierda(carga, true, state.resto));
+            }
+            if (state.transferidos && state.transferidos.length > 0) {
+                hasTransferidos = true;
+                listaNuevo.insertAdjacentHTML('beforeend', generarHtmlCardDerecha(carga, state.transferidos));
+            }
+        }
+    });
+
+    if (!hasTransferidos) {
+        listaNuevo.style.alignItems = 'flex-start';
+        listaNuevo.style.justifyContent = 'center';
+        listaNuevo.style.paddingTop = '24px';
+        listaNuevo.innerHTML = '<p style="margin: 0; font-size: 13px; font-style: italic; color: #3b82f6;">Aún no hay cargas asignadas para transbordo.</p>';
+    } else {
+        listaNuevo.style.alignItems = 'stretch';
+        listaNuevo.style.justifyContent = 'flex-start';
+        listaNuevo.style.paddingTop = '0';
+    }
+}
+
+function generarHtmlCardIzquierda(carga, isResto, detalles) {
+    let detallesHtml = '';
+    if (detalles && detalles.length > 0) {
+        detalles.forEach(d => {
+            detallesHtml += `
+                <div style="margin-bottom: 8px;">
+                    <div style="font-size: 12px; font-weight: 600; color: #334155;">• ${d.cantidad_sacos} x ${d.producto}</div>
+                    <div style="font-size: 11px; color: #94a3b8; font-style: italic; margin-left: 12px;">Marca visual: ${d.marca_visual || 'Sin marca'}</div>
+                </div>
+            `;
+        });
+    }
+
+    const tituloSuffix = isResto ? ' (Resto)' : '';
+    const buttonHtml = isResto 
+        ? `<button class="btn-deshacer-seleccion" data-id="${carga.id_carga}" style="width: 100%; padding: 8px; background: white; border: 1px solid #fca5a5; border-radius: 6px; color: #dc2626; font-weight: 700; font-size: 13px; cursor: pointer; transition: all 0.2s;">Deshacer Selección</button>`
+        : `<button class="btn-transbordar-item" data-id="${carga.id_carga}" style="width: 100%; padding: 8px; background: #ffedd5; border: none; border-radius: 6px; color: #ea580c; font-weight: 700; font-size: 13px; cursor: pointer; transition: all 0.2s;">Transbordar <i class="fas fa-arrow-right" style="margin-left: 4px;"></i></button>`;
+
+    return `
+        <div id="tarjeta-transbordo-carga-${carga.id_carga}" style="background: white; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h5 style="margin: 0; font-size: 15px; font-weight: 700; color: #0f172a;">Carga #${carga.id_carga}${tituloSuffix}</h5>
+                <span style="background: #fee2e2; color: #b91c1c; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">Siniestrada</span>
+            </div>
+            <div style="font-size: 12px; color: #475569; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px;">
+                <div><span style="font-weight: 600; color: #64748b;">Remitente:</span> ${carga.remitente_nombre || 'Desconocido'}</div>
+                <div><span style="font-weight: 600; color: #64748b;">Destinatario:</span> ${carga.destinatario_nombre || 'Desconocido'}</div>
+            </div>
+            
+            ${detalles.length > 0 ? `<div style="background: #f8fafc; border-radius: 6px; padding: 12px; margin-bottom: 16px;">${detallesHtml}</div>` : ''}
+            
+            ${buttonHtml}
+        </div>
+    `;
+}
+
+function generarHtmlCardDerecha(carga, detalles) {
+    let detallesHtml = '';
+    if (detalles && detalles.length > 0) {
+        detalles.forEach((d, idx) => {
+            const borderBottom = idx === detalles.length - 1 ? '' : 'border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 8px;';
+            detallesHtml += `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; ${borderBottom}">
+                    <div>
+                        <div style="font-size: 12px; font-weight: 600; color: #1e3a8a;">${d.producto}</div>
+                        <div style="font-size: 11px; color: #3b82f6; font-style: italic;">Marca: ${d.marca_visual || 'Sin marca'}</div>
+                    </div>
+                    <div style="font-size: 12px; font-weight: 700; color: #1d4ed8;">${d.cantidad_sacos} sacos</div>
+                </div>
+            `;
+        });
+    }
+
+    return `
+        <div style="background: white; border: 1px solid #bfdbfe; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h5 style="margin: 0; font-size: 15px; font-weight: 700; color: #0f172a;">Carga #${carga.id_carga} (Transbordo)</h5>
+                <span style="background: #dbeafe; color: #1d4ed8; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 4px;"><i class="fas fa-check-circle"></i> Listo</span>
+            </div>
+            <div style="font-size: 12px; color: #475569; margin-bottom: 12px;">
+                ${carga.remitente_nombre || 'Desconocido'} &mdash; ${carga.destinatario_nombre || 'Desconocido'}
+            </div>
+            
+            <div style="background: #f8fafc; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+                ${detallesHtml}
+            </div>
+            
+            <button class="btn-deshacer-transbordo" data-id="${carga.id_carga}" style="width: 100%; padding: 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; color: #475569; font-weight: 700; font-size: 13px; cursor: pointer; transition: all 0.2s;">
+                <i class="fas fa-exchange-alt" style="margin-right: 4px;"></i> Deshacer Transbordo
+            </button>
+        </div>
+    `;
+}
+
+function expandirFormularioTransbordo(idCarga) {
+    const carga = window.cargasTransbordoActual.find(c => c.id_carga === Number(idCarga));
+    if (!carga) return;
+    
+    const card = document.getElementById(`tarjeta-transbordo-carga-${idCarga}`);
+    if (!card) return;
+    
+    card.style.borderColor = '#fdba74';
+    card.style.boxShadow = '0 4px 6px -1px rgba(234, 88, 12, 0.1), 0 2px 4px -1px rgba(234, 88, 12, 0.06)';
+
+    let detallesFormHtml = `
+        <div style="font-size: 10px; font-weight: 700; color: #94a3b8; letter-spacing: 0.5px; margin-bottom: 8px;">DETALLE DE PRODUCTOS A TRANSBORDAR</div>
+        <div style="border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; margin-bottom: 16px;">
+    `;
+    
+    if (carga.detalles && carga.detalles.length > 0) {
+        carga.detalles.forEach((d, idx) => {
+            const isLast = idx === carga.detalles.length - 1;
+            const borderBottom = isLast ? '' : 'border-bottom: 1px solid #e2e8f0;';
+            detallesFormHtml += `
+                <div class="producto-transbordo-row" style="padding: 12px; background: white; ${borderBottom} transition: background-color 0.2s;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <div class="producto-transbordo-nombre" style="font-size: 13px; font-weight: 700; color: #1e293b; transition: color 0.2s;">${d.producto}</div>
+                        <div style="font-size: 12px; color: #64748b;">Orig: ${d.cantidad_sacos}</div>
+                    </div>
+                    <div style="font-size: 11px; color: #94a3b8; font-style: italic; margin-bottom: 12px;">Marca visual: ${d.marca_visual || 'Sin marca'}</div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 12px; color: #475569;">Cant. a pasar</span>
+                            <input type="number" class="input-transbordo-cant" data-id-detalle="${d.id_detalle}" data-max="${d.cantidad_sacos}" value="${d.cantidad_sacos}" min="0" max="${d.cantidad_sacos}" style="width: 60px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; outline: none;">
+                        </div>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="checkbox" class="chk-perdida-total" style="width: 14px; height: 14px; accent-color: #dc2626;">
+                            <span style="font-size: 12px; font-weight: 600; color: #dc2626;">Pérdida Total</span>
+                        </label>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    detallesFormHtml += `</div>
+        <div style="display: flex; gap: 12px;">
+            <button class="btn-cancelar-transbordo-item" data-id="${carga.id_carga}" style="flex: 1; padding: 8px; background: #f1f5f9; border: none; border-radius: 6px; color: #475569; font-weight: 700; font-size: 13px; cursor: pointer; transition: all 0.2s;">Cancelar</button>
+            <button class="btn-guardar-transbordo-item" data-id="${carga.id_carga}" style="flex: 1; padding: 8px; background: #ea580c; border: none; border-radius: 6px; color: white; font-weight: 700; font-size: 13px; cursor: pointer; transition: all 0.2s;">Guardar</button>
+        </div>
+    `;
+
+    const topHtml = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h5 style="margin: 0; font-size: 15px; font-weight: 700; color: #0f172a;">Carga #${carga.id_carga}</h5>
+            <span style="background: #fee2e2; color: #b91c1c; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">Siniestrada</span>
+        </div>
+        <div style="font-size: 12px; color: #475569; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px;">
+            <div><span style="font-weight: 600; color: #64748b;">Remitente:</span> ${carga.remitente_nombre || 'Desconocido'}</div>
+            <div><span style="font-weight: 600; color: #64748b;">Destinatario:</span> ${carga.destinatario_nombre || 'Desconocido'}</div>
+        </div>
+    `;
+    
+    card.innerHTML = topHtml + detallesFormHtml;
+}
 
 // Hacer disponible globalmente
 window.init_recepcion_entregas = init_recepcion_entregas;

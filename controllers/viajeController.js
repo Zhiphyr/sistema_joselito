@@ -125,7 +125,7 @@ const obtenerCargasPorViaje = async (req, res) => {
         // Consultar las cargas con remitente y destinatario
         const sqlCargas = `
             SELECT 
-                c.id_carga, 
+                c.id_carga, c.flete_total,
                 c.estado_cobro, c.estado_entrega,
                 rem.nombre_razon_social AS remitente_nombre, rem.numero_documento AS remitente_doc,
                 dest.nombre_razon_social AS destinatario_nombre, dest.numero_documento AS destinatario_doc
@@ -201,6 +201,41 @@ const obtenerViajesRecepcion = async (req, res) => {
     } catch (error) {
         console.error('Error en obtenerViajesRecepcion:', error);
         return res.status(500).json({ success: false, message: 'Error al obtener viajes de recepción' });
+    }
+};
+
+const obtenerViajePorId = async (req, res) => {
+    try {
+        const idViaje = req.params.id;
+        const sql = `
+            SELECT 
+                v.id_viaje,
+                v.fecha_salida,
+                v.fecha_llegada,
+                v.estado_operativo,
+                v.id_camion,
+                v.id_ruta,
+                c.placa as vehiculo,
+                c.nombre as vehiculo_nombre,
+                c.conductor as chofer,
+                r.ciudad_origen,
+                r.ciudad_destino
+            FROM Viaje v
+            JOIN Camiones c ON v.id_camion = c.id_camion
+            JOIN rutas r ON v.id_ruta = r.id_ruta
+            WHERE v.id_viaje = ?
+        `;
+        
+        const [viajes] = await db.query(sql, [idViaje]);
+        
+        if (viajes.length === 0) {
+            return res.status(404).json({ success: false, message: 'Viaje no encontrado' });
+        }
+        
+        return res.status(200).json({ success: true, data: viajes[0] });
+    } catch (error) {
+        console.error('Error en obtenerViajePorId:', error);
+        return res.status(500).json({ success: false, message: 'Error al obtener el viaje' });
     }
 };
 
@@ -453,6 +488,68 @@ const entregaParcialCarga = async (req, res) => {
     }
 };
 
+const rechazarCarga = async (req, res) => {
+    let connection;
+    try {
+        const idCarga = req.params.id;
+        
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        const sqlGetViaje = `SELECT id_viaje FROM Carga WHERE id_carga = ? AND estado != 2`;
+        const [cargaRows] = await connection.query(sqlGetViaje, [idCarga]);
+        
+        if (cargaRows.length === 0) {
+            await connection.rollback();
+            connection.release();
+            return res.status(400).json({ success: false, message: 'La carga no existe.' });
+        }
+        
+        const idViaje = cargaRows[0].id_viaje;
+        
+        const sqlUpdateCarga = `
+            UPDATE Carga
+            SET estado_entrega = 'Rechazado', estado_cobro = 'Anulado'
+            WHERE id_carga = ?
+        `;
+        await connection.query(sqlUpdateCarga, [idCarga]);
+        
+        const sqlCheckAll = `
+            SELECT COUNT(*) AS pendientes 
+            FROM Carga 
+            WHERE id_viaje = ? AND estado_entrega NOT IN ('Entregado', 'Rechazado') AND estado != 2
+        `;
+        const [checkRows] = await connection.query(sqlCheckAll, [idViaje]);
+        
+        let viajeFinalizado = false;
+        if (checkRows[0].pendientes === 0) {
+            const sqlUpdateViaje = `
+                UPDATE Viaje 
+                SET estado_operativo = 'Finalizado' 
+                WHERE id_viaje = ?
+            `;
+            await connection.query(sqlUpdateViaje, [idViaje]);
+            viajeFinalizado = true;
+        }
+        
+        await connection.commit();
+        connection.release();
+        
+        return res.status(200).json({ 
+            success: true, 
+            message: 'Carga rechazada.',
+            viajeFinalizado: viajeFinalizado
+        });
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+            connection.release();
+        }
+        console.error('Error en rechazarCarga:', error);
+        return res.status(500).json({ success: false, message: 'Error interno al rechazar carga.' });
+    }
+};
+
 module.exports = {
     registrarViaje,
     obtenerHistorialViajes,
@@ -460,5 +557,7 @@ module.exports = {
     obtenerViajesRecepcion,
     marcarLlegadaViaje,
     entregarCarga,
-    entregaParcialCarga
+    entregaParcialCarga,
+    obtenerViajePorId,
+    rechazarCarga
 };
