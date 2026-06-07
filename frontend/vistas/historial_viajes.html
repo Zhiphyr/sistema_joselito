@@ -1,0 +1,242 @@
+<div class="vista-contenedor" style="max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; height: 100%; box-sizing: border-box;">
+    
+
+    <!-- Buscador y Filtros -->
+    <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 250px; position: relative;">
+            <i class="fas fa-search" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+            <input type="text" id="input-buscar-viaje" class="form-control" placeholder="Buscar viaje por ID, placa o chofer..." style="padding-left: 44px; border-radius: var(--radius-md); box-shadow: 0 1px 2px rgba(0,0,0,0.05); height: 42px;">
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Salida:</span>
+            <input type="date" id="input-fecha-salida" class="form-control" style="height: 42px; border-radius: var(--radius-md); box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Llegada:</span>
+            <input type="date" id="input-fecha-llegada" class="form-control" style="height: 42px; border-radius: var(--radius-md); box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <i class="fas fa-filter" style="color: var(--text-muted);"></i>
+            <select id="select-estado-viaje" class="form-control" style="width: auto; height: 42px; border-radius: var(--radius-md); box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <option value="todos">Todos los estados</option>
+                <option value="en_ruta">En Ruta</option>
+                <option value="llego_destino">Llegó a Destino</option>
+                <option value="finalizado">Finalizado</option>
+                <option value="incidencia">Incidencia</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Contenedor de Tarjetas de Viaje -->
+    <div id="contenedor-tarjetas-viajes" style="display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding-right: 8px; padding-bottom: 24px;">
+        <!-- Aquí se renderizarán dinámicamente las tarjetas de viaje -->
+    </div>
+</div>
+
+<!-- Modal Detalles del Viaje -->
+<div id="modal-detalles-viaje" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1050; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+    <div style="background: white; border-radius: 12px; width: 100%; max-width: 650px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; max-height: 90vh;">
+        
+        <!-- Header Modal -->
+        <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; gap: 16px; align-items: center;">
+                <div style="width: 48px; height: 48px; border-radius: 12px; background: #e0f2fe; color: var(--brand-blue); display: flex; justify-content: center; align-items: center; font-size: 20px;">
+                    <i class="fas fa-truck"></i>
+                </div>
+                <div>
+                    <h3 id="modal-detalle-titulo" style="margin: 0 0 4px 0; font-size: 18px; color: var(--text-primary); font-weight: 700;">Detalles del Viaje</h3>
+                    <p id="modal-detalle-ruta" style="margin: 0; font-size: 13px; color: var(--text-secondary);">Origen - Destino</p>
+                </div>
+            </div>
+            <button id="btn-cerrar-modal-x" style="background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; padding: 4px;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Body Modal (Scrollable) -->
+        <div style="padding: 24px; overflow-y: auto; flex: 1;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                
+                <!-- Estado -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+                    <p style="margin: 0 0 12px 0; font-size: 13px; color: var(--text-secondary); font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-info-circle"></i> Estado
+                    </p>
+                    <span id="modal-detalle-estado" style="display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">-</span>
+                </div>
+
+                <!-- Fechas -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+                    <p style="margin: 0 0 12px 0; font-size: 13px; color: var(--text-secondary); font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                        <i class="far fa-calendar-alt"></i> Fechas
+                    </p>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 13px; color: var(--text-muted);">Salida:</span>
+                        <span id="modal-detalle-fecha-salida" style="font-size: 13px; color: var(--text-primary); font-weight: 500;">-</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="font-size: 13px; color: var(--text-muted);">Llegada:</span>
+                        <span id="modal-detalle-fecha-llegada" style="font-size: 13px; color: var(--text-primary); font-weight: 500;">-</span>
+                    </div>
+                </div>
+
+                <!-- Vehículo -->
+                <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+                    <p style="margin: 0 0 12px 0; font-size: 14px; color: var(--text-primary); font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-truck-moving" style="color: var(--brand-blue);"></i> Vehículo
+                    </p>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 13px; color: var(--text-muted);">Apodo/Nombre:</span>
+                        <span id="modal-detalle-vehiculo-nombre" style="font-size: 13px; color: var(--text-primary); font-weight: 600;">-</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="font-size: 13px; color: var(--text-muted);">Placa:</span>
+                        <span id="modal-detalle-vehiculo-placa" style="font-size: 13px; color: var(--text-primary); font-weight: 600;">-</span>
+                    </div>
+                </div>
+
+                <!-- Conductor -->
+                <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+                    <p style="margin: 0 0 12px 0; font-size: 14px; color: var(--text-primary); font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                        <i class="far fa-user" style="color: var(--brand-blue);"></i> Conductor
+                    </p>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 13px; color: var(--text-muted);">Nombre:</span>
+                        <span id="modal-detalle-chofer-nombre" style="font-size: 13px; color: var(--text-primary); font-weight: 600;">-</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 13px; color: var(--text-muted);"><i class="far fa-id-card"></i> DNI:</span>
+                        <span id="modal-detalle-chofer-dni" style="font-size: 13px; color: var(--text-primary); font-weight: 600;">-</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="font-size: 13px; color: var(--text-muted);"><i class="fas fa-phone-alt"></i> Teléfono:</span>
+                        <span id="modal-detalle-chofer-telefono" style="font-size: 13px; color: var(--text-primary); font-weight: 600;">-</span>
+                    </div>
+                </div>
+
+                <!-- Carga -->
+                <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+                    <p style="margin: 0 0 12px 0; font-size: 14px; color: var(--text-primary); font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-box" style="color: var(--brand-blue);"></i> Carga
+                    </p>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 13px; color: var(--text-muted);">Total Cargas:</span>
+                        <span id="modal-detalle-total-cargas" style="font-size: 13px; color: var(--text-primary); font-weight: 600;">-</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="font-size: 13px; color: var(--text-muted);">Peso Total:</span>
+                        <span id="modal-detalle-peso-total" style="font-size: 13px; color: var(--text-primary); font-weight: 600;">-</span>
+                    </div>
+                </div>
+
+                <!-- Finanzas -->
+                <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+                    <p style="margin: 0 0 12px 0; font-size: 14px; color: var(--text-primary); font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-dollar-sign" style="color: var(--brand-blue);"></i> Finanzas
+                    </p>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 13px; color: var(--text-muted);">Tarifa Transportista:</span>
+                        <span id="modal-detalle-tarifa" style="font-size: 13px; color: var(--text-primary); font-weight: 600;">-</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="font-size: 13px; color: var(--text-muted);">Flete Total:</span>
+                        <span id="modal-detalle-flete" style="font-size: 13px; color: var(--text-primary); font-weight: 600;">-</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Footer Modal -->
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border-radius: 0 0 12px 12px;">
+            <span style="font-size: 13px; color: var(--text-muted);">Creado por: <strong id="modal-detalle-creador" style="color: var(--text-primary);"></strong></span>
+            <button id="btn-cerrar-modal-btn" style="padding: 8px 16px; background: white; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; font-weight: 600; color: var(--text-primary); cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                Cerrar
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<!-- Modal Cargas del Viaje -->
+<div id="modal-cargas-viaje" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1050; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+    <div style="background: white; border-radius: 12px; width: 100%; max-width: 900px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; max-height: 90vh;">
+        
+        <!-- Header Modal -->
+        <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; gap: 16px; align-items: center;">
+                <div style="width: 48px; height: 48px; border-radius: 12px; background: #dcfce7; color: #16a34a; display: flex; justify-content: center; align-items: center; font-size: 20px;">
+                    <i class="fas fa-box-open"></i>
+                </div>
+                <div>
+                    <h3 id="modal-cargas-titulo" style="margin: 0 0 4px 0; font-size: 18px; color: var(--text-primary); font-weight: 700;">Cargas del Viaje</h3>
+                    <p id="modal-cargas-subtitulo" style="margin: 0; font-size: 13px; color: var(--text-secondary);">Total de cargas registradas: 0</p>
+                </div>
+            </div>
+            <button id="btn-cerrar-modal-cargas-x" style="background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; padding: 4px;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Body Modal (Scrollable) -->
+        <div id="modal-cargas-body" style="padding: 24px; overflow-y: auto; flex: 1; min-height: 0; border-radius: 0 0 12px 12px; display: flex; flex-direction: column; gap: 24px; background: #f8fafc;">
+            <!-- Contenido dinámico renderizado desde JS -->
+        </div>
+
+    </div>
+</div>
+
+<style>
+
+    #modal-cargas-body > * {
+        flex-shrink: 0;
+    }
+
+    .btn-viaje {
+        width: 100%;
+        padding: 8px 12px;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: center;
+    }
+
+    .btn-ver-detalles {
+        background: #f0f9ff;
+        color: var(--brand-blue);
+    }
+    .btn-ver-detalles:hover {
+        background: #e0f2fe;
+    }
+
+    .btn-ver-cargas {
+        background: #f1f5f9;
+        color: var(--text-secondary);
+    }
+    .btn-ver-cargas:hover {
+        background: #e2e8f0;
+    }
+
+    .btn-estado-success {
+        background: #f0fdf4;
+        color: #16a34a;
+    }
+    .btn-estado-success:hover {
+        background: #dcfce7;
+    }
+
+    .btn-incidencia {
+        background: #fef2f2;
+        color: #dc2626;
+    }
+    .btn-incidencia:hover {
+        background: #fee2e2;
+    }
+
+    .card-viaje:hover {
+        border-color: #cbd5e1;
+    }
+</style>
