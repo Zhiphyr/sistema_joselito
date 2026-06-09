@@ -11,5 +11,6 @@ router.put('/cargas/:id/entregar', viajeController.entregarCarga);
 router.put('/cargas/:id/rechazar', viajeController.rechazarCarga);
 router.post('/cargas/:id/entrega-parcial', viajeController.entregaParcialCarga);
 router.get('/:id/cargas', viajeController.obtenerCargasPorViaje);
+router.post('/transbordo', viajeController.confirmarTransbordo);
 
 module.exports = router;

@@ -83,6 +83,7 @@ const obtenerHistorialViajes = async (req, res) => {
         const sql = `
             SELECT 
                 v.id_viaje,
+                v.id_viaje_origen,
                 v.fecha_salida,
                 v.fecha_llegada,
                 v.tarifa_transportista,
@@ -175,6 +176,7 @@ const obtenerViajesRecepcion = async (req, res) => {
         const sql = `
             SELECT 
                 v.id_viaje,
+                v.id_viaje_origen,
                 v.fecha_salida,
                 v.fecha_llegada,
                 v.estado_operativo,
@@ -522,7 +524,9 @@ const rechazarCarga = async (req, res) => {
         const [checkRows] = await connection.query(sqlCheckAll, [idViaje]);
         
         let viajeFinalizado = false;
+        
         if (checkRows[0].pendientes === 0) {
+            // 4. Si todas están entregadas, el viaje finaliza
             const sqlUpdateViaje = `
                 UPDATE Viaje 
                 SET estado_operativo = 'Finalizado' 
@@ -537,7 +541,7 @@ const rechazarCarga = async (req, res) => {
         
         return res.status(200).json({ 
             success: true, 
-            message: 'Carga rechazada.',
+            message: 'Carga marcada como entregada.',
             viajeFinalizado: viajeFinalizado
         });
     } catch (error) {
@@ -545,8 +549,144 @@ const rechazarCarga = async (req, res) => {
             await connection.rollback();
             connection.release();
         }
-        console.error('Error en rechazarCarga:', error);
-        return res.status(500).json({ success: false, message: 'Error interno al rechazar carga.' });
+        console.error('Error en entregarCarga:', error);
+        return res.status(500).json({ success: false, message: 'Error interno al registrar la entrega.' });
+    }
+};
+
+
+
+const confirmarTransbordo = async (req, res) => {
+    let connection;
+    try {
+        const { id_viaje_accidentado, datos_nuevo_viaje, cargas_transbordo } = req.body;
+        
+        if (!id_viaje_accidentado || !datos_nuevo_viaje || !cargas_transbordo) {
+            return res.status(400).json({ success: false, message: 'Datos incompletos para transbordo' });
+        }
+
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. Crear Viaje de Rescate
+        const sqlNuevoViaje = `
+            INSERT INTO Viaje (id_camion, id_ruta, tarifa_transportista, fecha_salida, id_usuario, estado_operativo, id_viaje_origen)
+            VALUES (?, ?, ?, ?, ?, 'En Ruta', ?)
+        `;
+        const [resultNuevoViaje] = await connection.query(sqlNuevoViaje, [
+            datos_nuevo_viaje.id_camion, 
+            datos_nuevo_viaje.id_ruta, 
+            datos_nuevo_viaje.tarifa_transportista, 
+            datos_nuevo_viaje.fecha_salida, 
+            datos_nuevo_viaje.id_usuario,
+            id_viaje_accidentado
+        ]);
+        const idNuevoViaje = resultNuevoViaje.insertId;
+
+        // 2. Siniestrar Viaje Original
+        const sqlViajeOriginal = `UPDATE Viaje SET estado_operativo = 'Incidencia' WHERE id_viaje = ?`;
+        await connection.query(sqlViajeOriginal, [id_viaje_accidentado]);
+
+        // 3. Iteración de Cargas
+        for (const cargaTrans of cargas_transbordo) {
+            const { id_carga_original, detalles } = cargaTrans;
+
+            // Obtener carga original
+            const [cargaRows] = await connection.query(`SELECT * FROM Carga WHERE id_carga = ?`, [id_carga_original]);
+            if (cargaRows.length === 0) throw new Error(`Carga ${id_carga_original} no encontrada`);
+            const cargaOriginal = cargaRows[0];
+
+            const hasTransferidos = detalles.some(d => Number(d.cantidad_a_pasar) > 0);
+            let idNuevaCarga = null;
+            let nuevoFleteTotal = 0;
+            let viejoFleteTotal = 0;
+
+            // Crear Carga de Rescate (solo si hay al menos un detalle transferido)
+            if (hasTransferidos) {
+                const [resultNuevaCarga] = await connection.query(`
+                    INSERT INTO Carga (id_viaje, id_remitente, id_destinatario, flete_total, estado_cobro, estado_entrega, id_usuario)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `, [
+                    idNuevoViaje,
+                    cargaOriginal.id_remitente,
+                    cargaOriginal.id_destinatario,
+                    0.00,
+                    'Pendiente',
+                    'En ruta', // Minúscula para consistencia con la DB actual
+                    datos_nuevo_viaje.id_usuario
+                ]);
+                idNuevaCarga = resultNuevaCarga.insertId;
+            }
+
+            // Procesar Detalles
+            for (const det of detalles) {
+                const [detRows] = await connection.query(`SELECT * FROM Detalle_Carga WHERE id_detalle = ?`, [det.id_detalle_original]);
+                if (detRows.length === 0) continue;
+                const detOrig = detRows[0];
+                
+                const cantPasar = Number(det.cantidad_a_pasar);
+                const cantPerdida = Number(det.cantidad_perdida);
+
+                // Para lo salvado (INSERT)
+                if (cantPasar > 0) {
+                    const pesoTotalSalvado = cantPasar * Number(detOrig.peso_unitario);
+                    const fleteSubtotalSalvado = pesoTotalSalvado * Number(detOrig.precio_peso);
+                    nuevoFleteTotal += fleteSubtotalSalvado;
+
+                    await connection.query(`
+                        INSERT INTO Detalle_Carga (id_carga, id_producto, marca_visual, cantidad_sacos, peso_unitario, peso_total, precio_peso, flete_subtotal)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    `, [
+                        idNuevaCarga,
+                        detOrig.id_producto,
+                        detOrig.marca_visual,
+                        cantPasar,
+                        detOrig.peso_unitario,
+                        pesoTotalSalvado,
+                        detOrig.precio_peso,
+                        fleteSubtotalSalvado
+                    ]);
+                }
+
+                // Para la merma (UPDATE)
+                if (cantPerdida >= 0) {
+                    const pesoTotalPerdido = cantPerdida * Number(detOrig.peso_unitario);
+                    const fleteSubtotalPerdido = pesoTotalPerdido * Number(detOrig.precio_peso);
+                    viejoFleteTotal += fleteSubtotalPerdido;
+
+                    await connection.query(`
+                        UPDATE Detalle_Carga 
+                        SET cantidad_sacos = ?, peso_total = ?, flete_subtotal = ? 
+                        WHERE id_detalle = ?
+                    `, [cantPerdida, pesoTotalPerdido, fleteSubtotalPerdido, det.id_detalle_original]);
+                }
+            }
+
+            // Actualizar flete_total nueva carga
+            if (hasTransferidos && idNuevaCarga) {
+                await connection.query(`UPDATE Carga SET flete_total = ? WHERE id_carga = ?`, [nuevoFleteTotal, idNuevaCarga]);
+            }
+
+            // Actualizar carga original a Siniestrado
+            await connection.query(`
+                UPDATE Carga 
+                SET flete_total = ?, estado_entrega = 'Siniestrado', estado_cobro = 'Anulado' 
+                WHERE id_carga = ?
+            `, [viejoFleteTotal, id_carga_original]);
+        }
+
+        await connection.commit();
+        connection.release();
+
+        return res.status(200).json({ success: true, message: 'Transbordo procesado correctamente', id_viaje: idNuevoViaje });
+
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+            connection.release();
+        }
+        console.error('Error en confirmarTransbordo:', error);
+        return res.status(500).json({ success: false, message: 'Error interno al confirmar transbordo: ' + error.message });
     }
 };
 
@@ -559,5 +699,6 @@ module.exports = {
     entregarCarga,
     entregaParcialCarga,
     obtenerViajePorId,
-    rechazarCarga
+    rechazarCarga,
+    confirmarTransbordo
 };

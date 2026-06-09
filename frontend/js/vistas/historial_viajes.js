@@ -84,10 +84,13 @@ function abrirModalDetallesViaje(idStr) {
 
     // Fechas
     document.getElementById('modal-detalle-fecha-salida').textContent = formatFechaCompleta(viaje.fecha_salida);
-    if (viaje.estado_operativo === 'En Ruta' || !viaje.fecha_llegada) {
-        document.getElementById('modal-detalle-fecha-llegada').textContent = 'En Ruta';
+    const elemLlegada = document.getElementById('modal-detalle-fecha-llegada');
+    if ((viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.fecha_llegada) {
+        elemLlegada.textContent = formatFechaCompleta(viaje.fecha_llegada);
+    } else if (viaje.estado_operativo === 'En Ruta') {
+        elemLlegada.textContent = 'En Ruta';
     } else {
-        document.getElementById('modal-detalle-fecha-llegada').textContent = formatFechaCompleta(viaje.fecha_llegada);
+        elemLlegada.innerHTML = `<span style="color: #dc2626; font-weight: 600;">${viaje.estado_operativo}</span>`;
     }
 
     // Vehículo
@@ -161,6 +164,7 @@ async function abrirModalCargasViaje(idStr) {
                 let colorEntrega = '#64748b', bgEntrega = '#f1f5f9', borderEntrega = '#e2e8f0';
                 if (carga.estado_entrega === 'Entregado') { colorEntrega = '#16a34a'; bgEntrega = '#dcfce7'; borderEntrega = '#bbf7d0'; }
                 else if (carga.estado_entrega === 'En ruta') { colorEntrega = '#2563eb'; bgEntrega = '#dbeafe'; borderEntrega = '#bfdbfe'; }
+                else if (carga.estado_entrega === 'Siniestrado') { colorEntrega = '#dc2626'; bgEntrega = '#fee2e2'; borderEntrega = '#fecaca'; }
                 else { colorEntrega = '#d97706'; bgEntrega = '#fef3c7'; borderEntrega = '#fde68a'; } // En Almacen...
 
                 let filasProductos = '';
@@ -353,15 +357,17 @@ function renderizarTarjetasViaje(viajes) {
 
         const tarjetaHtml = `
             <div class="card-viaje" style="background: #ffffff; border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: flex; gap: 24px;">
-                
-                <div style="display: flex; gap: 16px; min-width: 200px;">
-                    <div style="width: 48px; height: 48px; border-radius: 12px; background: #e0f2fe; color: var(--brand-blue); display: flex; justify-content: center; align-items: center; font-size: 20px;">
-                        <i class="fas fa-truck"></i>
+                <div style="display: flex; flex-direction: column; justify-content: space-between; width: 240px; flex-shrink: 0;">
+                    <div style="display: flex; gap: 16px;">
+                        <div style="width: 48px; height: 48px; border-radius: 12px; background: #e0f2fe; color: var(--brand-blue); display: flex; justify-content: center; align-items: center; font-size: 20px; flex-shrink: 0;">
+                            <i class="fas fa-truck"></i>
+                        </div>
+                        <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                            <h3 style="margin: 0 0 4px 0; font-size: 16px; color: var(--text-primary); font-weight: 700;">Viaje #${viaje.id_viaje}</h3>
+                            <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">${viaje.ciudad_origen || 'Origen'} - ${viaje.ciudad_destino || 'Destino'}</p>
+                        </div>
                     </div>
-                    <div>
-                        <h3 style="margin: 0 0 4px 0; font-size: 16px; color: var(--text-primary); font-weight: 700;">Viaje #${viaje.id_viaje}</h3>
-                        <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">${viaje.ciudad_origen || 'Origen'} - ${viaje.ciudad_destino || 'Destino'}</p>
-                    </div>
+                    ${viaje.id_viaje_origen ? `<div style="margin-top: 12px;"><span style="background: #ffedd5; color: #c2410c; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; display: inline-block;">TRANSBORDO DEL VIAJE #${viaje.id_viaje_origen}</span></div>` : ''}
                 </div>
 
                 <div style="flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; border-left: 1px solid var(--border-light); padding-left: 24px; align-content: center;">

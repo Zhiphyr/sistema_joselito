@@ -193,10 +193,16 @@ function renderizarTarjetasRecepcion(viajes) {
                     </span>
                 </div>
                 
-                <!-- Destino -->
-                <div class="card-row" style="margin-bottom: 24px;">
-                    <i class="fas fa-map-marker-alt"></i>
-                    <span>${viaje.ciudad_origen} - ${viaje.ciudad_destino}</span>
+                <!-- Destino y Transbordo -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
+                    <div class="card-row">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>${viaje.ciudad_origen} - ${viaje.ciudad_destino}</span>
+                    </div>
+                    ${viaje.id_viaje_origen ? `
+                    <span style="background: #ffedd5; color: #c2410c; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase;">
+                        TRANSBORDO DEL VIAJE #${viaje.id_viaje_origen}
+                    </span>` : ''}
                 </div>
                 
                 <!-- Detalles -->
@@ -1003,19 +1009,145 @@ document.addEventListener('click', async (e) => {
         
         if (inputCant) {
             if (chkPerdidaTotal.checked) {
+                inputCant.dataset.previousValue = inputCant.value;
                 inputCant.value = 0;
                 inputCant.disabled = true;
-                inputCant.style.backgroundColor = '#f1f5f9';
                 if (rowDiv) rowDiv.style.backgroundColor = '#fef2f2';
                 if (nombreDiv) nombreDiv.style.color = '#dc2626';
             } else {
-                inputCant.value = inputCant.getAttribute('data-max');
+                inputCant.value = inputCant.dataset.previousValue || inputCant.getAttribute('data-max');
                 inputCant.disabled = false;
-                inputCant.style.backgroundColor = 'white';
                 if (rowDiv) rowDiv.style.backgroundColor = 'white';
                 if (nombreDiv) nombreDiv.style.color = '#1e293b';
             }
         }
+    }
+
+    const btnConfirmarTransbordo = e.target.closest('#btn-confirmar-transbordo');
+    if (btnConfirmarTransbordo) {
+        const idCamion = document.getElementById('transbordo-camion-select').value;
+        const tarifaTransportista = document.getElementById('transbordo-tarifa-input').value;
+        const fechaSalida = document.getElementById('transbordo-fecha-input').value;
+
+        if (!idCamion || !tarifaTransportista) {
+            Swal.fire({
+                title: 'Atención',
+                text: 'Debe seleccionar un camión y especificar la tarifa del transportista.',
+                icon: 'warning',
+                confirmButtonColor: '#ea580c'
+            });
+            document.querySelector('.transbordo-tab[data-tab="camion"]').click();
+            return;
+        }
+
+        const idViajeAccidentado = window.idViajeTransbordoActual;
+        const idRuta = window.idRutaTransbordoActual;
+
+        const hasTransfers = window.transbordoState && Object.keys(window.transbordoState).length > 0;
+        
+        if (!hasTransfers) {
+            Swal.fire({
+                title: 'Sin cargas para transbordar',
+                text: 'No has asignado ninguna carga al nuevo camión de transbordo. Ve a la pestaña Seleccionar Carga y transborda al menos una carga.',
+                icon: 'warning',
+                confirmButtonColor: '#ea580c'
+            });
+            document.querySelector('.transbordo-tab[data-tab="carga"]').click();
+            return;
+        }
+
+        const cargas_transbordo = [];
+        
+        for (const [idCarga, state] of Object.entries(window.transbordoState)) {
+            const detalles = [];
+            
+            if (state.transferidos) {
+                state.transferidos.forEach(d => {
+                    detalles.push({
+                        id_detalle_original: d.id_detalle,
+                        cantidad_a_pasar: d.cantidad_sacos,
+                        cantidad_perdida: 0
+                    });
+                });
+            }
+            
+            if (state.resto) {
+                state.resto.forEach(d => {
+                    const cantPerdida = d.perdida_total ? d.cantidad_sacos : 0;
+                    const existingDetalle = detalles.find(x => x.id_detalle_original === d.id_detalle);
+                    
+                    if (existingDetalle) {
+                        existingDetalle.cantidad_perdida = cantPerdida;
+                    } else {
+                        detalles.push({
+                            id_detalle_original: d.id_detalle,
+                            cantidad_a_pasar: 0,
+                            cantidad_perdida: cantPerdida
+                        });
+                    }
+                });
+            }
+            
+            cargas_transbordo.push({
+                id_carga_original: Number(idCarga),
+                detalles: detalles
+            });
+        }
+
+        const payload = {
+            id_viaje_accidentado: idViajeAccidentado,
+            datos_nuevo_viaje: {
+                id_camion: Number(idCamion),
+                id_ruta: idRuta,
+                id_chofer: null,
+                fecha_salida: fechaSalida,
+                tarifa_transportista: Number(tarifaTransportista),
+                id_usuario: Number(localStorage.getItem('user_id') || 1)
+            },
+            cargas_transbordo: cargas_transbordo
+        };
+
+        Swal.fire({
+            title: '¿Confirmar Transbordo?',
+            text: 'Se registrará un nuevo viaje con el camión seleccionado y se dividirán las cargas. Esta acción no se puede deshacer.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#ea580c',
+            cancelButtonColor: '#94a3b8',
+            confirmButtonText: 'Sí, confirmar',
+            cancelButtonText: 'Revisar de nuevo'
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    const response = await fetch('/api/viajes/transbordo', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-user-profile': localStorage.getItem('user_id') || 1
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        document.getElementById('modal-transbordo').style.display = 'none';
+                        Swal.fire({
+                            title: '¡Transbordo Exitoso!',
+                            text: `Se ha creado el Viaje de Rescate #${data.id_viaje}.`,
+                            icon: 'success',
+                            confirmButtonColor: '#ea580c'
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (error) {
+                    Swal.fire('Error', error.message || 'No se pudo completar el transbordo.', 'error');
+                }
+            }
+        });
     }
 
     const btnRechazar = e.target.closest('.btn-rechazar-carga');
@@ -1310,6 +1442,9 @@ async function abrirModalTransbordo(idViaje) {
         }
 
         const viaje = dataViaje.data;
+
+        window.idViajeTransbordoActual = Number(idViaje);
+        window.idRutaTransbordoActual = viaje.id_ruta;
 
         // Populate fields
         document.getElementById('modal-transbordo-titulo-viaje').textContent = `Viaje #${viaje.id_viaje}`;
