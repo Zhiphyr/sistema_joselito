@@ -1107,12 +1107,32 @@ document.addEventListener('click', async (e) => {
             cargas_transbordo: cargas_transbordo
         };
 
+        const promedioFlete = window.promedioFleteActual || 0;
+        const tarifaNum = Number(tarifaTransportista) || 0;
+        
+        let confirmTitle = '¿Confirmar Transbordo?';
+        let confirmText = 'Se registrará un nuevo viaje con el camión seleccionado y se dividirán las cargas. Esta acción no se puede deshacer.';
+        let confirmIcon = 'question';
+        let confirmColor = '#ea580c';
+
+        if (promedioFlete > 0 && tarifaNum > promedioFlete) {
+            confirmTitle = '¡Atención! Pérdida Financiera';
+            confirmText = 'La tarifa del viaje de rescate (S/ ' + tarifaNum.toFixed(2) + ') es mayor al flete promedio de las cargas (S/ ' + promedioFlete.toFixed(2) + '). Esto generará pérdidas directas. ¿Estás seguro de continuar y guardar?';
+            confirmIcon = 'warning';
+            confirmColor = '#dc2626';
+        } else if (tarifaNum === 0) {
+            confirmTitle = 'Tarifa en Cero';
+            confirmText = 'Estás registrando una tarifa de S/ 0.00. ¿Confirmas que este transbordo no tiene costo de flete por kilo?';
+            confirmIcon = 'warning';
+            confirmColor = '#ea580c';
+        }
+
         Swal.fire({
-            title: '¿Confirmar Transbordo?',
-            text: 'Se registrará un nuevo viaje con el camión seleccionado y se dividirán las cargas. Esta acción no se puede deshacer.',
-            icon: 'question',
+            title: confirmTitle,
+            text: confirmText,
+            icon: confirmIcon,
             showCancelButton: true,
-            confirmButtonColor: '#ea580c',
+            confirmButtonColor: confirmColor,
             cancelButtonColor: '#94a3b8',
             confirmButtonText: 'Sí, confirmar',
             cancelButtonText: 'Revisar de nuevo'
@@ -1407,6 +1427,35 @@ document.addEventListener('input', (e) => {
         const row = input.closest('div').parentElement;
         row.querySelector('.input-parcial-aceptado').value = aceptados;
     }
+    
+    if (e.target.id === 'transbordo-tarifa-input') {
+        const input = e.target;
+        const tarifaNum = Number(input.value) || 0;
+        const promedioFlete = window.promedioFleteActual || 0;
+        const warningSpan = document.getElementById('transbordo-tarifa-warning');
+        
+        if (promedioFlete > 0 && tarifaNum > promedioFlete) {
+            warningSpan.style.display = 'block';
+        } else {
+            warningSpan.style.display = 'none';
+        }
+    }
+});
+
+document.addEventListener('change', (e) => {
+    if (e.target.id === 'transbordo-tarifa-input') {
+        const input = e.target;
+        let val = Number(input.value);
+        
+        if (isNaN(val)) val = 0;
+        if (val < 0) val = 0;
+        if (val > 99999999.99) val = 99999999.99;
+        
+        input.value = val.toFixed(2);
+        
+        // Disparar input para que se actualice la alerta si es necesario
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
 });
 
 async function abrirModalTransbordo(idViaje) {
@@ -1487,6 +1536,38 @@ async function abrirModalTransbordo(idViaje) {
             window.transbordoState = {};
             window.cargasTransbordoActual = dataCargas.data;
             actualizarListasTransbordo();
+
+            // Populate Summary Box
+            const camionTxt = viaje.vehiculo ? viaje.vehiculo : `Camión ID: ${viaje.id_camion}`;
+            document.getElementById('transbordo-resumen-camion').textContent = `${camionTxt} (Viaje #${viaje.id_viaje})`;
+            
+            let totalPesoTransbordar = 0;
+            let totalFleteTransbordar = 0;
+            
+            dataCargas.data.forEach(carga => {
+                if (carga.estado_entrega !== 'Entregado') { // Solo lo no entregado se transborda o siniestra
+                    if (carga.detalles && carga.detalles.length > 0) {
+                        carga.detalles.forEach(prod => {
+                            totalPesoTransbordar += Number(prod.peso_total) || 0;
+                            totalFleteTransbordar += Number(prod.flete_subtotal) || 0;
+                        });
+                    }
+                }
+            });
+
+            let tonAprox = (totalPesoTransbordar / 1000).toFixed(2);
+            document.getElementById('transbordo-resumen-peso').innerHTML = `${totalPesoTransbordar.toFixed(2)} kg <span style="font-size:11px; color:var(--text-muted);">(${tonAprox} Ton)</span>`;
+
+            let promedioFlete = totalPesoTransbordar > 0 ? (totalFleteTransbordar / totalPesoTransbordar) : 0;
+            window.promedioFleteActual = promedioFlete; // Store for validations
+            document.getElementById('transbordo-resumen-flete').textContent = `S/ ${promedioFlete.toFixed(2)} / kg`;
+
+            let tarifaAntigua = Number(viaje.tarifa_transportista) || 0;
+            document.getElementById('transbordo-resumen-tarifa').textContent = `S/ ${tarifaAntigua.toFixed(2)} / kg`;
+
+            document.getElementById('transbordo-tarifa-input').value = '';
+            document.getElementById('transbordo-tarifa-warning').style.display = 'none';
+
         } else {
             console.error('Error al obtener cargas:', dataCargas.message);
         }

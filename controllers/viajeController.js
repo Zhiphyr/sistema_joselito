@@ -275,6 +275,8 @@ const obtenerViajePorId = async (req, res) => {
                 v.estado_operativo,
                 v.id_camion,
                 v.id_ruta,
+                v.tarifa_transportista,
+                v.id_viaje_origen,
                 c.placa as vehiculo,
                 c.nombre as vehiculo_nombre,
                 c.conductor as chofer,

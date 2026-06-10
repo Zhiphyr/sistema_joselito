@@ -143,6 +143,30 @@ async function init_historial_viajes() {
             descuentoInput.value = (total - emp).toFixed(2);
         }
     });
+
+    document.getElementById('modal-incidencias-body')?.addEventListener('change', (e) => {
+        const targetId = e.target.id;
+        if (!targetId || !targetId.startsWith('nueva-incidencia-')) return;
+        if (e.target.type !== 'number') return;
+
+        let val = Number(e.target.value);
+        if (isNaN(val)) val = 0;
+        if (val < 0) val = 0;
+
+        if (targetId === 'nueva-incidencia-gastos') {
+            if (val > 99999999.99) val = 99999999.99;
+        }
+
+        if (e.target.hasAttribute('max')) {
+            const maxVal = Number(e.target.getAttribute('max'));
+            if (val > maxVal) val = maxVal;
+        }
+
+        e.target.value = val.toFixed(2);
+        
+        // Forzar recalculo en caso de que el valor haya cambiado por el formato/límite
+        e.target.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     
     await fetchViajes(false);
 }
@@ -259,6 +283,13 @@ async function abrirModalCargasViaje(idStr) {
                 else if (carga.estado_entrega === 'Rechazado') { colorEntrega = '#ea580c'; bgEntrega = '#ffedd5'; borderEntrega = '#fed7aa'; }
                 else { colorEntrega = '#d97706'; bgEntrega = '#fef3c7'; borderEntrega = '#fde68a'; } // En Almacen...
 
+                let isTragedia = (carga.estado_entrega === 'Rechazado' || carga.estado_entrega === 'Siniestrado') && carga.estado_cobro === 'Anulado';
+                let headerCant = isTragedia ? 'CANT. PERDIDA' : 'CANT.';
+                let headerFleteTot = isTragedia ? 'FLETE PERDIDO' : 'FLETE TOT.';
+                let colorFleteCell = isTragedia ? '#dc2626' : 'var(--text-primary)';
+                let colorFleteTotal = isTragedia ? '#dc2626' : '#16a34a';
+                let footerText = isTragedia ? 'Totales de Cargas y Flete Perdido' : 'Totales de Carga y Flete a Cobrar';
+
                 let filasProductos = '';
                 if (carga.detalles && carga.detalles.length > 0) {
                     carga.detalles.forEach(prod => {
@@ -266,15 +297,22 @@ async function abrirModalCargasViaje(idStr) {
                         totalKilos += Number(prod.peso_total);
                         totalFlete += Number(prod.flete_subtotal);
 
+                        let isTransbordado = carga.estado_entrega === 'Siniestrado' && carga.estado_cobro === 'Anulado' && Number(prod.cantidad_sacos) === 0;
+                        let textColor = isTransbordado ? 'var(--text-muted)' : 'var(--text-primary)';
+                        let secTextColor = isTransbordado ? 'var(--text-muted)' : 'var(--text-secondary)';
+                        let weightColor = isTransbordado ? 'var(--text-muted)' : 'var(--text-primary)';
+                        let fleteColor = isTransbordado ? 'var(--text-muted)' : colorFleteCell;
+                        let extraBadge = isTransbordado ? '<br><span style="display: inline-block; margin-top: 4px; padding: 2px 6px; background: #f1f5f9; color: #64748b; border-radius: 4px; font-size: 9px; font-weight: 500;">Transbordado a otro viaje</span>' : '';
+
                         filasProductos += `
                             <tr>
-                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-weight: 600; color: var(--text-primary); white-space: nowrap;">${prod.producto || '-'}</td>
-                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; color: var(--text-secondary); white-space: nowrap;">${prod.marca_visual || 'Sin Marca'}</td>
-                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; white-space: nowrap;">${prod.cantidad_sacos}</td>
-                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; white-space: nowrap;">${prod.peso_unitario} kg</td>
-                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; font-weight: 700; color: var(--text-primary); white-space: nowrap;">${Number(prod.peso_total).toFixed(2)} kg</td>
-                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; white-space: nowrap;">S/ ${Number(prod.precio_peso).toFixed(2)}</td>
-                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: right; font-weight: 700; color: var(--text-primary); white-space: nowrap;">S/ ${Number(prod.flete_subtotal).toFixed(2)}</td>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-weight: 600; color: ${textColor}; white-space: nowrap;">${prod.producto || '-'}${extraBadge}</td>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; color: ${secTextColor}; white-space: nowrap;">${prod.marca_visual || 'Sin Marca'}</td>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; color: ${textColor}; white-space: nowrap;">${prod.cantidad_sacos}</td>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; color: ${secTextColor}; white-space: nowrap;">${prod.peso_unitario} kg</td>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; font-weight: 700; color: ${weightColor}; white-space: nowrap;">${Number(prod.peso_total).toFixed(2)} kg</td>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; color: ${secTextColor}; white-space: nowrap;">S/ ${Number(prod.precio_peso).toFixed(2)}</td>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: right; font-weight: 700; color: ${fleteColor}; white-space: nowrap;">S/ ${Number(prod.flete_subtotal).toFixed(2)}</td>
                             </tr>
                         `;
                     });
@@ -284,12 +322,12 @@ async function abrirModalCargasViaje(idStr) {
 
                 const filaTotales = `
                     <tr style="background: #f8fafc;">
-                        <td colspan="2" style="padding: 16px; font-weight: 700; color: var(--text-primary); white-space: nowrap;">Totales de Carga</td>
+                        <td colspan="2" style="padding: 16px; font-weight: 700; color: var(--text-primary); white-space: nowrap;">${footerText}</td>
                         <td style="padding: 16px; text-align: center; font-weight: 700; color: var(--brand-blue); white-space: nowrap;">${totalSacos} und</td>
                         <td style="padding: 16px; text-align: center; white-space: nowrap;"></td>
                         <td style="padding: 16px; text-align: center; font-weight: 700; color: var(--brand-blue); white-space: nowrap;">${totalKilos.toFixed(2)} kg</td>
                         <td style="padding: 16px; text-align: center; white-space: nowrap;"></td>
-                        <td style="padding: 16px; text-align: right; font-weight: 700; color: #16a34a; font-size: 15px; white-space: nowrap;">S/ ${totalFlete.toFixed(2)}</td>
+                        <td style="padding: 16px; text-align: right; font-weight: 700; color: ${colorFleteTotal}; font-size: 15px; white-space: nowrap;">S/ ${totalFlete.toFixed(2)}</td>
                     </tr>
                 `;
 
@@ -316,11 +354,11 @@ async function abrirModalCargasViaje(idStr) {
                                     <tr>
                                         <th style="text-align: left; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">Producto</th>
                                         <th style="text-align: left; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">Marca Visual</th>
-                                        <th style="text-align: center; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">Cant.</th>
+                                        <th style="text-align: center; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">${headerCant}</th>
                                         <th style="text-align: center; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">Peso (U)</th>
                                         <th style="text-align: center; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">Kilos Tot.</th>
                                         <th style="text-align: center; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">Flete x Kg</th>
-                                        <th style="text-align: right; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">Flete Tot.</th>
+                                        <th style="text-align: right; padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap;">${headerFleteTot}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -372,6 +410,7 @@ async function abrirModalIncidencias(idStr) {
             document.getElementById('modal-incidencias-subtitulo').textContent = `Total de incidencias registradas: ${incidencias.length}`;
             
             if (incidencias.length === 0) {
+                document.getElementById('btn-nueva-incidencia').style.display = 'none';
                 modalBody.innerHTML = `
                     <div style="text-align: center; padding: 40px; margin: auto;">
                         <div style="width: 64px; height: 64px; border-radius: 50%; background: #f1f5f9; color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 16px;">
@@ -386,6 +425,8 @@ async function abrirModalIncidencias(idStr) {
                 `;
                 return;
             }
+
+            document.getElementById('btn-nueva-incidencia').style.display = 'flex';
 
             let filasIncidencias = '';
             incidencias.forEach(inc => {
@@ -479,6 +520,9 @@ async function mostrarFormularioNuevaIncidencia() {
     const idViaje = document.getElementById('modal-incidencias-viaje').getAttribute('data-id-viaje');
     
     if (document.getElementById('form-nueva-incidencia-container')) return;
+    
+    // Ocultar botón de nueva incidencia del header mientras el form está activo
+    document.getElementById('btn-nueva-incidencia').style.display = 'none';
     
     // Cambiamos el estilo del modal body para que pueda contener las dos columnas a full height
     modalBody.style.overflowY = 'hidden';
