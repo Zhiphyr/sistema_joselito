@@ -28,8 +28,15 @@
     </div>
 
     <!-- Contenedor de Tarjetas de Viaje -->
-    <div id="contenedor-tarjetas-viajes" style="display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding-right: 8px; padding-bottom: 24px;">
+    <div id="contenedor-tarjetas-viajes" style="display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding-right: 8px;">
         <!-- Aquí se renderizarán dinámicamente las tarjetas de viaje -->
+    </div>
+    
+    <!-- Botón Cargar Más -->
+    <div style="text-align: center; margin-top: 8px; margin-bottom: 24px;">
+        <button id="btn-cargar-mas-viajes" style="display: none; padding: 10px 24px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--text-secondary); cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: all 0.2s ease;">
+            <i class="fas fa-chevron-down" style="margin-right: 8px;"></i> Cargar más viajes
+        </button>
     </div>
 </div>
 
@@ -181,6 +188,46 @@
         <!-- Body Modal (Scrollable) -->
         <div id="modal-cargas-body" style="padding: 24px; overflow-y: auto; flex: 1; min-height: 0; border-radius: 0 0 12px 12px; display: flex; flex-direction: column; gap: 24px; background: #f8fafc;">
             <!-- Contenido dinámico renderizado desde JS -->
+        </div>
+
+    </div>
+</div>
+
+<!-- Modal Incidencias del Viaje -->
+<div id="modal-incidencias-viaje" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1050; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+    <div style="background: white; border-radius: 12px; width: 100%; max-width: 900px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; max-height: 90vh;">
+        
+        <!-- Header Modal -->
+        <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; gap: 16px; align-items: center;">
+                <div style="width: 48px; height: 48px; border-radius: 12px; background: #fee2e2; color: #dc2626; display: flex; justify-content: center; align-items: center; font-size: 20px;">
+                    <i class="fas fa-exclamation-circle"></i>
+                </div>
+                <div>
+                    <h3 id="modal-incidencias-titulo" style="margin: 0 0 4px 0; font-size: 18px; color: var(--text-primary); font-weight: 700;">Incidencias del Viaje</h3>
+                    <p id="modal-incidencias-subtitulo" style="margin: 0; font-size: 13px; color: var(--text-secondary);">Total de incidencias registradas: 0</p>
+                </div>
+            </div>
+            <div style="display: flex; gap: 16px; align-items: center;">
+                <button id="btn-nueva-incidencia" style="background: #dc2626; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2); transition: all 0.2s;">
+                    <i class="fas fa-plus"></i> Nueva Incidencia
+                </button>
+                <button id="btn-cerrar-modal-incidencias-x" style="background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; padding: 4px;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Body Modal (Scrollable) -->
+        <div id="modal-incidencias-body" style="padding: 24px; overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 24px;">
+            <!-- Contenido dinámico renderizado desde JS -->
+        </div>
+        
+        <!-- Footer Modal -->
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; align-items: center; background: #f8fafc; border-radius: 0 0 12px 12px;">
+            <button id="btn-cerrar-modal-incidencias-btn" style="padding: 8px 16px; background: white; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; font-weight: 600; color: var(--text-primary); cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                Cerrar
+            </button>
         </div>
 
     </div>

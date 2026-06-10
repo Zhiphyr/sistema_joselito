@@ -12,5 +12,7 @@ router.put('/cargas/:id/rechazar', viajeController.rechazarCarga);
 router.post('/cargas/:id/entrega-parcial', viajeController.entregaParcialCarga);
 router.get('/:id/cargas', viajeController.obtenerCargasPorViaje);
 router.post('/transbordo', viajeController.confirmarTransbordo);
+router.get('/:id/incidencias', viajeController.obtenerIncidenciasViaje);
+router.post('/:id/incidencias', viajeController.registrarIncidenciaViaje);
 
 module.exports = router;

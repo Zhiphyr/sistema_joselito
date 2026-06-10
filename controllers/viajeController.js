@@ -80,6 +80,60 @@ const registrarViaje = async (req, res) => {
 
 const obtenerHistorialViajes = async (req, res) => {
     try {
+        const { search, fechaSalida, fechaLlegada, estado, page = 1, limit = 10 } = req.query;
+        
+        let whereClause = 'v.estado != 2';
+        const queryParams = [];
+        const countParams = [];
+
+        if (search) {
+            whereClause += ' AND (v.id_viaje LIKE ? OR c.placa LIKE ? OR c.conductor LIKE ?)';
+            const searchParam = `%${search}%`;
+            queryParams.push(searchParam, searchParam, searchParam);
+            countParams.push(searchParam, searchParam, searchParam);
+        }
+
+        if (fechaSalida) {
+            whereClause += ' AND DATE(v.fecha_salida) = ?';
+            queryParams.push(fechaSalida);
+            countParams.push(fechaSalida);
+        }
+
+        if (fechaLlegada) {
+            whereClause += ' AND DATE(v.fecha_llegada) = ?';
+            queryParams.push(fechaLlegada);
+            countParams.push(fechaLlegada);
+        }
+
+        if (estado && estado !== 'todos') {
+            let estadoDB = '';
+            if (estado === 'en_ruta') estadoDB = 'En Ruta';
+            else if (estado === 'llego_destino') estadoDB = 'Llegó a Destino';
+            else if (estado === 'finalizado') estadoDB = 'Finalizado';
+            else if (estado === 'incidencia') estadoDB = 'Incidencia';
+            
+            if (estadoDB) {
+                whereClause += ' AND v.estado_operativo = ?';
+                queryParams.push(estadoDB);
+                countParams.push(estadoDB);
+            }
+        }
+
+        const numLimit = parseInt(limit) || 10;
+        const numPage = parseInt(page) || 1;
+        const offset = (numPage - 1) * numLimit;
+
+        // Conteo total para paginación
+        const countSql = `
+            SELECT COUNT(DISTINCT v.id_viaje) as total
+            FROM Viaje v
+            JOIN Camiones c ON v.id_camion = c.id_camion
+            WHERE ${whereClause}
+        `;
+        const [countResult] = await db.query(countSql, countParams);
+        const totalRecords = countResult[0].total;
+
+        // Consulta principal con límites
         const sql = `
             SELECT 
                 v.id_viaje,
@@ -98,21 +152,25 @@ const obtenerHistorialViajes = async (req, res) => {
                 u.nombre as usuario_creador,
                 COUNT(DISTINCT cg.id_carga) as total_cargas,
                 COALESCE(SUM(dc.peso_total), 0) as peso_total_kg,
-                (SELECT COALESCE(SUM(flete_total), 0) FROM Carga WHERE id_viaje = v.id_viaje AND estado != 2) as flete_total
+                (SELECT COALESCE(SUM(flete_total), 0) FROM Carga WHERE id_viaje = v.id_viaje AND estado != 2) as flete_total,
+                (SELECT COUNT(*) FROM Carga WHERE id_viaje = v.id_viaje AND estado_entrega = 'Rechazado' AND estado != 2) as cargas_rechazadas,
+                (SELECT COUNT(*) FROM Incidencia_Viaje iv WHERE iv.id_viaje = v.id_viaje AND iv.estado = 1) > 0 as tiene_incidencia_reportada
             FROM Viaje v
             JOIN Camiones c ON v.id_camion = c.id_camion
             JOIN rutas r ON v.id_ruta = r.id_ruta
             LEFT JOIN usuarios u ON v.id_usuario = u.id_usuario
             LEFT JOIN Carga cg ON v.id_viaje = cg.id_viaje AND cg.estado != 2
             LEFT JOIN Detalle_Carga dc ON cg.id_carga = dc.id_carga AND dc.estado != 2
-            WHERE v.estado != 2
+            WHERE ${whereClause}
             GROUP BY v.id_viaje
             ORDER BY v.fecha_salida DESC
+            LIMIT ? OFFSET ?
         `;
         
-        const [viajes] = await db.query(sql);
+        queryParams.push(numLimit, offset);
+        const [viajes] = await db.query(sql, queryParams);
         
-        return res.status(200).json({ success: true, data: viajes });
+        return res.status(200).json({ success: true, data: viajes, totalRecords });
     } catch (error) {
         console.error('Error en obtenerHistorialViajes:', error);
         return res.status(500).json({ success: false, message: 'Error al obtener el historial de viajes' });
@@ -690,6 +748,110 @@ const confirmarTransbordo = async (req, res) => {
     }
 };
 
+const obtenerIncidenciasViaje = async (req, res) => {
+    try {
+        const idViaje = req.params.id;
+        const [incidencias] = await db.query(`
+            SELECT 
+                i.id_incidencia, i.tipo_incidencia, i.descripcion_detallada,
+                i.valor_total_perdida, i.gastos_adicionales, i.monto_asumido_empresa, i.monto_descuento_chofer,
+                i.estado_resolucion, i.fecha_creacion,
+                u.usuario as usuario_registro
+            FROM Incidencia_Viaje i
+            JOIN Usuarios u ON i.id_usuario = u.id_usuario
+            WHERE i.id_viaje = ? AND i.estado = 1
+            ORDER BY i.fecha_creacion DESC
+        `, [idViaje]);
+
+        return res.json({
+            success: true,
+            data: incidencias
+        });
+    } catch (error) {
+        console.error('Error al obtener incidencias del viaje:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error de servidor al obtener las incidencias.'
+        });
+    }
+};
+
+const registrarIncidenciaViaje = async (req, res) => {
+    try {
+        const idViaje = req.params.id;
+        const {
+            tipo_incidencia,
+            descripcion_detallada,
+            valor_total_perdida,
+            gastos_adicionales,
+            monto_descuento_chofer,
+            monto_asumido_empresa,
+            estado_resolucion
+        } = req.body;
+        
+        const userId = req.headers['x-user-profile'] || 1; // Ajustar según tu autenticación
+
+        // Basic validation
+        if (!tipo_incidencia || !descripcion_detallada || !estado_resolucion) {
+            return res.status(400).json({ success: false, message: 'Faltan datos obligatorios para la incidencia' });
+        }
+
+        // Validate "Resuelto" state logic again in the backend for security
+        const perdida = Number(valor_total_perdida) || 0;
+        const gastos = Number(gastos_adicionales) || 0;
+        const descuento = monto_descuento_chofer !== '' && monto_descuento_chofer !== null ? Number(monto_descuento_chofer) : null;
+        const empresa = monto_asumido_empresa !== '' && monto_asumido_empresa !== null ? Number(monto_asumido_empresa) : null;
+
+        // Validar el Remanente
+        const sqlRemanente = `
+            SELECT 
+                (SELECT COALESCE(SUM(flete_total), 0) FROM Carga WHERE id_viaje = ? AND estado_entrega IN ('Rechazado', 'Siniestrado') AND estado = 1) AS perdida_total_cargas,
+                (SELECT COALESCE(SUM(valor_total_perdida), 0) FROM Incidencia_Viaje WHERE id_viaje = ? AND estado = 1) AS perdida_ya_registrada
+        `;
+        const [rows] = await db.query(sqlRemanente, [idViaje, idViaje]);
+        const maxPerdidaPosible = Number(rows[0].perdida_total_cargas) || 0;
+        const perdidaYaRegistrada = Number(rows[0].perdida_ya_registrada) || 0;
+        const remanente = maxPerdidaPosible - perdidaYaRegistrada;
+
+        if (perdida > remanente + 0.01) {
+            return res.status(400).json({ success: false, message: 'El monto de pérdida supera el saldo disponible para este viaje.' });
+        }
+
+        if (estado_resolucion === 'Resuelto') {
+            const sumDescuento = descuento || 0;
+            const sumEmpresa = empresa || 0;
+            const totalRepartir = perdida + gastos;
+            // Evitar problemas de precisión con decimales
+            if (Math.abs(totalRepartir - (sumDescuento + sumEmpresa)) > 0.01) {
+                return res.status(400).json({ success: false, message: 'Para marcar como Resuelto, los montos de descuento y asunción deben cubrir el 100% del costo del incidente.' });
+            }
+        }
+
+        const sql = `
+            INSERT INTO Incidencia_Viaje 
+            (id_viaje, tipo_incidencia, descripcion_detallada, valor_total_perdida, gastos_adicionales, monto_asumido_empresa, monto_descuento_chofer, estado_resolucion, id_usuario, estado_cobro_penalidad, monto_cobrado)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', 0.00)
+        `;
+
+        await db.query(sql, [
+            idViaje,
+            tipo_incidencia,
+            descripcion_detallada,
+            perdida,
+            gastos,
+            empresa, 
+            descuento, 
+            estado_resolucion,
+            userId
+        ]);
+
+        return res.status(201).json({ success: true, message: 'Incidencia registrada correctamente.' });
+    } catch (error) {
+        console.error('Error al registrar incidencia:', error);
+        return res.status(500).json({ success: false, message: 'Error interno al registrar la incidencia.' });
+    }
+};
+
 module.exports = {
     registrarViaje,
     obtenerHistorialViajes,
@@ -700,5 +862,7 @@ module.exports = {
     entregaParcialCarga,
     obtenerViajePorId,
     rechazarCarga,
-    confirmarTransbordo
+    confirmarTransbordo,
+    obtenerIncidenciasViaje,
+    registrarIncidenciaViaje
 };
