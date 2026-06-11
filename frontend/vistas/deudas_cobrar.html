@@ -1,0 +1,52 @@
+<div class="module-header">
+    <div>
+        <h2>Deudas por Cobrar</h2>
+        <p>Módulo para gestionar las deudas pendientes de cobro y pagos realizados.</p>
+    </div>
+</div>
+
+<div class="welcome-card sin-padding">
+    <div class="tabla-toolbar" style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+        <div style="flex: 1; display: flex; align-items: center; gap: 12px; min-width: 250px;">
+            <label for="inputBuscarDeuda" style="margin: 0; font-weight: 600; color: var(--text-secondary);">Buscar:</label>
+            <input type="text" id="inputBuscarDeuda" class="form-control" placeholder="N° Guía, Viaje o Nombre del Deudor..." style="flex: 1;">
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <label for="selectFiltroDeuda" style="margin: 0; font-weight: 600; color: var(--text-secondary);">
+                <i class="fas fa-filter" style="margin-right: 4px; color: var(--text-muted);"></i> Filtro:
+            </label>
+            <select id="selectFiltroDeuda" class="form-control" style="width: auto;">
+                <option value="activas" selected>Deudas Activas (Pendientes/Parciales)</option>
+                <option value="completadas">Cobros Completados</option>
+                <option value="todos">Todos los Estados</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="tabla-scroll">
+        <table class="tabla-modulo">
+            <thead>
+                <tr>
+                    <th class="tabla-th" style="width: 100px;">N° Guía</th>
+                    <th class="tabla-th" style="width: 100px;">Viaje</th>
+                    <th class="tabla-th" style="width: 130px;">Fecha Llegada</th>
+                    <th class="tabla-th">Deudor</th>
+                    <th class="tabla-th" style="width: 140px;">Estado Entrega</th>
+                    <th class="tabla-th" style="width: 130px;">Deuda Original</th>
+                    <th class="tabla-th" style="width: 130px;">Saldo Pendiente</th>
+                    <th class="tabla-th" style="width: 140px;">Estado Cobro</th>
+                    <th class="tabla-th" style="width: 160px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-deudas">
+                <tr>
+                    <td colspan="9" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
+                        <p style="margin:0;">Cargando deudas...</p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
