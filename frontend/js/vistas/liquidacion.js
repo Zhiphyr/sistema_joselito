@@ -251,6 +251,16 @@ function inicializarEventos() {
 
             if (!validacionCorrecta) return;
 
+            if (inputAdelantoVal > (chofer.bruto - totalPenalidadDescontada)) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Adelanto inválido',
+                    text: `El adelanto no puede superar el monto neto a pagar (S/ ${(chofer.bruto - totalPenalidadDescontada).toFixed(2)}).`,
+                    confirmButtonColor: '#008f5d'
+                });
+                return;
+            }
+
             const netoFinal = chofer.bruto - inputAdelantoVal - totalPenalidadDescontada;
 
             // Confirmar transacción
@@ -360,6 +370,24 @@ function recalcularNetoModal() {
             penalidadesTotal += val;
         }
     });
+
+    const maxAdelantoPermitido = chofer.bruto - penalidadesTotal;
+    const errAdelanto = document.getElementById("modal-adelanto-error");
+    const txtMaxAdelanto = document.getElementById("modal-err-max-adelanto");
+
+    if (adelanto > maxAdelantoPermitido) {
+        inputAdelanto.style.borderColor = "#e11d48";
+        if (errAdelanto && txtMaxAdelanto) {
+            txtMaxAdelanto.textContent = maxAdelantoPermitido.toFixed(2);
+            errAdelanto.style.display = "block";
+        }
+        validacionError = true;
+    } else {
+        inputAdelanto.style.borderColor = "#cbd5e1";
+        if (errAdelanto) {
+            errAdelanto.style.display = "none";
+        }
+    }
 
     const neto = chofer.bruto - adelanto - penalidadesTotal;
     document.getElementById("modal-neto-pagar").textContent = formatMoneda(neto);
