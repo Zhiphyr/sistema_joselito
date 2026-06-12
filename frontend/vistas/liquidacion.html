@@ -141,29 +141,45 @@
 
                 <span class="liq-modal-info-label">Tarifa del chofer</span>
                 <span class="liq-modal-info-value" id="modal-resumen-tarifa">-</span>
-            </div>
 
-            <!-- Sección: Monto Bruto -->
-            <div class="liq-modal-info-grid" style="font-size: 15px; margin-top: 14px; font-weight: 700;">
                 <span class="liq-modal-info-label" style="color: var(--text-primary); font-weight: 700;">Monto Bruto</span>
-                <span class="liq-modal-info-value" style="font-size: 16px;" id="modal-resumen-bruto">S/ 0.00</span>
+                <span class="liq-modal-info-value" style="font-size: 15px; font-weight: 700;" id="modal-resumen-bruto">S/ 0.00</span>
+
+                <span class="liq-modal-info-label"><i class="fa-solid fa-circle-minus" style="color:#d97706;"></i> Adelanto a descontar</span>
+                <div style="background: white; border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 8px; display: flex; align-items: center; max-width: 140px; justify-self: end;">
+                    <span style="font-weight: 600; color: var(--text-secondary); margin-right: 4px; font-size: 13px;">S/</span>
+                    <input type="number" id="modal-input-adelanto" value="0" step="10" min="0" style="border: none; outline: none; font-weight: 700; width: 100%; text-align: right; color: #d97706; font-size: 13px;">
+                </div>
             </div>
 
-            <!-- Cuadro de Descuento por Adelanto (Editable) -->
-            <div class="liq-modal-adjustment-box">
-                <span class="liq-modal-adjustment-title">Descuento por Adelanto</span>
-                <div class="liq-modal-input-group">
-                    <span class="liq-modal-input-symbol">S/</span>
-                    <input type="number" id="modal-input-adelanto" class="liq-modal-input" value="0" step="10">
+            <!-- Asignación Manual de Penalidades (Incidencias) -->
+            <div class="liq-modal-section-title" style="margin-top: 20px;">Incidencias y Penalidades Pendientes</div>
+            <div id="modal-incidencias-container" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                <p id="modal-incidencias-empty" style="font-size: 13px; color: var(--text-muted); text-align: center; margin: 8px 0;">
+                    El conductor no tiene incidencias ni penalidades pendientes.
+                </p>
+                <div id="modal-incidencias-table-wrapper" style="display: none; overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid #e2e8f0; color: var(--text-secondary); font-weight: 700;">
+                                <th style="padding: 6px 4px; width: 30px;"></th>
+                                <th style="padding: 6px 4px;">Incidencia / Fecha</th>
+                                <th style="padding: 6px 4px; text-align: right; width: 80px;">Saldo Deuda</th>
+                                <th style="padding: 6px 4px; text-align: center; width: 110px;">Descontar Hoy</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-modal-incidencias">
+                            <!-- Inyectado dinámicamente -->
+                        </tbody>
+                    </table>
                 </div>
-                <span class="liq-modal-input-warning">Puede ajustar el monto si hubo cambios desde el último adelanto</span>
             </div>
 
             <!-- Banner Monto Neto a Pagar -->
             <div class="liq-modal-net-banner">
                 <div class="liq-modal-net-meta">
                     <span class="liq-modal-net-title">Monto Neto a Pagar</span>
-                    <span class="liq-modal-net-subtitle">Bruto – Adelanto – Penalidades</span>
+                    <span class="liq-modal-net-subtitle">Bruto − Adelanto − Penalidades netas</span>
                 </div>
                 <span class="liq-modal-net-amount" id="modal-neto-pagar">S/ 0.00</span>
             </div>

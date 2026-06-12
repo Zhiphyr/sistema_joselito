@@ -24,6 +24,7 @@ const productoRoutes = require('./routes/productoRoutes');
 const camionRoutes = require('./routes/camionRoutes');
 const rutaRoutes = require('./routes/rutaRoutes');
 const viajeRoutes = require('./routes/viajeRoutes');
+const liquidacionRoutes = require('./routes/liquidacionRoutes');
 
 // Registro de rutas
 app.use('/api/auth', authRoutes);
@@ -36,6 +37,7 @@ app.use('/api/productos', productoRoutes);
 app.use('/api/camiones', camionRoutes);
 app.use('/api/rutas', rutaRoutes);
 app.use('/api/viajes', viajeRoutes);
+app.use('/api/liquidacion', liquidacionRoutes);
 
 // Ruta de prueba
 app.get('/api/ping', (req, res) => {
