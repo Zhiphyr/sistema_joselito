@@ -1,4 +1,6 @@
 const db = require('../config/db');
+const { cloudinary } = require('../config/cloudinary');
+const bcrypt = require('bcryptjs');
 
 const obtenerDeudas = async (req, res) => {
     try {
@@ -12,10 +14,21 @@ const obtenerDeudas = async (req, res) => {
                 c.flete_total,
                 c.estado_cobro,
                 c.estado_entrega,
-                cli.nombre_razon_social AS cliente_nombre
+                cli.nombre_razon_social AS cliente_nombre,
+                rem.nombre_razon_social AS remitente_nombre,
+                (SELECT GROUP_CONCAT(CONCAT(dc.cantidad_sacos, 'x ', p.nombre) SEPARATOR ' / ') 
+                 FROM Detalle_Carga dc 
+                 JOIN Productos p ON dc.id_producto = p.id_producto 
+                 WHERE dc.id_carga = c.id_carga AND dc.estado = 1) AS resumen_carga,
+                (c.flete_total - IFNULL((
+                    SELECT SUM(monto_pagado) 
+                    FROM pago_carga pc 
+                    WHERE pc.id_carga = c.id_carga AND pc.estado = 1
+                ), 0)) AS saldo_pendiente
             FROM Carga c
             JOIN Viaje v ON c.id_viaje = v.id_viaje
             JOIN Clientes cli ON c.id_destinatario = cli.id_cliente
+            JOIN Clientes rem ON c.id_remitente = rem.id_cliente
             WHERE c.estado = 1
             AND v.estado_operativo IN ('Llegó a Destino', 'Finalizado')
         `;
@@ -34,9 +47,9 @@ const obtenerDeudas = async (req, res) => {
         }
 
         if (search) {
-            query += ` AND (c.id_carga LIKE ? OR cli.nombre_razon_social LIKE ?)`;
+            query += ` AND (c.id_carga LIKE ? OR cli.nombre_razon_social LIKE ? OR rem.nombre_razon_social LIKE ?)`;
             const searchParam = `%${search}%`;
-            queryParams.push(searchParam, searchParam);
+            queryParams.push(searchParam, searchParam, searchParam);
         }
 
         query += ` ORDER BY c.id_carga DESC`;
@@ -51,6 +64,230 @@ const obtenerDeudas = async (req, res) => {
     }
 };
 
+const obtenerCuentasBancarias = async (req, res) => {
+    try {
+        const query = `
+            SELECT id_cuenta, entidad_financiera, tipo_cuenta, nro_cuenta, titular, ruta_qr 
+            FROM cuenta_bancaria 
+            WHERE estado = 1
+        `;
+        const [cuentas] = await db.query(query);
+        res.json({ success: true, data: cuentas });
+    } catch (error) {
+        console.error("Error en obtenerCuentasBancarias:", error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor al obtener las cuentas bancarias' });
+    }
+};
+
+const registrarCobro = async (req, res) => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const {
+            id_carga,
+            monto_pagado,
+            canal_pago, // Efectivo, Transferencia, Deposito, Billetera Digital
+            id_cuenta,
+            nro_operacion,
+            fecha_pago,
+            observacion
+        } = req.body;
+
+        const id_usuario = req.headers['x-user-profile'] || 1; // ID de quien cobra
+        const ruta_comprobante = req.file ? req.file.path : null;
+
+        const idCuentaParseado = canal_pago === 'Efectivo' ? null : (id_cuenta || null);
+        const montoNum = Number(monto_pagado);
+
+        // Insertar en pago_carga
+        const insertQuery = `
+            INSERT INTO pago_carga 
+            (id_carga, id_cuenta, monto_pagado, tipo_pago, nro_operacion, ruta_comprobante, observacion, id_usuario, fecha_pago)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        
+        await connection.query(insertQuery, [
+            id_carga,
+            idCuentaParseado,
+            montoNum,
+            canal_pago,
+            nro_operacion || null,
+            ruta_comprobante,
+            observacion || null,
+            id_usuario,
+            fecha_pago || new Date()
+        ]);
+
+        // Recalcular saldo pendiente
+        const saldoQuery = `
+            SELECT 
+                c.flete_total,
+                IFNULL((SELECT SUM(monto_pagado) FROM pago_carga WHERE id_carga = c.id_carga AND estado = 1), 0) as total_pagado
+            FROM Carga c
+            WHERE c.id_carga = ?
+        `;
+        
+        const [rows] = await connection.query(saldoQuery, [id_carga]);
+        if (rows.length > 0) {
+            const { flete_total, total_pagado } = rows[0];
+            const saldo_pendiente = flete_total - total_pagado;
+            
+            let nuevoEstado = 'Parcial';
+            if (saldo_pendiente <= 0) {
+                nuevoEstado = 'Completado';
+            }
+
+            // Actualizar estado_cobro en carga
+            await connection.query(`UPDATE Carga SET estado_cobro = ? WHERE id_carga = ?`, [nuevoEstado, id_carga]);
+        }
+
+        await connection.commit();
+        res.json({ success: true, message: 'Cobro registrado exitosamente' });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error("Error en registrarCobro:", error);
+        
+        // --- PREVENCIÓN DE ARCHIVOS HUÉRFANOS ---
+        // Si falló la BD pero la imagen sí se subió a Cloudinary, la eliminamos.
+        if (req.file && req.file.filename) {
+            try {
+                // req.file.filename contiene el public_id completo asignado por multer-storage-cloudinary
+                await cloudinary.uploader.destroy(req.file.filename);
+                console.log(`[Reversión Exitosa] Archivo huérfano eliminado de Cloudinary: ${req.file.filename}`);
+            } catch (cloudErr) {
+                console.error("No se pudo eliminar el archivo huérfano de Cloudinary:", cloudErr);
+            }
+        }
+        
+        res.status(500).json({ success: false, message: 'Error interno al registrar el cobro' });
+    } finally {
+        connection.release();
+    }
+};
+
+const obtenerHistorialPagos = async (req, res) => {
+    try {
+        const { id_carga } = req.params;
+        
+        const query = `
+            SELECT 
+                p.id_pago,
+                p.monto_pagado,
+                p.fecha_pago,
+                p.tipo_pago,
+                p.nro_operacion,
+                p.ruta_comprobante,
+                p.observacion,
+                p.estado,
+                c.entidad_financiera,
+                c.tipo_cuenta,
+                c.nro_cuenta,
+                c.titular
+            FROM pago_carga p
+            LEFT JOIN cuenta_bancaria c ON p.id_cuenta = c.id_cuenta
+            WHERE p.id_carga = ? AND p.estado IN (0, 1)
+            ORDER BY p.fecha_pago DESC
+        `;
+        
+        const [rows] = await db.query(query, [id_carga]);
+        
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error("Error en obtenerHistorialPagos:", error);
+        res.status(500).json({ success: false, message: 'Error interno al obtener el historial' });
+    }
+};
+
+const anularPago = async (req, res) => {
+    let connection;
+    try {
+        const { id_pago, pin } = req.body;
+
+        if (!id_pago || !pin) {
+            return res.status(400).json({ success: false, message: 'Faltan datos obligatorios' });
+        }
+
+        // 1. Obtener PIN de la base de datos
+        const [configRows] = await db.query('SELECT valor FROM configuracion_sistema WHERE parametro = ?', ['PIN_ANULACION_PAGOS']);
+        if (configRows.length === 0) {
+            return res.status(500).json({ success: false, message: 'No se ha configurado el PIN de seguridad' });
+        }
+
+        const hashedPin = configRows[0].valor;
+
+        // 2. Comparar PIN
+        const isValid = await bcrypt.compare(pin.toString(), hashedPin);
+        if (!isValid) {
+            return res.status(401).json({ success: false, message: 'PIN incorrecto' });
+        }
+
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 3. Obtener el pago
+        const [pagoRows] = await connection.query('SELECT monto_pagado, id_carga, estado FROM pago_carga WHERE id_pago = ? FOR UPDATE', [id_pago]);
+        if (pagoRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Pago no encontrado' });
+        }
+
+        const pago = pagoRows[0];
+        if (pago.estado === 0) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: 'El pago ya se encuentra anulado' });
+        }
+
+        // 4. Marcar pago como anulado
+        await connection.query('UPDATE pago_carga SET estado = 0 WHERE id_pago = ?', [id_pago]);
+
+        // 5. Recalcular saldo pendiente
+        const saldoQuery = `
+            SELECT 
+                c.flete_total,
+                IFNULL((SELECT SUM(monto_pagado) FROM pago_carga WHERE id_carga = c.id_carga AND estado = 1), 0) as total_pagado
+            FROM Carga c
+            WHERE c.id_carga = ? FOR UPDATE
+        `;
+
+        const [cargaRows] = await connection.query(saldoQuery, [pago.id_carga]);
+        if (cargaRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Carga no encontrada' });
+        }
+
+        const { flete_total, total_pagado } = cargaRows[0];
+        const nuevoSaldo = Number(flete_total) - Number(total_pagado);
+        
+        let nuevoEstado = 'Pendiente';
+        if (nuevoSaldo === Number(flete_total)) {
+            nuevoEstado = 'Pendiente';
+        } else if (nuevoSaldo > 0 && nuevoSaldo < Number(flete_total)) {
+            nuevoEstado = 'Parcial';
+        } else if (nuevoSaldo <= 0) {
+            nuevoEstado = 'Completado';
+        }
+
+        // 6. Actualizar Carga (solo estado_cobro, saldo_pendiente se calcula en vuelo siempre)
+        await connection.query('UPDATE Carga SET estado_cobro = ? WHERE id_carga = ?', [nuevoEstado, pago.id_carga]);
+
+        await connection.commit();
+        res.json({ success: true, message: 'Pago anulado correctamente', nuevo_saldo: nuevoSaldo, nuevo_estado: nuevoEstado });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error("Error en anularPago:", error);
+        res.status(500).json({ success: false, message: 'Error interno al anular el pago' });
+    } finally {
+        if (connection) connection.release();
+    }
+};
+
 module.exports = {
-    obtenerDeudas
+    obtenerDeudas,
+    obtenerCuentasBancarias,
+    registrarCobro,
+    obtenerHistorialPagos,
+    anularPago
 };
