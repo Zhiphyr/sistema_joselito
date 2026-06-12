@@ -1,0 +1,186 @@
+<!-- Carga de estilos específicos del módulo -->
+<link rel="stylesheet" href="css/liquidacion.css">
+
+<!-- Encabezado del Módulo -->
+<div class="module-header">
+    <div>
+        <h2 style="display: flex; align-items: center; gap: 10px;">
+            <i class="fa-solid fa-money-bill-transfer" style="color: #008f5d;"></i>
+            Liquidaciones de Transportistas
+        </h2>
+        <p>Gestión de pagos finales a choferes por viaje completado</p>
+    </div>
+</div>
+
+<!-- Tarjetas de Estadísticas (KPIs) -->
+<div class="liq-kpi-container">
+    <!-- Tarjeta 1: Viajes Pendientes -->
+    <div class="liq-kpi-card">
+        <div class="liq-kpi-icon-wrapper liq-kpi-icon-pendientes">
+            <i class="fa-regular fa-clock"></i>
+        </div>
+        <div class="liq-kpi-details">
+            <span class="liq-kpi-label">Viajes Pendientes</span>
+            <span class="liq-kpi-value" id="kpi-viajes-pendientes">0</span>
+        </div>
+    </div>
+
+    <!-- Tarjeta 2: Total por Pagar -->
+    <div class="liq-kpi-card">
+        <div class="liq-kpi-icon-wrapper liq-kpi-icon-total">
+            <i class="fa-solid fa-dollar-sign"></i>
+        </div>
+        <div class="liq-kpi-details">
+            <span class="liq-kpi-label">Total por Pagar</span>
+            <span class="liq-kpi-value val-red" id="kpi-total-pagar">S/ 0.00</span>
+        </div>
+    </div>
+
+    <!-- Tarjeta 3: Pagado este Mes -->
+    <div class="liq-kpi-card">
+        <div class="liq-kpi-icon-wrapper liq-kpi-icon-pagado">
+            <i class="fa-regular fa-circle-check"></i>
+        </div>
+        <div class="liq-kpi-details">
+            <span class="liq-kpi-label">Pagado este Mes</span>
+            <span class="liq-kpi-value val-green" id="kpi-pagado-mes">S/ 0.00</span>
+        </div>
+    </div>
+</div>
+
+<!-- Contenedor Principal (Tabs y Listas) -->
+<div class="welcome-card sin-padding">
+    <!-- Barra de Herramientas -->
+    <div class="liq-toolbar">
+        <!-- Pestañas de Navegación -->
+        <div class="liq-tabs-wrapper">
+            <button class="liq-tab-btn active" id="tab-btn-pendientes">
+                Pendientes
+                <span class="liq-badge-orange" id="badge-pendientes-count">0</span>
+            </button>
+            <button class="liq-tab-btn" id="tab-btn-historial">
+                Historial
+            </button>
+        </div>
+
+        <!-- Buscador -->
+        <div class="liq-search-wrapper">
+            <i class="fa-solid fa-magnifying-glass liq-search-icon"></i>
+            <input type="text" id="liq-search-input" class="liq-search-input" placeholder="Buscar chofer, placa o viaje...">
+        </div>
+    </div>
+
+    <!-- Pestaña 1: Lista de Pendientes (Contenedor Dinámico) -->
+    <div id="tab-content-pendientes" class="liq-list-container">
+        <!-- Aquí se inyectan las tarjetas de choferes dinámicamente -->
+    </div>
+
+    <!-- Pestaña 2: Historial (Tabla Dinámica, inicialmente oculta) -->
+    <div id="tab-content-historial" class="tabla-scroll" style="display: none;">
+        <table class="tabla-modulo">
+            <thead>
+                <tr>
+                    <th class="tabla-th" style="width: 80px; text-align: center;">Liq. #</th>
+                    <th class="tabla-th">Chofer</th>
+                    <th class="tabla-th">Viaje / Ruta</th>
+                    <th class="tabla-th" style="width: 100px; text-align: right;">Peso (Ton)</th>
+                    <th class="tabla-th" style="width: 130px; text-align: right;">Bruto</th>
+                    <th class="tabla-th" style="width: 120px; text-align: right;">Adelanto</th>
+                    <th class="tabla-th" style="width: 120px; text-align: right;">Penalidades</th>
+                    <th class="tabla-th" style="width: 140px; text-align: right;">Neto Pagado</th>
+                    <th class="tabla-th" style="width: 160px; text-align: center;">Fecha</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-historial">
+                <!-- Aquí se inyectan los registros del historial dinámicamente -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal para Confirmar Liquidación (Inicialmente oculto) -->
+<div id="liqModalOverlay" class="liq-modal-overlay">
+    <div class="liq-modal-container">
+        <div class="liq-modal-header">
+            <div class="liq-modal-title-wrapper">
+                <div class="liq-modal-icon-circle">
+                    <i class="fa-solid fa-calculator"></i>
+                </div>
+                <div class="liq-modal-title-block">
+                    <h3>Confirmar Liquidación</h3>
+                    <span>Viaje #<span id="modal-viaje-id">0</span></span>
+                </div>
+            </div>
+            <button class="btn-close" id="modal-btn-close-x">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+
+        <div class="liq-modal-body">
+            <!-- Sección: Información del Chofer -->
+            <div class="liq-modal-section-title">Información del Chofer</div>
+            <div class="liq-modal-info-grid">
+                <span class="liq-modal-info-label"><i class="fa-regular fa-user"></i> Nombre</span>
+                <span class="liq-modal-info-value" id="modal-chofer-nombre">-</span>
+
+                <span class="liq-modal-info-label"><i class="fa-regular fa-id-card"></i> DNI</span>
+                <span class="liq-modal-info-value" id="modal-chofer-dni">-</span>
+
+                <span class="liq-modal-info-label"><i class="fa-solid fa-truck"></i> Vehículo</span>
+                <span class="liq-modal-info-value" id="modal-chofer-vehiculo">-</span>
+
+                <span class="liq-modal-info-label"><i class="fa-solid fa-route"></i> Ruta</span>
+                <span class="liq-modal-info-value" id="modal-chofer-ruta">-</span>
+            </div>
+
+            <!-- Sección: Resumen de Cálculo -->
+            <div class="liq-modal-section-title">Resumen de Cálculo</div>
+            <div class="liq-modal-info-grid">
+                <span class="liq-modal-info-label">Peso total del viaje</span>
+                <span class="liq-modal-info-value" id="modal-resumen-peso">-</span>
+
+                <span class="liq-modal-info-label">Tarifa del chofer</span>
+                <span class="liq-modal-info-value" id="modal-resumen-tarifa">-</span>
+            </div>
+
+            <!-- Sección: Monto Bruto -->
+            <div class="liq-modal-info-grid" style="font-size: 15px; margin-top: 14px; font-weight: 700;">
+                <span class="liq-modal-info-label" style="color: var(--text-primary); font-weight: 700;">Monto Bruto</span>
+                <span class="liq-modal-info-value" style="font-size: 16px;" id="modal-resumen-bruto">S/ 0.00</span>
+            </div>
+
+            <!-- Cuadro de Descuento por Adelanto (Editable) -->
+            <div class="liq-modal-adjustment-box">
+                <span class="liq-modal-adjustment-title">Descuento por Adelanto</span>
+                <div class="liq-modal-input-group">
+                    <span class="liq-modal-input-symbol">S/</span>
+                    <input type="number" id="modal-input-adelanto" class="liq-modal-input" value="0" step="10">
+                </div>
+                <span class="liq-modal-input-warning">Puede ajustar el monto si hubo cambios desde el último adelanto</span>
+            </div>
+
+            <!-- Banner Monto Neto a Pagar -->
+            <div class="liq-modal-net-banner">
+                <div class="liq-modal-net-meta">
+                    <span class="liq-modal-net-title">Monto Neto a Pagar</span>
+                    <span class="liq-modal-net-subtitle">Bruto – Adelanto – Penalidades</span>
+                </div>
+                <span class="liq-modal-net-amount" id="modal-neto-pagar">S/ 0.00</span>
+            </div>
+
+            <!-- Observaciones -->
+            <div class="liq-modal-textarea-group">
+                <label for="modal-input-observaciones" class="liq-modal-textarea-label">Observaciones (opcional)</label>
+                <textarea id="modal-input-observaciones" class="liq-modal-textarea" placeholder="Notas sobre este pago..."></textarea>
+            </div>
+        </div>
+
+        <div class="liq-modal-footer">
+            <button class="liq-btn-cancel" id="modal-btn-cancelar">Cancelar</button>
+            <button class="liq-btn-confirm" id="modal-btn-confirmar">
+                <i class="fa-solid fa-money-bill-wave"></i>
+                Confirmar y Registrar
+            </button>
+        </div>
+    </div>
+</div>
