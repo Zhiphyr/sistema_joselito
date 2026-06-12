@@ -16,6 +16,7 @@ const obtenerDeudas = async (req, res) => {
                 c.estado_entrega,
                 cli.nombre_razon_social AS cliente_nombre,
                 rem.nombre_razon_social AS remitente_nombre,
+                cli.telefono AS destinatario_telefono,
                 (SELECT GROUP_CONCAT(CONCAT(dc.cantidad_sacos, 'x ', p.nombre) SEPARATOR ' / ') 
                  FROM Detalle_Carga dc 
                  JOIN Productos p ON dc.id_producto = p.id_producto 
@@ -284,10 +285,30 @@ const anularPago = async (req, res) => {
     }
 };
 
+const obtenerResumenDiario = async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                IFNULL(SUM(monto_pagado), 0) AS total_recaudado,
+                IFNULL(SUM(CASE WHEN tipo_pago = 'Efectivo' THEN monto_pagado ELSE 0 END), 0) AS total_efectivo,
+                IFNULL(SUM(CASE WHEN tipo_pago = 'Billetera Digital' THEN monto_pagado ELSE 0 END), 0) AS total_billetera,
+                IFNULL(SUM(CASE WHEN tipo_pago IN ('Transferencia', 'Deposito') THEN monto_pagado ELSE 0 END), 0) AS total_bancos
+            FROM pago_carga
+            WHERE DATE(fecha_pago) = CURDATE() AND estado = 1
+        `;
+        const [rows] = await db.query(query);
+        res.json({ success: true, data: rows[0] });
+    } catch (error) {
+        console.error("Error en obtenerResumenDiario:", error);
+        res.status(500).json({ success: false, message: 'Error al obtener resumen diario' });
+    }
+};
+
 module.exports = {
     obtenerDeudas,
     obtenerCuentasBancarias,
     registrarCobro,
     obtenerHistorialPagos,
-    anularPago
+    anularPago,
+    obtenerResumenDiario
 };

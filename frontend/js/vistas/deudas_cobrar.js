@@ -327,7 +327,29 @@ function abrirModalCobro(idCarga, fleteOriginal, saldoPendiente) {
     modal.style.display = 'flex';
 }
 
+async function cargarResumenDiario() {
+    try {
+        const response = await fetch('/api/deudas/resumen-diario', {
+            headers: {
+                'x-user-profile': localStorage.getItem('user_id') || 1
+            }
+        });
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            const data = result.data;
+            document.getElementById('cardTotalRecaudado').textContent = 'S/ ' + Number(data.total_recaudado).toFixed(2);
+            document.getElementById('cardEfectivo').textContent = 'S/ ' + Number(data.total_efectivo).toFixed(2);
+            document.getElementById('cardBilleteras').textContent = 'S/ ' + Number(data.total_billetera).toFixed(2);
+            document.getElementById('cardBancos').textContent = 'S/ ' + Number(data.total_bancos).toFixed(2);
+        }
+    } catch (error) {
+        console.error("Error al cargar resumen diario:", error);
+    }
+}
+
 async function cargarDeudas() {
+    cargarResumenDiario();
     const inputBuscar = document.getElementById('inputBuscarDeuda');
     const selectFiltro = document.getElementById('selectFiltroDeuda');
     const tbody = document.getElementById('tbody-deudas');
@@ -356,6 +378,7 @@ async function cargarDeudas() {
         const data = await response.json();
 
         if (data.success) {
+            window.deudasActuales = data.data;
             renderTablaDeudas(data.data);
         } else {
             throw new Error(data.message || 'Error al obtener las deudas.');
@@ -509,11 +532,76 @@ function inicializarModalHistorial() {
     
     document.getElementById('btnCerrarHistorial').addEventListener('click', cerrarModal);
     document.getElementById('btnCerrarHistorialFooter').addEventListener('click', cerrarModal);
+
+    // Configurar Botón WhatsApp
+    const btnWhatsApp = document.getElementById('btnWhatsApp');
+    if (btnWhatsApp) {
+        // Remover listener anterior si existe
+        btnWhatsApp.replaceWith(btnWhatsApp.cloneNode(true));
+        document.getElementById('btnWhatsApp').addEventListener('click', async () => {
+            const idCarga = window.idCargaAbierta;
+            if (!idCarga || !window.deudasActuales) return;
+
+            const deuda = window.deudasActuales.find(d => d.id_carga == idCarga);
+            if (!deuda) return;
+
+            const telOriginal = deuda.destinatario_telefono || '';
+
+            const { value: numeroWA } = await Swal.fire({
+                title: 'Enviar Mensaje',
+                text: 'Confirme o edite el número de WhatsApp (Solo 9 dígitos)',
+                input: 'text',
+                inputValue: telOriginal,
+                showCancelButton: true,
+                confirmButtonText: '<i class="fab fa-whatsapp"></i> Enviar',
+                confirmButtonColor: '#22c55e',
+                cancelButtonText: 'Cancelar',
+                inputValidator: (value) => {
+                    const soloNumeros = /^\d+$/.test(value);
+                    if (!value || !soloNumeros || value.length > 9 || value === '000000000' || Number(value) <= 0) {
+                        return 'Ingrese un celular válido (Ej. 987654321)';
+                    }
+                }
+            });
+
+            if (numeroWA) {
+                // Formatear mensaje
+                const fechaDate = new Date(deuda.fecha_llegada);
+                const opcionesFecha = { day: '2-digit', month: '2-digit', year: 'numeric' };
+                const strFecha = fechaDate.toLocaleDateString('es-ES', opcionesFecha);
+                
+                const strProductos = deuda.resumen_carga || 'Sin detalle';
+
+                let mensaje = '';
+                const fleteTotal = Number(deuda.flete_total).toFixed(2);
+                
+                // Extraer el saldo del DOM (está siempre actualizado)
+                const saldoActualStr = document.getElementById('historialSaldo').textContent.replace('S/', '').trim();
+                const estadoActual = document.getElementById('historialEstado').textContent.trim();
+                const pagadoActual = (Number(fleteTotal) - Number(saldoActualStr)).toFixed(2);
+
+                if (estadoActual === 'PENDIENTE') {
+                    mensaje = `Tiene una deuda pendiente de una carga del viaje que llego el dia ${strFecha} por los productos ${strProductos}.`;
+                } else if (estadoActual === 'PARCIAL') {
+                    mensaje = `Aun tiene una deuda por pagar de la carga del viaje que llego el dia ${strFecha} por los productos ${strProductos}, ha pagado S/ ${pagadoActual} de S/ ${fleteTotal}, aun debe S/ ${saldoActualStr}.`;
+                } else if (estadoActual === 'COMPLETADO' || estadoActual === 'COBRADO') {
+                    mensaje = `Su deuda de la carga del viaje que llego el dia ${strFecha} por los productos ${strProductos}. Ha sido completamente pagada, muchas gracias por su responsabilidad.`;
+                } else {
+                    mensaje = `Detalle de su carga del viaje llegado el ${strFecha} por los productos ${strProductos}.`;
+                }
+
+                const urlWA = `https://wa.me/51${numeroWA}?text=${encodeURIComponent(mensaje)}`;
+                window.open(urlWA, '_blank');
+            }
+        });
+    }
 }
 
 async function abrirHistorial(idCarga, fleteOriginal, saldoPendiente, estadoActual) {
     const modal = document.getElementById('modalHistorial');
     if (!modal) return;
+
+    window.idCargaAbierta = idCarga;
 
     // 1. Cabecera y Resumen Financiero
     document.getElementById('modalHistorialBadge').textContent = 'Carga ' + idCarga;

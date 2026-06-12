@@ -5,6 +5,53 @@
     </div>
 </div>
 
+<!-- Dashboard de Recaudación del Día -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 20px;">
+    <!-- Total Recaudado -->
+    <div style="background: linear-gradient(135deg, #1e3a8a, #3b82f6); border-radius: 12px; padding: 20px; color: white; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div>
+            <p style="margin: 0; font-size: 13px; opacity: 0.9; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Recaudación Hoy</p>
+            <h3 id="cardTotalRecaudado" style="margin: 4px 0 0; font-size: 28px; font-weight: 700;">S/ 0.00</h3>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.2); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+            <i class="fas fa-cash-register"></i>
+        </div>
+    </div>
+
+    <!-- Efectivo -->
+    <div style="background: linear-gradient(135deg, #065f46, #10b981); border-radius: 12px; padding: 20px; color: white; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div>
+            <p style="margin: 0; font-size: 13px; opacity: 0.9; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Efectivo</p>
+            <h3 id="cardEfectivo" style="margin: 4px 0 0; font-size: 24px; font-weight: 700;">S/ 0.00</h3>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.2); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+            <i class="fas fa-money-bill-wave"></i>
+        </div>
+    </div>
+
+    <!-- Billeteras Digitales -->
+    <div style="background: linear-gradient(135deg, #581c87, #8b5cf6); border-radius: 12px; padding: 20px; color: white; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div>
+            <p style="margin: 0; font-size: 13px; opacity: 0.9; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Billeteras Digitales</p>
+            <h3 id="cardBilleteras" style="margin: 4px 0 0; font-size: 24px; font-weight: 700;">S/ 0.00</h3>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.2); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+            <i class="fas fa-mobile-alt"></i>
+        </div>
+    </div>
+
+    <!-- Bancos -->
+    <div style="background: linear-gradient(135deg, #9a3412, #f59e0b); border-radius: 12px; padding: 20px; color: white; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div>
+            <p style="margin: 0; font-size: 13px; opacity: 0.9; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Bancos</p>
+            <h3 id="cardBancos" style="margin: 4px 0 0; font-size: 24px; font-weight: 700;">S/ 0.00</h3>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.2); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+            <i class="fas fa-university"></i>
+        </div>
+    </div>
+</div>
+
 <div class="welcome-card sin-padding">
     <div class="tabla-toolbar" style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
         <div style="flex: 1; display: flex; align-items: center; gap: 12px; min-width: 250px;">
@@ -212,7 +259,7 @@
         <!-- Footer -->
         <div class="modal-footer" style="display: flex; gap: 16px; padding: 20px 24px; background: white; border-top: 1px solid var(--border-light); flex-shrink: 0;">
             <button type="button" id="btnCerrarHistorialFooter" style="flex: 1; padding: 14px; background: #ffffff; color: #334155; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer;">Cerrar</button>
-            <button type="button" style="flex: 1; padding: 14px; background: #22c55e; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s;" onmouseover="this.style.background='#16a34a'" onmouseout="this.style.background='#22c55e'">
+            <button type="button" id="btnWhatsApp" style="flex: 1; padding: 14px; background: #22c55e; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s;" onmouseover="this.style.background='#16a34a'" onmouseout="this.style.background='#22c55e'">
                 <i class="fab fa-whatsapp"></i> Enviar por WhatsApp
             </button>
         </div>
