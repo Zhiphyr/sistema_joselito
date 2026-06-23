@@ -228,20 +228,51 @@ function crearNuevaPestaniaViaje(esRestauracion = false) {
         const cargas = window.cargasPorViaje[idViaje] || [];
         actualizarTotalesGenerales(divContenido, cargas);
 
+        let tieneErrorTarifa = false;
         if (!isNaN(fg) && !isNaN(tt)) {
             if (tt >= fg) {
+                tieneErrorTarifa = true;
                 msgError.style.display = 'block';
-                btnRegistrarViajeFinal.disabled = true;
-                btnRegistrarViajeFinal.style.opacity = '0.5';
-                btnRegistrarViajeFinal.style.cursor = 'not-allowed';
             } else {
                 msgError.style.display = 'none';
-                btnRegistrarViajeFinal.disabled = false;
-                btnRegistrarViajeFinal.style.opacity = '1';
-                btnRegistrarViajeFinal.style.cursor = 'pointer';
             }
         } else {
             msgError.style.display = 'none';
+        }
+
+        // Validación de Adelanto
+        let tieneErrorAdelanto = false;
+        const textoPagoTrans = divContenido.querySelector('.texto-pago-transportista');
+        const pagoTrans = textoPagoTrans ? parseFloat(textoPagoTrans.textContent.replace(/,/g, '')) : 0;
+        const montoAdelanto = parseFloat(inputMontoAdelanto.value);
+
+        const existingAlert = divContenido.querySelector('.error-adelanto-msg');
+        if (existingAlert) existingAlert.remove();
+        inputMontoAdelanto.style.borderColor = '';
+
+        if (chkAdelanto && chkAdelanto.checked && !isNaN(montoAdelanto) && pagoTrans > 0) {
+            if (montoAdelanto > pagoTrans) {
+                tieneErrorAdelanto = true;
+                inputMontoAdelanto.style.borderColor = '#ef4444';
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'error-adelanto-msg';
+                alertDiv.style.color = '#ef4444';
+                alertDiv.style.fontSize = '11px';
+                alertDiv.style.marginTop = '15px';
+                alertDiv.style.position = 'absolute';
+                alertDiv.style.top = '100%';
+                alertDiv.style.left = '0';
+                alertDiv.style.whiteSpace = 'nowrap';
+                alertDiv.textContent = 'El adelanto no puede superar el pago del transportista';
+                inputMontoAdelanto.parentElement.appendChild(alertDiv);
+            }
+        }
+
+        if (tieneErrorTarifa || tieneErrorAdelanto) {
+            btnRegistrarViajeFinal.disabled = true;
+            btnRegistrarViajeFinal.style.opacity = '0.5';
+            btnRegistrarViajeFinal.style.cursor = 'not-allowed';
+        } else {
             btnRegistrarViajeFinal.disabled = false;
             btnRegistrarViajeFinal.style.opacity = '1';
             btnRegistrarViajeFinal.style.cursor = 'pointer';
@@ -251,11 +282,47 @@ function crearNuevaPestaniaViaje(esRestauracion = false) {
     if (inputFleteGlobal) inputFleteGlobal.addEventListener('input', validarTarifas);
     if (inputTarifa) inputTarifa.addEventListener('input', validarTarifas);
 
+    // Eventos para Adelanto Inicial
+    const chkAdelanto = divContenido.querySelector('.chk-adelanto');
+    const contAdelanto = divContenido.querySelector('.contenedor-campos-adelanto');
+    const inputMontoAdelanto = divContenido.querySelector('.input-monto-adelanto');
+    const selectMetodoAdelanto = divContenido.querySelector('.select-metodo-adelanto');
+
+    if (chkAdelanto) {
+        chkAdelanto.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                contAdelanto.style.display = 'flex';
+                inputMontoAdelanto.required = true;
+            } else {
+                contAdelanto.style.display = 'none';
+                inputMontoAdelanto.required = false;
+                inputMontoAdelanto.value = '';
+            }
+            validarTarifas();
+            guardarEstadoEnLocalStorage(idViaje);
+        });
+    }
+
+    if (inputMontoAdelanto) {
+        inputMontoAdelanto.addEventListener('input', validarTarifas);
+        inputMontoAdelanto.addEventListener('blur', (e) => {
+            const val = parseFloat(e.target.value);
+            if (!isNaN(val) && val > 0) {
+                e.target.value = val.toFixed(2);
+            } else {
+                e.target.value = '';
+            }
+            validarTarifas();
+            guardarEstadoEnLocalStorage(idViaje);
+        });
+    }
+
     // Eventos para LocalStorage
     const inputsAEscuchar = [
         selectCamion, selectRuta, 
         divContenido.querySelector('.fecha-salida-input'),
-        inputFleteGlobal, inputTarifa
+        inputFleteGlobal, inputTarifa,
+        selectMetodoAdelanto
     ];
     inputsAEscuchar.forEach(inp => {
         if(inp) {
@@ -882,6 +949,9 @@ function guardarEstadoEnLocalStorage(idViaje) {
         fecha_salida: vista.querySelector('.fecha-salida-input') ? vista.querySelector('.fecha-salida-input').value : '',
         flete_global: vista.querySelector('.flete-global-input') ? vista.querySelector('.flete-global-input').value : '',
         tarifa_transportista: vista.querySelector('.tarifa-transportista-input') ? vista.querySelector('.tarifa-transportista-input').value : '',
+        tiene_adelanto: vista.querySelector('.chk-adelanto') ? vista.querySelector('.chk-adelanto').checked : false,
+        monto_adelanto: vista.querySelector('.input-monto-adelanto') ? vista.querySelector('.input-monto-adelanto').value : '',
+        metodo_adelanto: vista.querySelector('.select-metodo-adelanto') ? vista.querySelector('.select-metodo-adelanto').value : 'Efectivo',
         cargas: window.cargasPorViaje[idViaje] || []
     };
 
@@ -921,6 +991,17 @@ function restaurarEstadoDesdeLocalStorage() {
                     if(data.flete_global) vista.querySelector('.flete-global-input').value = data.flete_global;
                     if(data.tarifa_transportista) vista.querySelector('.tarifa-transportista-input').value = data.tarifa_transportista;
                     
+                    if(data.tiene_adelanto) {
+                        const chk = vista.querySelector('.chk-adelanto');
+                        if (chk) {
+                            chk.checked = true;
+                            vista.querySelector('.contenedor-campos-adelanto').style.display = 'flex';
+                            vista.querySelector('.input-monto-adelanto').required = true;
+                            if (data.monto_adelanto) vista.querySelector('.input-monto-adelanto').value = data.monto_adelanto;
+                            if (data.metodo_adelanto) vista.querySelector('.select-metodo-adelanto').value = data.metodo_adelanto;
+                        }
+                    }
+
                     window.cargasPorViaje[idViaje] = data.cargas || [];
                     renderizarCargasViaje(idViaje);
                     
@@ -945,6 +1026,9 @@ async function registrarViajeBackend(btn) {
     const fecha_salida = vista.querySelector('.fecha-salida-input').value;
     const flete_global = vista.querySelector('.flete-global-input').value;
     const tarifa_transportista = vista.querySelector('.tarifa-transportista-input').value;
+    const tiene_adelanto = vista.querySelector('.chk-adelanto') ? vista.querySelector('.chk-adelanto').checked : false;
+    const monto_adelanto = vista.querySelector('.input-monto-adelanto') ? vista.querySelector('.input-monto-adelanto').value : '';
+    const metodo_adelanto = vista.querySelector('.select-metodo-adelanto') ? vista.querySelector('.select-metodo-adelanto').value : '';
     const cargas = window.cargasPorViaje[idViaje] || [];
 
     if (!camion || !ruta || !fecha_salida || !flete_global || !tarifa_transportista) {
@@ -974,6 +1058,9 @@ async function registrarViajeBackend(btn) {
                 fecha_salida,
                 flete_global,
                 tarifa_transportista,
+                tiene_adelanto,
+                monto_adelanto,
+                metodo_adelanto,
                 cargas
             })
         });

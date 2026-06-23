@@ -3,12 +3,32 @@ const db = require('../config/db');
 const registrarViaje = async (req, res) => {
     let connection;
     try {
-        const { camion, ruta, flete_global, tarifa_transportista, fecha_salida, cargas } = req.body;
+        const { camion, ruta, flete_global, tarifa_transportista, fecha_salida, cargas, tiene_adelanto, monto_adelanto, metodo_adelanto } = req.body;
         const userId = req.headers['x-user-profile'] || 1; // Ajustar según tu autenticación
 
         // Validaciones básicas
         if (!camion || !ruta || !flete_global || !tarifa_transportista || !fecha_salida) {
             return res.status(400).json({ success: false, message: 'Faltan datos obligatorios del viaje' });
+        }
+
+        // Validación de Servidor: El Adelanto no puede ser mayor al pago transportista
+        if (tiene_adelanto && Number(monto_adelanto) > 0) {
+            let totalPesoGlobal = 0;
+            if (cargas && cargas.length > 0) {
+                cargas.forEach(c => {
+                    if (c.productos && c.productos.length > 0) {
+                        c.productos.forEach(p => {
+                            totalPesoGlobal += Number(p.peso_total) || 0;
+                        });
+                    }
+                });
+            }
+            
+            const pagoTransportistaGlobal = totalPesoGlobal * Number(tarifa_transportista);
+            
+            if (Number(monto_adelanto) > pagoTransportistaGlobal) {
+                return res.status(400).json({ success: false, message: 'El adelanto no puede superar el pago total del transportista' });
+            }
         }
 
         connection = await db.getConnection();
@@ -59,6 +79,20 @@ const registrarViaje = async (req, res) => {
                     }
                 }
             }
+        }
+
+        // 4. Insertar Adelanto Inicial si aplica
+        if (tiene_adelanto && Number(monto_adelanto) > 0) {
+            const sqlAdelanto = `
+                INSERT INTO adelantos_viaje (id_viaje, id_usuario, monto, metodo_entrega, motivo_referencial)
+                VALUES (?, ?, ?, ?, 'Viáticos iniciales')
+            `;
+            await connection.query(sqlAdelanto, [
+                idViajeInsertado,
+                userId,
+                Number(monto_adelanto),
+                metodo_adelanto || 'Efectivo'
+            ]);
         }
 
         // Si todo sale bien, aplicamos los cambios
