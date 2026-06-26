@@ -217,11 +217,41 @@ const consultarDocumento = async (req, res) => {
     }
 };
 
+const obtenerIncidenciasPendientesPorCamion = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const db = require('../config/db'); // Necesitamos db directamente para consultas complejas o podemos usar un modelo
+        
+        const sql = `
+            SELECT 
+                iv.id_incidencia,
+                iv.tipo_incidencia,
+                v.id_viaje,
+                (iv.monto_descuento_chofer - iv.monto_cobrado) AS saldo_deuda
+            FROM incidencia_viaje iv
+            JOIN viaje v ON iv.id_viaje = v.id_viaje
+            WHERE v.id_camion = ?
+              AND iv.estado = 1
+              AND iv.monto_descuento_chofer IS NOT NULL
+              AND iv.estado_cobro_penalidad IN ('Pendiente', 'Cobrado Parcial')
+              AND (iv.monto_descuento_chofer - iv.monto_cobrado) > 0
+        `;
+        
+        const [rows] = await db.query(sql, [id]);
+        
+        return res.status(200).json({ success: true, data: rows });
+    } catch (error) {
+        console.error('Error en obtenerIncidenciasPendientesPorCamion:', error);
+        return res.status(500).json({ success: false, message: 'Error interno al obtener incidencias pendientes' });
+    }
+};
+
 module.exports = {
     listarCamiones,
     registrar,
     actualizar,
     reactivar,
     cambiarEstado,
-    consultarDocumento
+    consultarDocumento,
+    obtenerIncidenciasPendientesPorCamion
 };

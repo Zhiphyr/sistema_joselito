@@ -17,8 +17,22 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionStorage.removeItem('usuario_joselito');
         window.location.href = 'login.html';
     });
+    // 4. Manejar colapso del Sidebar
+    const sidebar = document.getElementById('sidebar');
+    const btnToggleSidebar = document.getElementById('btnToggleSidebar');
 
-    // 4. Cargar menú dinámico RBAC
+    // Recuperar estado al cargar la página
+    if (localStorage.getItem('sidebarCollapsed') === 'true') {
+        sidebar.classList.add('collapsed');
+    }
+
+    btnToggleSidebar.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+        // Guardar el estado actual en localStorage
+        localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+    });
+
+    // 5. Cargar menú dinámico RBAC
     cargarMenu(userData.id_perfil);
 });
 

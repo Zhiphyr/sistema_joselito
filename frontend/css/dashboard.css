@@ -49,8 +49,8 @@ body {
 /* Sidebar */
 .sidebar {
     width: var(--sidebar-width);
-    background-color: var(--surface-sidebar);
-    border-right: 1px solid var(--border-light);
+    background-color: #1f2937; /* Tema Oscuro */
+    border-right: none;
     display: flex;
     flex-direction: column;
     transition: transform 0.3s ease;
@@ -58,23 +58,50 @@ body {
 }
 
 .sidebar-header {
-    height: var(--topbar-height);
+    height: 8rem;
     display: flex;
     align-items: center;
+    justify-content: center;
     padding: 0 24px;
-    border-bottom: 1px solid var(--border-light);
-    gap: 12px;
+    border-bottom: 1px solid #374151; 
 }
 
-.brand-icon {
-    color: var(--brand-blue);
-    font-size: 24px;
+.sidebar-logo {
+    max-height: 8rem;
+    max-width: 100%;
+    object-fit: contain;
 }
 
-.sidebar-header h2 {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--brand-blue);
+/* Sidebar Colapsado */
+.sidebar.collapsed {
+    width: 80px;
+}
+
+.sidebar.collapsed .sidebar-logo {
+    display: none;
+}
+
+.sidebar.collapsed .collapsed-logo {
+    display: block !important;
+}
+
+.sidebar.collapsed .nav-link span {
+    display: none;
+}
+
+.sidebar.collapsed .nav-link {
+    justify-content: center;
+    padding: 12px 0;
+}
+
+.sidebar.collapsed .nav-link i {
+    width: auto;
+    font-size: 20px;
+}
+
+.sidebar.collapsed .sidebar-header {
+    padding: 0;
+    justify-content: center;
 }
 
 /* Sidebar Nav */
@@ -82,6 +109,12 @@ body {
     flex: 1;
     padding: 24px 16px;
     overflow-y: auto;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+}
+
+.sidebar-nav::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
 }
 
 .sidebar-nav ul {
@@ -96,7 +129,7 @@ body {
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
-    color: var(--text-secondary);
+    color: #f3f4f6; /* Letras blancas/claras */
     text-decoration: none;
     border-radius: var(--radius-md);
     font-size: 14px;
@@ -109,25 +142,34 @@ body {
     width: 20px;
     text-align: center;
     font-size: 16px;
+    color: #9ca3af; /* Iconos gris claro */
 }
 
 .nav-link:hover {
-    background-color: var(--brand-blue-light);
-    color: var(--brand-blue);
+    background-color: #374151; /* Gris intermedio */
+    color: #ffffff;
+}
+
+.nav-link:hover i {
+    color: #ffffff;
 }
 
 .nav-link.active {
-    background-color: var(--brand-blue);
-    color: #fff;
+    background-color: #4b5563; /* Gris claro para resaltar */
+    color: #ffffff;
 }
 
-/* Sidebar Footer / User Info */
-.sidebar-footer {
-    padding: 16px;
-    border-top: 1px solid var(--border-light);
+.nav-link.active i {
+    color: #ffffff;
+}
+
+/* User Info (Now in Topbar) */
+.topbar-user {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 24px;
+    border-left: 1px solid var(--border-light);
+    padding-left: 24px;
 }
 
 .user-info {
@@ -173,7 +215,7 @@ body {
 .btn-logout {
     background: none;
     border: none;
-    color: var(--text-muted);
+    color: var(--text-secondary);
     cursor: pointer;
     padding: 8px;
     border-radius: var(--radius-md);
@@ -181,7 +223,7 @@ body {
 }
 
 .btn-logout:hover {
-    color: #ef4444; /* Semantic destructive action */
+    color: #ef4444; /* Rojo para cerrar sesión */
     background-color: rgba(239, 68, 68, 0.1);
 }
 
@@ -199,15 +241,15 @@ body {
     border-bottom: 1px solid var(--border-light);
     display: flex;
     align-items: center;
+    justify-content: space-between; /* Espaciar título de usuario */
     padding: 0 24px;
-    gap: 16px;
 }
 
 .btn-icon {
     background: none;
     border: none;
-    color: var(--text-secondary);
-    font-size: 18px;
+    color: var(--brand-blue); /* Color corporativo */
+    font-size: 20px;
     cursor: pointer;
     padding: 8px;
     border-radius: var(--radius-md);

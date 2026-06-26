@@ -3,6 +3,8 @@ const router = express.Router();
 const viajeController = require('../controllers/viajeController');
 
 router.post('/', viajeController.registrarViaje);
+router.get('/liquidaciones/pendientes', viajeController.obtenerLiquidacionesPendientes);
+router.get('/liquidaciones/historial', viajeController.obtenerHistorialLiquidaciones);
 router.get('/', viajeController.obtenerHistorialViajes);
 router.get('/recepcion/activos', viajeController.obtenerViajesRecepcion);
 router.get('/:id', viajeController.obtenerViajePorId);
@@ -14,5 +16,7 @@ router.get('/:id/cargas', viajeController.obtenerCargasPorViaje);
 router.post('/transbordo', viajeController.confirmarTransbordo);
 router.get('/:id/incidencias', viajeController.obtenerIncidenciasViaje);
 router.post('/:id/incidencias', viajeController.registrarIncidenciaViaje);
+
+router.post('/:id/liquidar', viajeController.liquidarViaje);
 
 module.exports = router;

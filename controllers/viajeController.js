@@ -888,6 +888,277 @@ const registrarIncidenciaViaje = async (req, res) => {
     }
 };
 
+const obtenerLiquidacionesPendientes = async (req, res) => {
+    try {
+        const sql = `
+            SELECT 
+                v.id_viaje,
+                c.id_camion,
+                c.placa AS camion_placa,
+                c.nombre AS camion_modelo,
+                c.conductor AS chofer_nombre,
+                c.numero_documento AS chofer_dni,
+                v.tarifa_transportista,
+                DATE_FORMAT(v.fecha_salida, '%Y-%m-%d · %H:%i') AS salida,
+                DATE_FORMAT(v.fecha_llegada, '%Y-%m-%d · %H:%i') AS llegada,
+                CONCAT(ro.ciudad_origen, ' - ', ro.ciudad_destino) AS ruta,
+                
+                -- Cálculo de peso total de las cargas de este viaje
+                (
+                    SELECT COALESCE(SUM(dc.peso_total), 0)
+                    FROM carga cg
+                    JOIN detalle_carga dc ON cg.id_carga = dc.id_carga
+                    WHERE cg.id_viaje = v.id_viaje AND cg.estado = 1 AND dc.estado = 1
+                ) AS total_peso,
+                
+                -- Suma de adelantos de este viaje
+                (
+                    SELECT COALESCE(SUM(monto), 0)
+                    FROM adelantos_viaje
+                    WHERE id_viaje = v.id_viaje AND estado = 1
+                ) AS adelanto,
+                
+                -- Suma de penalidades pendientes globales de este CAMIÓN
+                (
+                    SELECT COALESCE(SUM(iv.monto_descuento_chofer - iv.monto_cobrado), 0)
+                    FROM incidencia_viaje iv
+                    JOIN viaje v2 ON iv.id_viaje = v2.id_viaje
+                    WHERE v2.id_camion = v.id_camion 
+                      AND iv.estado = 1 
+                      AND iv.monto_descuento_chofer IS NOT NULL
+                      AND iv.estado_cobro_penalidad IN ('Pendiente', 'Cobrado Parcial')
+                ) AS penalidades
+                
+            FROM viaje v
+            JOIN camiones c ON v.id_camion = c.id_camion
+            JOIN rutas ro ON v.id_ruta = ro.id_ruta
+            WHERE v.estado_operativo = 'Finalizado' 
+              AND v.estado_pagos = 'Pendiente' 
+              AND v.estado = 1
+            ORDER BY v.fecha_llegada ASC
+        `;
+
+        const [rows] = await db.query(sql);
+
+        // Formatear los datos para el frontend (calcular bruto y neto)
+        const liquidaciones = rows.map(row => {
+            const monto_bruto = Number(row.total_peso) * Number(row.tarifa_transportista);
+            const neto_pagar = monto_bruto - Number(row.adelanto);
+
+            return {
+                id: row.id_viaje, // Usamos el id_viaje como id de liquidación
+                id_camion: row.id_camion,
+                chofer_nombre: row.chofer_nombre,
+                chofer_dni: row.chofer_dni,
+                camion_placa: row.camion_placa,
+                camion_modelo: row.camion_modelo,
+                viaje_num: row.id_viaje,
+                ruta: row.ruta,
+                salida: row.salida || 'Sin fecha',
+                llegada: row.llegada || 'Sin fecha',
+                monto_bruto: monto_bruto,
+                tarifa_transportista: Number(row.tarifa_transportista),
+                total_peso: Number(row.total_peso),
+                adelanto: Number(row.adelanto),
+                penalidades: Number(row.penalidades),
+                neto_pagar: neto_pagar
+            };
+        });
+
+        // Calcular pagado este mes
+        const sqlPagadoMes = `
+            SELECT COALESCE(SUM(monto_neto_pagado), 0) AS total_pagado_mes 
+            FROM liquidacion_viaje 
+            WHERE MONTH(fecha_liquidacion) = MONTH(CURRENT_DATE()) 
+              AND YEAR(fecha_liquidacion) = YEAR(CURRENT_DATE())
+              AND estado = 1
+        `;
+        const [rowsPagado] = await db.query(sqlPagadoMes);
+        const pagadoMes = rowsPagado[0].total_pagado_mes;
+
+        return res.status(200).json({ success: true, data: liquidaciones, pagadoMes: Number(pagadoMes) });
+    } catch (error) {
+        console.error('Error al obtener liquidaciones pendientes:', error);
+        return res.status(500).json({ success: false, message: 'Error interno del servidor.' });
+    }
+};
+
+const liquidarViaje = async (req, res) => {
+    let connection;
+    try {
+        const { id } = req.params; // id_viaje
+        const id_usuario = req.headers['x-user-profile'];
+        
+        const { 
+            monto_bruto, 
+            total_adelantos, 
+            total_penalidades, 
+            monto_neto_pagado, 
+            metodo_pago, 
+            observaciones, 
+            penalidades_descontadas 
+        } = req.body;
+
+        if (!id_usuario) {
+            return res.status(401).json({ success: false, message: 'Usuario no autenticado' });
+        }
+        
+        if (monto_neto_pagado < 0) {
+            return res.status(400).json({ success: false, message: 'El monto neto no puede ser negativo' });
+        }
+
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. Insertar en liquidacion_viaje
+        const sqlInsertLiquidacion = `
+            INSERT INTO liquidacion_viaje 
+            (id_viaje, id_usuario, monto_bruto, total_adelantos, total_penalidades, monto_neto_pagado, metodo_pago, observaciones)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        const [resultLiq] = await connection.query(sqlInsertLiquidacion, [
+            id, id_usuario, monto_bruto, total_adelantos, total_penalidades, monto_neto_pagado, metodo_pago, observaciones
+        ]);
+        
+        const id_liquidacion = resultLiq.insertId;
+
+        // 2 & 3. Procesar Penalidades Descontadas
+        if (penalidades_descontadas && penalidades_descontadas.length > 0) {
+            for (let pen of penalidades_descontadas) {
+                // Insertar detalle_liquidacion_penalidad
+                await connection.query(`
+                    INSERT INTO detalle_liquidacion_penalidad (id_liquidacion, id_incidencia, monto_descontado)
+                    VALUES (?, ?, ?)
+                `, [id_liquidacion, pen.id_incidencia, pen.monto_descontado]);
+
+                // Actualizar incidencia_viaje
+                // Necesitamos el monto_cobrado actual y monto_descuento_chofer para actualizar estado
+                const [rowsInc] = await connection.query(
+                    `SELECT monto_descuento_chofer, monto_cobrado FROM incidencia_viaje WHERE id_incidencia = ? FOR UPDATE`,
+                    [pen.id_incidencia]
+                );
+                
+                if (rowsInc.length > 0) {
+                    const inc = rowsInc[0];
+                    const nuevo_cobrado = Number(inc.monto_cobrado) + Number(pen.monto_descontado);
+                    const deuda_total = Number(inc.monto_descuento_chofer);
+                    
+                    let nuevo_estado = 'Cobrado Parcial';
+                    // Deuda saldada (usamos una tolerancia mínima por decimales si es necesario, o >= )
+                    if (nuevo_cobrado >= deuda_total - 0.01) {
+                        nuevo_estado = 'Cobrado';
+                    }
+
+                    await connection.query(`
+                        UPDATE incidencia_viaje 
+                        SET monto_cobrado = ?, estado_cobro_penalidad = ? 
+                        WHERE id_incidencia = ?
+                    `, [nuevo_cobrado, nuevo_estado, pen.id_incidencia]);
+                }
+            }
+        }
+
+        // 4. Marcar viaje como Liquidado
+        await connection.query(`
+            UPDATE viaje 
+            SET estado_pagos = 'Liquidado' 
+            WHERE id_viaje = ?
+        `, [id]);
+
+        await connection.commit();
+        
+        return res.status(200).json({ success: true, message: 'Liquidación registrada con éxito', id_liquidacion });
+        
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+        }
+        console.error('Error al liquidar viaje:', error);
+        
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ success: false, message: 'Este viaje ya ha sido liquidado anteriormente.' });
+        }
+        
+        return res.status(500).json({ success: false, message: 'Error interno al procesar la liquidación.' });
+    } finally {
+        if (connection) {
+            connection.release();
+        }
+    }
+};
+
+const obtenerHistorialLiquidaciones = async (req, res) => {
+    try {
+        const sql = `
+            SELECT 
+                l.id_liquidacion,
+                DATE_FORMAT(l.fecha_liquidacion, '%Y-%m-%d · %H:%i:%s') AS fecha,
+                l.monto_bruto,
+                l.total_adelantos,
+                l.total_penalidades,
+                l.monto_neto_pagado,
+                c.nombre AS camion_modelo,
+                c.placa AS camion_placa,
+                c.conductor AS chofer_nombre,
+                c.numero_documento AS chofer_dni,
+                v.id_viaje,
+                CONCAT(ro.ciudad_origen, ' - ', ro.ciudad_destino) AS ruta,
+                
+                -- Calcular el peso total en kg
+                (
+                    SELECT COALESCE(SUM(dc.peso_total), 0)
+                    FROM carga cg
+                    JOIN detalle_carga dc ON cg.id_carga = dc.id_carga
+                    WHERE cg.id_viaje = v.id_viaje AND cg.estado = 1 AND dc.estado = 1
+                ) AS total_peso,
+
+                -- Extraer las penalidades como un JSON array
+                (
+                    SELECT JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            'incidencia', i.tipo_incidencia, 
+                            'monto', dlp.monto_descontado
+                        )
+                    )
+                    FROM detalle_liquidacion_penalidad dlp
+                    JOIN incidencia_viaje i ON dlp.id_incidencia = i.id_incidencia
+                    WHERE dlp.id_liquidacion = l.id_liquidacion
+                ) AS detalle_penalidades
+                
+            FROM liquidacion_viaje l
+            JOIN viaje v ON l.id_viaje = v.id_viaje
+            JOIN camiones c ON v.id_camion = c.id_camion
+            JOIN rutas ro ON v.id_ruta = ro.id_ruta
+            WHERE l.estado = 1
+            ORDER BY l.fecha_liquidacion DESC
+        `;
+
+        const [rows] = await db.query(sql);
+
+        // Mapear el JSON array si la BD devuelve un string
+        const historial = rows.map(row => {
+            let penalidadesParsed = [];
+            if (row.detalle_penalidades) {
+                try {
+                    penalidadesParsed = typeof row.detalle_penalidades === 'string' 
+                        ? JSON.parse(row.detalle_penalidades) 
+                        : row.detalle_penalidades;
+                } catch(e) {}
+            }
+            
+            return {
+                ...row,
+                detalle_penalidades: penalidadesParsed
+            };
+        });
+
+        return res.status(200).json({ success: true, data: historial });
+    } catch (error) {
+        console.error('Error al obtener historial de liquidaciones:', error);
+        return res.status(500).json({ success: false, message: 'Error interno del servidor.' });
+    }
+};
+
 module.exports = {
     registrarViaje,
     obtenerHistorialViajes,
@@ -900,5 +1171,8 @@ module.exports = {
     rechazarCarga,
     confirmarTransbordo,
     obtenerIncidenciasViaje,
-    registrarIncidenciaViaje
+    registrarIncidenciaViaje,
+    obtenerLiquidacionesPendientes,
+    liquidarViaje,
+    obtenerHistorialLiquidaciones
 };
