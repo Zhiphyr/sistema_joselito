@@ -59,6 +59,11 @@ async function init_historial_viajes() {
                 const idViaje = btn.getAttribute('data-id');
                 abrirModalIncidencias(idViaje);
             }
+            if (e.target.classList.contains('btn-ver-adelantos') || e.target.closest('.btn-ver-adelantos')) {
+                const btn = e.target.classList.contains('btn-ver-adelantos') ? e.target : e.target.closest('.btn-ver-adelantos');
+                const idViaje = btn.getAttribute('data-id');
+                abrirModalAdelantos(idViaje);
+            }
         });
     }
 
@@ -78,6 +83,12 @@ async function init_historial_viajes() {
     document.getElementById('btn-cerrar-modal-incidencias-btn')?.addEventListener('click', cerrarModalIncidencias);
     document.getElementById('modal-incidencias-viaje')?.addEventListener('click', (e) => {
         if(e.target.id === 'modal-incidencias-viaje') cerrarModalIncidencias();
+    });
+
+    document.getElementById('btn-cerrar-modal-adelantos-x')?.addEventListener('click', cerrarModalAdelantosViaje);
+    document.getElementById('btn-cerrar-modal-adelantos-btn')?.addEventListener('click', cerrarModalAdelantosViaje);
+    document.getElementById('modal-adelantos-viaje')?.addEventListener('click', (e) => {
+        if(e.target.id === 'modal-adelantos-viaje') cerrarModalAdelantosViaje();
     });
 
     document.getElementById('btn-nueva-incidencia')?.addEventListener('click', mostrarFormularioNuevaIncidencia);
@@ -114,7 +125,9 @@ async function init_historial_viajes() {
 
         const p = Number(perdidaInput.value) || 0;
         const g = Number(gastosInput.value) || 0;
-        const total = p + g;
+        const adelantoInput = document.getElementById('nueva-incidencia-adelanto');
+        const a = adelantoInput ? (Number(adelantoInput.getAttribute('value')) || Number(adelantoInput.value) || 0) : 0;
+        const total = p + g + a;
 
         if (targetId === 'nueva-incidencia-perdida' || targetId === 'nueva-incidencia-gastos') {
             labelTotal.textContent = `S/ ${total.toFixed(2)}`;
@@ -181,21 +194,22 @@ function abrirModalDetallesViaje(idStr) {
     document.getElementById('modal-detalle-ruta').textContent = `${viaje.ciudad_origen || 'Origen'} - ${viaje.ciudad_destino || 'Destino'}`;
 
     // Estado
-    const spanEstado = document.getElementById('modal-detalle-estado');
-    spanEstado.textContent = viaje.estado_operativo;
-    if (viaje.estado_operativo === 'En Ruta') {
-        spanEstado.style.background = '#e0f2fe';
-        spanEstado.style.color = 'var(--brand-blue)';
-    } else if (viaje.estado_operativo === 'Llegó a Destino') {
-        spanEstado.style.background = '#dcfce7';
-        spanEstado.style.color = '#16a34a';
-    } else if (viaje.estado_operativo === 'Finalizado') {
-        spanEstado.style.background = '#f1f5f9';
-        spanEstado.style.color = '#475569';
-    } else { // Incidencia
-        spanEstado.style.background = '#fee2e2';
-        spanEstado.style.color = '#dc2626';
-    }
+    const divEstado = document.getElementById('modal-detalle-estado');
+    let colorEstado, bgEstado;
+    if (viaje.estado_operativo === 'En Ruta') { colorEstado = 'var(--brand-blue)'; bgEstado = '#e0f2fe'; }
+    else if (viaje.estado_operativo === 'Llegó a Destino') { colorEstado = '#16a34a'; bgEstado = '#dcfce7'; }
+    else if (viaje.estado_operativo === 'Finalizado') { colorEstado = '#475569'; bgEstado = '#f1f5f9'; }
+    else { colorEstado = '#dc2626'; bgEstado = '#fee2e2'; } // Incidencia
+
+    let colorPago, bgPago;
+    if (viaje.estado_pagos === 'Liquidado') { colorPago = '#16a34a'; bgPago = '#dcfce7'; }
+    else if (viaje.estado_pagos === 'Anulado') { colorPago = '#dc2626'; bgPago = '#fee2e2'; }
+    else { colorPago = '#d97706'; bgPago = '#fef3c7'; } // Pendiente o default
+
+    divEstado.innerHTML = `
+        <span style="background: ${bgEstado}; color: ${colorEstado}; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-truck-moving"></i> ${viaje.estado_operativo}</span>
+        <span style="background: ${bgPago}; color: ${colorPago}; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-money-bill-wave"></i> ${viaje.estado_pagos || 'Pendiente'}</span>
+    `;
 
     // Fechas
     document.getElementById('modal-detalle-fecha-salida').textContent = formatFechaCompleta(viaje.fecha_salida);
@@ -235,6 +249,10 @@ function abrirModalDetallesViaje(idStr) {
 
 function cerrarModalDetallesViaje() {
     document.getElementById('modal-detalles-viaje').style.display = 'none';
+}
+
+function cerrarModalAdelantosViaje() {
+    document.getElementById('modal-adelantos-viaje').style.display = 'none';
 }
 
 async function abrirModalCargasViaje(idStr) {
@@ -391,6 +409,11 @@ async function abrirModalIncidencias(idStr) {
     const modalIncidencias = document.getElementById('modal-incidencias-viaje');
     const modalBody = document.getElementById('modal-incidencias-body');
     
+    // Validar estado de pago
+    const viajeInfo = historialViajesTodos.find(v => v.id_viaje === idViaje);
+    const estaLiquidado = viajeInfo && viajeInfo.estado_pagos === 'Liquidado';
+    const esAnulado = viajeInfo && viajeInfo.estado_operativo === 'Incidencia' && viajeInfo.estado_pagos === 'Anulado';
+    
     document.getElementById('modal-incidencias-titulo').textContent = `Incidencias del Viaje #${idViaje}`;
     document.getElementById('modal-incidencias-subtitulo').textContent = `Total de incidencias registradas: Cargando...`;
     modalBody.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
@@ -411,6 +434,14 @@ async function abrirModalIncidencias(idStr) {
             
             if (incidencias.length === 0) {
                 document.getElementById('btn-nueva-incidencia').style.display = 'none';
+                
+                let btnNuevaEmptyHtml = '';
+                if (!estaLiquidado) {
+                    btnNuevaEmptyHtml = `<button id="btn-nueva-incidencia-empty" style="background: #dc2626; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2); transition: all 0.2s;"><i class="fas fa-plus"></i> Nueva Incidencia</button>`;
+                } else {
+                    btnNuevaEmptyHtml = `<div style="background: #fef3c7; border: 1px solid #fde68a; color: #d97706; padding: 12px; border-radius: 8px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;"><i class="fas fa-lock"></i> Este viaje ha sido liquidado. No se pueden registrar nuevas incidencias.</div>`;
+                }
+
                 modalBody.innerHTML = `
                     <div style="text-align: center; padding: 40px; margin: auto;">
                         <div style="width: 64px; height: 64px; border-radius: 50%; background: #f1f5f9; color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 16px;">
@@ -418,21 +449,21 @@ async function abrirModalIncidencias(idStr) {
                         </div>
                         <h4 style="margin: 0 0 8px 0; font-size: 16px; color: var(--text-primary);">Sin incidencias</h4>
                         <p style="margin: 0 0 24px 0; font-size: 14px; color: var(--text-secondary);">Este viaje no tiene ninguna incidencia registrada.</p>
-                        <button id="btn-nueva-incidencia-empty" style="background: #dc2626; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2); transition: all 0.2s;">
-                            <i class="fas fa-plus"></i> Nueva Incidencia
-                        </button>
+                        ${btnNuevaEmptyHtml}
                     </div>
                 `;
                 return;
             }
 
-            document.getElementById('btn-nueva-incidencia').style.display = 'flex';
+            const bloquearNuevas = estaLiquidado || (esAnulado && incidencias.length >= 1);
+            if (!bloquearNuevas) {
+                document.getElementById('btn-nueva-incidencia').style.display = 'flex';
+            } else {
+                document.getElementById('btn-nueva-incidencia').style.display = 'none';
+            }
 
             let filasIncidencias = '';
             incidencias.forEach(inc => {
-                const colorResolucion = inc.estado_resolucion === 'Resuelto' ? '#16a34a' : '#d97706';
-                const bgResolucion = inc.estado_resolucion === 'Resuelto' ? '#dcfce7' : '#fef3c7';
-
                 const mtoDescuento = inc.monto_descuento_chofer !== null 
                     ? `<span style="color: #ea580c; font-weight: 600;">S/ ${Number(inc.monto_descuento_chofer).toFixed(2)}</span>` 
                     : `<span style="color: #94a3b8; font-style: italic;">Por definir</span>`;
@@ -440,6 +471,10 @@ async function abrirModalIncidencias(idStr) {
                 const mtoEmpresa = inc.monto_asumido_empresa !== null 
                     ? `<span style="color: #dc2626; font-weight: 600;">S/ ${Number(inc.monto_asumido_empresa).toFixed(2)}</span>` 
                     : `<span style="color: #94a3b8; font-style: italic;">Por definir</span>`;
+                    
+                const mtoAdelanto = (inc.adelanto_recuperar !== null && Number(inc.adelanto_recuperar) > 0)
+                    ? `<span style="color: #ca8a04; font-weight: 700; background: #fef08a; padding: 2px 8px; border-radius: 12px; font-size: 11px;">S/ ${Number(inc.adelanto_recuperar).toFixed(2)}</span>`
+                    : `<span style="color: #cbd5e1;">-</span>`;
                     
                 // Asumiendo date extraido desde YYYY-MM-DD
                 const fechaDate = new Date(inc.fecha_creacion);
@@ -461,14 +496,14 @@ async function abrirModalIncidencias(idStr) {
                         <td style="padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; font-weight: 600; color: var(--text-primary); white-space: nowrap;">
                             S/ ${Number(inc.gastos_adicionales || 0).toFixed(2)}
                         </td>
+                        <td style="padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; white-space: nowrap; text-align: center;">
+                            ${mtoAdelanto}
+                        </td>
                         <td style="padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; white-space: nowrap;">
                             ${mtoDescuento}
                         </td>
                         <td style="padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; white-space: nowrap;">
                             ${mtoEmpresa}
-                        </td>
-                        <td style="padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top;">
-                            <span style="background: ${bgResolucion}; color: ${colorResolucion}; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;">${inc.estado_resolucion}</span>
                         </td>
                         <td style="padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; font-size: 12px; color: var(--text-secondary); white-space: nowrap;">
                             <span style="color: var(--text-primary); font-weight: 500;">${inc.usuario_registro}</span><br>
@@ -488,9 +523,9 @@ async function abrirModalIncidencias(idStr) {
                                     <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; font-size: 11px;">Descripción</th>
                                     <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-size: 11px;">Pérdida Total</th>
                                     <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-size: 11px;">Gastos Extra</th>
+                                    <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-size: 11px; text-align: center;">Adelanto Recup.</th>
                                     <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-size: 11px;">Descuento a Chofer</th>
                                     <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-size: 11px;">Pérdida Empresa</th>
-                                    <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-size: 11px;">Resolución</th>
                                     <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-size: 11px;">Registro</th>
                                 </tr>
                             </thead>
@@ -517,7 +552,8 @@ function cerrarModalIncidencias() {
 
 async function mostrarFormularioNuevaIncidencia() {
     const modalBody = document.getElementById('modal-incidencias-body');
-    const idViaje = document.getElementById('modal-incidencias-viaje').getAttribute('data-id-viaje');
+    const idViajeStr = document.getElementById('modal-incidencias-viaje').getAttribute('data-id-viaje');
+    const idViaje = Number(idViajeStr);
     
     if (document.getElementById('form-nueva-incidencia-container')) return;
     
@@ -535,15 +571,36 @@ async function mostrarFormularioNuevaIncidencia() {
     let htmlCargas = '';
     let perdidaYaRegistrada = 0;
 
+    let totalAdelantos = 0;
+    
+    const viajeInfoGlobal = historialViajesTodos.find(v => v.id_viaje === idViaje);
+    const esAnulado = viajeInfoGlobal && viajeInfoGlobal.estado_operativo === 'Incidencia' && viajeInfoGlobal.estado_pagos === 'Anulado';
+
     try {
         const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
-        const [resCargasReq, resIncidenciasReq] = await Promise.all([
+
+        const reqs = [
             fetch(`/api/viajes/${idViaje}/cargas`, { headers: { 'x-user-profile': sessionData.id_perfil || 1 } }),
             fetch(`/api/viajes/${idViaje}/incidencias`, { headers: { 'x-user-profile': sessionData.id_perfil || 1 } })
-        ]);
+        ];
+        if (esAnulado) {
+            reqs.push(fetch(`/api/viajes/${idViaje}/adelantos`, { headers: { 'x-user-profile': sessionData.id_perfil || 1 } }));
+        }
+
+        const responses = await Promise.all(reqs);
+        const resCargasReq = responses[0];
+        const resIncidenciasReq = responses[1];
+        const resAdelantosReq = responses[2];
 
         const res = await resCargasReq.json();
         const resInc = await resIncidenciasReq.json();
+        
+        if (esAnulado && resAdelantosReq && resAdelantosReq.ok) {
+            const resAdelantos = await resAdelantosReq.json();
+            if (resAdelantos.success) {
+                totalAdelantos = Number(resAdelantos.total_adelantos) || 0;
+            }
+        }
         
         if (resIncidenciasReq.ok && resInc.success && resInc.data) {
             resInc.data.forEach(inc => {
@@ -619,13 +676,14 @@ async function mostrarFormularioNuevaIncidencia() {
     if (remanente < 0) remanente = 0;
 
     let inputPerdidaHTML = '';
-    let totalRepartirInicial = remanente.toFixed(2);
+    let totalRepartirInicialNum = remanente + (esAnulado ? totalAdelantos : 0);
+    let totalRepartirInicial = totalRepartirInicialNum.toFixed(2);
+    
     if (remanente === 0) {
         inputPerdidaHTML = `
             <input type="number" id="nueva-incidencia-perdida" value="0.00" readonly style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; background-color: #f1f5f9; cursor: not-allowed;">
             <label style="display: block; font-size: 10px; font-weight: 600; color: var(--text-secondary); margin-top: 6px;">(Sin remanente)</label>
         `;
-        totalRepartirInicial = '0.00';
     } else {
         inputPerdidaHTML = `
             <input type="number" min="0" max="${remanente.toFixed(2)}" step="0.01" id="nueva-incidencia-perdida" value="${remanente.toFixed(2)}" placeholder="0" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none;">
@@ -643,6 +701,27 @@ async function mostrarFormularioNuevaIncidencia() {
         `;
     }
 
+    let alertaAdelantos = '';
+    let colAdelantoHTML = '';
+    let gridTemplateCols = '1fr 1fr';
+    if (esAnulado) {
+        if (totalAdelantos > 0) {
+            alertaAdelantos = `
+                <div style="background: #fef08a; color: #854d0e; padding: 12px 16px; border-radius: 6px; border: 1px solid #fde047; font-size: 13px; margin-bottom: 20px; display: flex; gap: 10px; align-items: flex-start;">
+                    <i class="fas fa-exclamation-triangle" style="margin-top: 2px;"></i>
+                    <div>Este viaje anulado tiene <strong>S/ ${totalAdelantos.toFixed(2)}</strong> en adelantos entregados al chofer. Asegúrate de cuadrar la recuperación de este dinero.</div>
+                </div>
+            `;
+        }
+        gridTemplateCols = '1fr 1fr 1fr';
+        colAdelantoHTML = `
+            <div>
+                <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Adelanto Recuperar (S/)</label>
+                <input type="number" id="nueva-incidencia-adelanto" value="${totalAdelantos.toFixed(2)}" readonly style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; background-color: #f1f5f9; cursor: not-allowed; color: #ca8a04; font-weight: 700;">
+            </div>
+        `;
+    }
+
     modalBody.innerHTML = `
         <div id="form-nueva-incidencia-container" style="display: grid; grid-template-columns: 1fr 380px; gap: 24px; align-items: stretch; height: 100%; min-height: 0;">
             
@@ -650,25 +729,17 @@ async function mostrarFormularioNuevaIncidencia() {
             <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px; overflow-y: auto;">
                 <h4 style="margin: 0 0 20px 0; font-size: 16px; color: var(--text-primary); font-weight: 700;">Nueva Incidencia de Viaje</h4>
                 ${alertaRemanenteCero}
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-                    <div>
-                        <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Tipo de Incidencia *</label>
-                        <select id="nueva-incidencia-tipo" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; color: var(--text-primary); outline: none;">
-                            <option value="Falla Mecánica">Falla Mecánica</option>
-                            <option value="Retraso en Ruta">Retraso en Ruta</option>
-                            <option value="Daño/Mala Estiba">Daño/Mala Estiba</option>
-                            <option value="Faltante / Pérdida">Faltante / Pérdida</option>
-                            <option value="Accidente">Accidente</option>
-                            <option value="Otro">Otro</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Estado Resolución</label>
-                        <select id="nueva-incidencia-estado" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; color: var(--text-primary); outline: none;">
-                            <option value="Pendiente">Pendiente</option>
-                            <option value="Resuelto">Resuelto</option>
-                        </select>
-                    </div>
+                ${alertaAdelantos}
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Tipo de Incidencia *</label>
+                    <select id="nueva-incidencia-tipo" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; color: var(--text-primary); outline: none;">
+                        <option value="Falla Mecánica">Falla Mecánica</option>
+                        <option value="Retraso en Ruta">Retraso en Ruta</option>
+                        <option value="Daño/Mala Estiba">Daño/Mala Estiba</option>
+                        <option value="Faltante / Pérdida">Faltante / Pérdida</option>
+                        <option value="Accidente">Accidente</option>
+                        <option value="Otro">Otro</option>
+                    </select>
                 </div>
 
                 <div style="margin-bottom: 24px;">
@@ -681,7 +752,7 @@ async function mostrarFormularioNuevaIncidencia() {
                         <i class="fas fa-dollar-sign" style="color: var(--text-muted);"></i> Impacto Financiero
                     </p>
                     
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                    <div style="display: grid; grid-template-columns: ${gridTemplateCols}; gap: 16px; margin-bottom: 16px;">
                         <div>
                             <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Pérdida Total (S/)</label>
                             ${inputPerdidaHTML}
@@ -690,6 +761,7 @@ async function mostrarFormularioNuevaIncidencia() {
                             <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Gastos Adicionales (S/)</label>
                             <input type="number" min="0" step="0.01" id="nueva-incidencia-gastos" placeholder="0" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none;">
                         </div>
+                        ${colAdelantoHTML}
                     </div>
 
                     <div style="background: #fee2e2; color: #dc2626; padding: 12px 16px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border: 1px solid #fecaca;">
@@ -763,6 +835,10 @@ async function mostrarFormularioNuevaIncidencia() {
             const el = document.getElementById('nueva-incidencia-gastos');
             if (el) el.focus();
         }
+
+        // Eliminado updateRepartir local porque ya existe un listener global delegado en modal-incidencias-body
+
+
     }, 100);
 }
 
@@ -771,7 +847,6 @@ async function guardarIncidencia() {
     if (!idViaje) return;
 
     const tipo = document.getElementById('nueva-incidencia-tipo').value;
-    const estado = document.getElementById('nueva-incidencia-estado').value;
     const descripcion = document.getElementById('nueva-incidencia-descripcion').value.trim();
     
     if (!descripcion) {
@@ -781,21 +856,34 @@ async function guardarIncidencia() {
 
     const perdida = Number(document.getElementById('nueva-incidencia-perdida').value) || 0;
     const gastos = Number(document.getElementById('nueva-incidencia-gastos').value) || 0;
+    const adelantoElem = document.getElementById('nueva-incidencia-adelanto');
+    const adelanto = adelantoElem ? (Number(adelantoElem.getAttribute('value')) || Number(adelantoElem.value) || 0) : 0;
     
     const descChoferVal = document.getElementById('nueva-incidencia-descuento').value.trim();
     const asuEmpresaVal = document.getElementById('nueva-incidencia-empresa').value.trim();
 
-    const descuento = descChoferVal !== '' ? Number(descChoferVal) : null;
-    const empresa = asuEmpresaVal !== '' ? Number(asuEmpresaVal) : null;
+    const descuento = descChoferVal !== '' ? Number(descChoferVal) : 0;
+    const empresa = asuEmpresaVal !== '' ? Number(asuEmpresaVal) : 0;
 
-    if (estado === 'Resuelto') {
-        const sumDescuento = descuento || 0;
-        const sumEmpresa = empresa || 0;
-        const totalRepartir = perdida + gastos;
-        if (Math.abs(totalRepartir - (sumDescuento + sumEmpresa)) > 0.01) {
-            alert('Para marcar como Resuelto, los montos de descuento y asunción deben cubrir el 100% del costo del incidente.');
-            return;
-        }
+    const totalRepartir = perdida + gastos + adelanto;
+    if (Math.abs(totalRepartir - (descuento + empresa)) > 0.01) {
+        alert('Los montos de descuento a chofer y asunción por empresa deben cubrir exactamente el 100% del costo del incidente y adelantos.');
+        return;
+    }
+
+    const result = await Swal.fire({
+        title: '¿Guardar Incidencia?',
+        text: '¿Estás seguro de registrar esta incidencia? Esta acción no se podrá modificar luego.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Sí, guardar',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) {
+        return;
     }
 
     const btnGuardar = document.getElementById('btn-guardar-incidencia');
@@ -806,10 +894,10 @@ async function guardarIncidencia() {
         const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
         const payload = {
             tipo_incidencia: tipo,
-            estado_resolucion: estado,
             descripcion_detallada: descripcion,
             valor_total_perdida: perdida,
             gastos_adicionales: gastos,
+            adelanto_recuperar: adelanto,
             monto_descuento_chofer: descuento,
             monto_asumido_empresa: empresa
         };
@@ -828,15 +916,16 @@ async function guardarIncidencia() {
             // Recargar modal
             abrirModalIncidencias(idViaje);
             // También recargar el historial por si la alerta roja debe desaparecer/cambiar
-            cargarHistorialViajes();
+            fetchViajes(false);
+            Swal.fire('¡Guardado!', 'La incidencia se registró correctamente.', 'success');
         } else {
-            alert(res.message || 'Error al guardar la incidencia.');
+            Swal.fire('Error', res.message || 'Error al guardar la incidencia.', 'error');
             btnGuardar.disabled = false;
             btnGuardar.innerHTML = '<i class="far fa-check-circle"></i> Guardar Incidencia';
         }
     } catch (error) {
         console.error('Error al guardar incidencia:', error);
-        alert('Error de conexión al guardar.');
+        Swal.fire('Error', 'Error de conexión al guardar.', 'error');
         btnGuardar.disabled = false;
         btnGuardar.innerHTML = '<i class="far fa-check-circle"></i> Guardar Incidencia';
     }
@@ -985,6 +1074,11 @@ function renderizarTarjetasViaje(viajes, isLoadMore = false) {
         else if (viaje.estado_operativo === 'Finalizado') { colorEstado = '#475569'; bgEstado = '#f1f5f9'; }
         else { colorEstado = '#dc2626'; bgEstado = '#fee2e2'; } // Incidencia
 
+        let colorPago, bgPago;
+        if (viaje.estado_pagos === 'Liquidado') { colorPago = '#16a34a'; bgPago = '#dcfce7'; }
+        else if (viaje.estado_pagos === 'Anulado') { colorPago = '#dc2626'; bgPago = '#fee2e2'; }
+        else { colorPago = '#d97706'; bgPago = '#fef3c7'; } // Pendiente o default
+
         const tarjetaHtml = `
             <div class="card-viaje" style="background: #ffffff; border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: flex; gap: 24px;">
                 <div style="display: flex; flex-direction: column; justify-content: space-between; width: 240px; flex-shrink: 0;">
@@ -998,6 +1092,10 @@ function renderizarTarjetasViaje(viajes, isLoadMore = false) {
                         </div>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px; align-items: flex-start;">
+                        <div style="display: flex; gap: 8px; margin-bottom: 4px;">
+                            <span style="background: ${bgEstado}; color: ${colorEstado}; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-truck-moving"></i> ${viaje.estado_operativo}</span>
+                            <span style="background: ${bgPago}; color: ${colorPago}; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-money-bill-wave"></i> ${viaje.estado_pagos || 'Pendiente'}</span>
+                        </div>
                         ${viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_reportada 
                             ? `<span class="badge-pulsing-red" style="background: #dc2626; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-exclamation-circle"></i> Siniestro: Requiere Reporte</span>` 
                             : ''}
@@ -1052,10 +1150,10 @@ function renderizarTarjetasViaje(viajes, isLoadMore = false) {
                 </div>
 
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 140px; border-left: 1px solid var(--border-light); padding-left: 24px;">
-                    <span style="background: ${bgEstado}; color: ${colorEstado}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">${viaje.estado_operativo}</span>
                     <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: auto;">
                         <button class="btn-viaje btn-ver-detalles" data-id="${viaje.id_viaje}">Ver detalles</button>
                         <button class="btn-viaje btn-ver-cargas" data-id="${viaje.id_viaje}">Ver cargas</button>
+                        <button class="btn-viaje btn-ver-adelantos" data-id="${viaje.id_viaje}"><i class="fas fa-hand-holding-usd"></i> Ver adelantos</button>
                         ${viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_reportada 
                             ? `<button class="btn-viaje btn-incidencia btn-pulsing-red" data-id="${viaje.id_viaje}"><i class="fas fa-exclamation-circle"></i> Reportar</button>`
                             : (viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.cargas_rechazadas > 0 && !viaje.tiene_incidencia_reportada
@@ -1068,6 +1166,116 @@ function renderizarTarjetasViaje(viajes, isLoadMore = false) {
         
         contenedor.insertAdjacentHTML('beforeend', tarjetaHtml);
     });
+}
+
+async function abrirModalAdelantos(idStr) {
+    const idViaje = Number(idStr);
+    const viaje = historialViajesTodos.find(v => v.id_viaje === idViaje);
+    if (!viaje) return;
+
+    const modal = document.getElementById('modal-adelantos-viaje');
+    const modalBody = document.getElementById('modal-adelantos-body');
+    const btnNuevo = document.getElementById('btn-nuevo-adelanto');
+    const subtitulo = document.getElementById('modal-adelantos-subtitulo');
+    
+    document.getElementById('modal-adelantos-titulo').textContent = `Adelantos del Viaje #${idViaje}`;
+    subtitulo.textContent = 'Cargando...';
+    btnNuevo.style.display = 'none';
+    modalBody.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+    
+    modal.style.display = 'flex';
+
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const response = await fetch(`/api/viajes/${idViaje}/adelantos`, {
+            headers: { 'x-user-profile': sessionData.id_perfil || 1 }
+        });
+        const res = await response.json();
+
+        if (response.ok && res.success) {
+            // Evaluamos la lógica de negocio para ver si el botón "Nuevo Adelanto" es visible
+            let canAdd = false;
+            const op = viaje.estado_operativo;
+            const pag = viaje.estado_pagos;
+
+            if (op === 'Incidencia' && pag === 'Anulado') {
+                canAdd = false;
+            } else if (pag === 'Liquidado') {
+                canAdd = false;
+            } else if (['En Ruta', 'Llegó a Destino', 'Finalizado'].includes(op) && pag === 'Pendiente') {
+                canAdd = true;
+            } else if (pag === 'Pendiente') {
+                // Cualquier otro caso donde siga pendiente
+                canAdd = true;
+            }
+
+            const adelantosList = res.data || [];
+            subtitulo.textContent = `Total de adelantos: ${adelantosList.length}`;
+
+            if (adelantosList.length === 0) {
+                if (canAdd) {
+                    modalBody.innerHTML = `
+                        <div style="text-align: center; padding: 40px; background: #fffbeb; border: 1px dashed #fcd34d; border-radius: 8px;">
+                            <i class="fas fa-hand-holding-usd" style="font-size: 32px; color: #f59e0b; margin-bottom: 12px;"></i>
+                            <h4 style="margin: 0 0 8px 0; font-size: 16px; color: var(--text-primary);">Aún no hay adelantos</h4>
+                            <p style="margin: 0 0 20px 0; font-size: 13px; color: var(--text-secondary);">Este viaje no tiene ningún adelanto registrado al chofer.</p>
+                            <button id="btn-registrar-primer-adelanto" style="background: #d97706; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(217, 119, 6, 0.2); transition: all 0.2s;">
+                                <i class="fas fa-plus"></i> Registrar Primer Adelanto
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    modalBody.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">No hay adelantos registrados y el viaje ya no permite nuevos adelantos.</div>';
+                }
+            } else {
+                if (canAdd) {
+                    btnNuevo.style.display = 'flex';
+                }
+                
+                // Mostrar lista en formato de tabla
+                let listaHtml = `
+                    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; width: 100%;">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                            <thead style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                                <tr>
+                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">ID</th>
+                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Monto</th>
+                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Método de Entrega</th>
+                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Motivo</th>
+                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Fecha de Registro</th>
+                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Registrado Por</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                adelantosList.forEach(a => {
+                    listaHtml += `
+                                <tr style="border-bottom: 1px solid #f1f5f9;">
+                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-muted); font-weight: 600;">#${a.id_adelanto}</td>
+                                    <td style="padding: 12px 16px; font-size: 14px; font-weight: 700; color: #16a34a; white-space: nowrap;">S/ ${Number(a.monto).toFixed(2)}</td>
+                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-primary);">${a.metodo_entrega || '-'}</td>
+                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-secondary);">${a.motivo_referencial || '-'}</td>
+                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-primary); white-space: nowrap;">${formatFechaCompleta(a.fecha_adelanto)}</td>
+                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-secondary);"><i class="far fa-user" style="color: var(--text-muted);"></i> ${a.usuario_creador || 'Desconocido'}</td>
+                                </tr>
+                    `;
+                });
+                
+                listaHtml += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                modalBody.innerHTML = listaHtml;
+            }
+        } else {
+            modalBody.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc2626;">Error al cargar los adelantos.</div>';
+        }
+    } catch (error) {
+        console.error('Error al cargar adelantos:', error);
+        modalBody.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc2626;">Error de conexión.</div>';
+    }
 }
 
 // Hacer disponible globalmente

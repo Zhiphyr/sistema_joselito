@@ -5,6 +5,7 @@ let liquidacionesPendientes = [];
 async function init_liquidacion() {
     asignarEventosTab();
     asignarEventoBusqueda();
+    asignarEventosEvidencia();
     await cargarLiquidacionesDesdeServidor();
 }
 
@@ -356,8 +357,14 @@ async function abrirModalLiquidar(id) {
     modalLiquidacionActual = liq;
 
     // Limpiar campos del modal al abrir
-    document.getElementById('modalLiqMetodoPago').value = '';
+    document.getElementById('modalLiqMetodoPago').value = 'Efectivo';
     document.getElementById('modalLiqObservaciones').value = '';
+
+    // Limpiar evidencia
+    document.getElementById('contenedorEvidencia').style.display = 'none';
+    document.getElementById('modalLiqNumOperacion').value = '';
+    document.getElementById('modalLiqEvidencia').value = '';
+    document.getElementById('nombreArchivoLiq').textContent = 'PNG, JPG hasta 5MB';
 
     // Llenar datos estáticos
     document.getElementById('modalLiqViajeTitle').textContent = `Viaje #${liq.viaje_num}`;
@@ -620,26 +627,41 @@ window.procesarLiquidacion = async function() {
 
     const neto_pagado = bruto - adelanto - total_penalidades;
     const observaciones = document.getElementById('modalLiqObservaciones').value;
+    
+    const numOperacion = document.getElementById('modalLiqNumOperacion').value.trim();
+    const inputFile = document.getElementById('modalLiqEvidencia');
 
-    const payload = {
-        monto_bruto: bruto,
-        total_adelantos: adelanto,
-        total_penalidades: total_penalidades,
-        monto_neto_pagado: neto_pagado,
-        metodo_pago: metodoPago,
-        observaciones: observaciones,
-        penalidades_descontadas: deudasCobrar
-    };
+    if (metodoPago !== 'Efectivo' && !numOperacion) {
+        Swal.fire({ icon: 'warning', title: 'Falta información', text: 'Por favor ingrese el N° de Operación.' });
+        btn.innerHTML = oldHtml;
+        btn.disabled = false;
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('monto_bruto', bruto);
+    formData.append('total_adelantos', adelanto);
+    formData.append('total_penalidades', total_penalidades);
+    formData.append('monto_neto_pagado', neto_pagado);
+    formData.append('metodo_pago', metodoPago);
+    formData.append('observaciones', observaciones);
+    formData.append('penalidades_descontadas', JSON.stringify(deudasCobrar));
+
+    if (metodoPago !== 'Efectivo') {
+        formData.append('numero_operacion', numOperacion);
+        if (inputFile.files.length > 0) {
+            formData.append('evidencia', inputFile.files[0]);
+        }
+    }
 
     try {
         const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
         const res = await fetch(`/api/viajes/${modalLiquidacionActual.id}/liquidar`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
                 'x-user-profile': sessionData.id_perfil
             },
-            body: JSON.stringify(payload)
+            body: formData
         });
         const json = await res.json();
 
@@ -658,6 +680,39 @@ window.procesarLiquidacion = async function() {
         btn.disabled = false;
     }
 };
+
+// Eventos de Formulario Evidencia
+function asignarEventosEvidencia() {
+    const cboPago = document.getElementById('modalLiqMetodoPago');
+    const contEvidencia = document.getElementById('contenedorEvidencia');
+    const inputEvidencia = document.getElementById('modalLiqEvidencia');
+    const nombreArchivo = document.getElementById('nombreArchivoLiq');
+
+    if (cboPago) {
+        cboPago.addEventListener('change', (e) => {
+            if (e.target.value === 'Efectivo' || e.target.value === '') {
+                contEvidencia.style.display = 'none';
+                document.getElementById('modalLiqNumOperacion').value = '';
+                inputEvidencia.value = '';
+                nombreArchivo.textContent = 'PNG, JPG hasta 5MB';
+            } else {
+                contEvidencia.style.display = 'block';
+            }
+        });
+    }
+
+    if (inputEvidencia) {
+        inputEvidencia.addEventListener('change', function(e) {
+            if (this.files && this.files[0]) {
+                nombreArchivo.textContent = this.files[0].name;
+                nombreArchivo.style.color = 'var(--text-primary)';
+            } else {
+                nombreArchivo.textContent = 'PNG, JPG hasta 5MB';
+                nombreArchivo.style.color = 'var(--text-muted)';
+            }
+        });
+    }
+}
 
 // Hacer globales
 window.init_liquidacion = init_liquidacion;

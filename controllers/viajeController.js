@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { cloudinary } = require('../config/cloudinary');
 
 const registrarViaje = async (req, res) => {
     let connection;
@@ -176,6 +177,7 @@ const obtenerHistorialViajes = async (req, res) => {
                 v.fecha_llegada,
                 v.tarifa_transportista,
                 v.estado_operativo,
+                v.estado_pagos,
                 c.placa as vehiculo,
                 c.nombre as vehiculo_nombre,
                 c.conductor as chofer,
@@ -677,8 +679,8 @@ const confirmarTransbordo = async (req, res) => {
         ]);
         const idNuevoViaje = resultNuevoViaje.insertId;
 
-        // 2. Siniestrar Viaje Original
-        const sqlViajeOriginal = `UPDATE Viaje SET estado_operativo = 'Incidencia' WHERE id_viaje = ?`;
+        // 2. Siniestrar Viaje Original y anular su pago
+        const sqlViajeOriginal = `UPDATE Viaje SET estado_operativo = 'Incidencia', estado_pagos = 'Anulado' WHERE id_viaje = ?`;
         await connection.query(sqlViajeOriginal, [id_viaje_accidentado]);
 
         // 3. Iteración de Cargas
@@ -790,8 +792,8 @@ const obtenerIncidenciasViaje = async (req, res) => {
         const [incidencias] = await db.query(`
             SELECT 
                 i.id_incidencia, i.tipo_incidencia, i.descripcion_detallada,
-                i.valor_total_perdida, i.gastos_adicionales, i.monto_asumido_empresa, i.monto_descuento_chofer,
-                i.estado_resolucion, i.fecha_creacion,
+                i.valor_total_perdida, i.gastos_adicionales, i.adelanto_recuperar, i.monto_asumido_empresa, i.monto_descuento_chofer,
+                i.fecha_creacion,
                 u.usuario as usuario_registro
             FROM Incidencia_Viaje i
             JOIN Usuarios u ON i.id_usuario = u.id_usuario
@@ -812,6 +814,47 @@ const obtenerIncidenciasViaje = async (req, res) => {
     }
 };
 
+const obtenerAdelantosViaje = async (req, res) => {
+    try {
+        const idViaje = req.params.id;
+        
+        // Obtener el total
+        const [suma] = await db.query(`
+            SELECT COALESCE(SUM(monto), 0) as total_adelantos
+            FROM adelantos_viaje
+            WHERE id_viaje = ? AND estado = 1
+        `, [idViaje]);
+
+        // Obtener la lista
+        const [adelantos] = await db.query(`
+            SELECT a.id_adelanto, a.monto, a.metodo_entrega, a.motivo_referencial, a.fecha_registro as fecha_adelanto,
+                   u.nombre as usuario_nombre
+            FROM adelantos_viaje a
+            LEFT JOIN usuarios u ON a.id_usuario = u.id_usuario
+            WHERE a.id_viaje = ? AND a.estado = 1
+            ORDER BY a.fecha_registro ASC
+        `, [idViaje]);
+
+        // Formatear el usuario
+        const adelantosFormateados = adelantos.map(ad => ({
+            ...ad,
+            usuario_creador: ad.usuario_nombre || 'Desconocido'
+        }));
+
+        return res.json({
+            success: true,
+            total_adelantos: Number(suma[0].total_adelantos) || 0,
+            data: adelantosFormateados
+        });
+    } catch (error) {
+        console.error('Error al obtener adelantos del viaje:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error de servidor al obtener los adelantos.'
+        });
+    }
+};
+
 const registrarIncidenciaViaje = async (req, res) => {
     try {
         const idViaje = req.params.id;
@@ -820,23 +863,23 @@ const registrarIncidenciaViaje = async (req, res) => {
             descripcion_detallada,
             valor_total_perdida,
             gastos_adicionales,
+            adelanto_recuperar,
             monto_descuento_chofer,
-            monto_asumido_empresa,
-            estado_resolucion
+            monto_asumido_empresa
         } = req.body;
         
         const userId = req.headers['x-user-profile'] || 1; // Ajustar según tu autenticación
 
         // Basic validation
-        if (!tipo_incidencia || !descripcion_detallada || !estado_resolucion) {
+        if (!tipo_incidencia || !descripcion_detallada) {
             return res.status(400).json({ success: false, message: 'Faltan datos obligatorios para la incidencia' });
         }
 
-        // Validate "Resuelto" state logic again in the backend for security
         const perdida = Number(valor_total_perdida) || 0;
         const gastos = Number(gastos_adicionales) || 0;
-        const descuento = monto_descuento_chofer !== '' && monto_descuento_chofer !== null ? Number(monto_descuento_chofer) : null;
-        const empresa = monto_asumido_empresa !== '' && monto_asumido_empresa !== null ? Number(monto_asumido_empresa) : null;
+        const adelanto = Number(adelanto_recuperar) || 0;
+        const descuento = monto_descuento_chofer !== '' && monto_descuento_chofer !== null ? Number(monto_descuento_chofer) : 0;
+        const empresa = monto_asumido_empresa !== '' && monto_asumido_empresa !== null ? Number(monto_asumido_empresa) : 0;
 
         // Validar el Remanente
         const sqlRemanente = `
@@ -853,19 +896,15 @@ const registrarIncidenciaViaje = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El monto de pérdida supera el saldo disponible para este viaje.' });
         }
 
-        if (estado_resolucion === 'Resuelto') {
-            const sumDescuento = descuento || 0;
-            const sumEmpresa = empresa || 0;
-            const totalRepartir = perdida + gastos;
-            // Evitar problemas de precisión con decimales
-            if (Math.abs(totalRepartir - (sumDescuento + sumEmpresa)) > 0.01) {
-                return res.status(400).json({ success: false, message: 'Para marcar como Resuelto, los montos de descuento y asunción deben cubrir el 100% del costo del incidente.' });
-            }
+        const totalRepartir = perdida + gastos + adelanto;
+        // Evitar problemas de precisión con decimales
+        if (Math.abs(totalRepartir - (descuento + empresa)) > 0.01) {
+            return res.status(400).json({ success: false, message: 'Los montos de descuento y asunción deben cubrir el 100% del costo del incidente y adelantos.' });
         }
 
         const sql = `
             INSERT INTO Incidencia_Viaje 
-            (id_viaje, tipo_incidencia, descripcion_detallada, valor_total_perdida, gastos_adicionales, monto_asumido_empresa, monto_descuento_chofer, estado_resolucion, id_usuario, estado_cobro_penalidad, monto_cobrado)
+            (id_viaje, tipo_incidencia, descripcion_detallada, valor_total_perdida, gastos_adicionales, adelanto_recuperar, monto_asumido_empresa, monto_descuento_chofer, id_usuario, estado_cobro_penalidad, monto_cobrado)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', 0.00)
         `;
 
@@ -875,9 +914,9 @@ const registrarIncidenciaViaje = async (req, res) => {
             descripcion_detallada,
             perdida,
             gastos,
+            adelanto,
             empresa, 
             descuento, 
-            estado_resolucion,
             userId
         ]);
 
@@ -989,15 +1028,18 @@ const liquidarViaje = async (req, res) => {
         const { id } = req.params; // id_viaje
         const id_usuario = req.headers['x-user-profile'];
         
-        const { 
+        let { 
             monto_bruto, 
             total_adelantos, 
             total_penalidades, 
             monto_neto_pagado, 
             metodo_pago, 
+            numero_operacion,
             observaciones, 
             penalidades_descontadas 
         } = req.body;
+
+        const evidencia_url = req.file ? req.file.path : null;
 
         if (!id_usuario) {
             return res.status(401).json({ success: false, message: 'Usuario no autenticado' });
@@ -1007,17 +1049,26 @@ const liquidarViaje = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El monto neto no puede ser negativo' });
         }
 
+        // Parsear penalidades si viene de FormData
+        if (typeof penalidades_descontadas === 'string') {
+            try {
+                penalidades_descontadas = JSON.parse(penalidades_descontadas);
+            } catch (e) {
+                penalidades_descontadas = [];
+            }
+        }
+
         connection = await db.getConnection();
         await connection.beginTransaction();
 
         // 1. Insertar en liquidacion_viaje
         const sqlInsertLiquidacion = `
             INSERT INTO liquidacion_viaje 
-            (id_viaje, id_usuario, monto_bruto, total_adelantos, total_penalidades, monto_neto_pagado, metodo_pago, observaciones)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (id_viaje, id_usuario, monto_bruto, total_adelantos, total_penalidades, monto_neto_pagado, metodo_pago, numero_operacion, evidencia_url, observaciones)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         const [resultLiq] = await connection.query(sqlInsertLiquidacion, [
-            id, id_usuario, monto_bruto, total_adelantos, total_penalidades, monto_neto_pagado, metodo_pago, observaciones
+            id, id_usuario, monto_bruto, total_adelantos, total_penalidades, monto_neto_pagado, metodo_pago, numero_operacion || null, evidencia_url, observaciones || null
         ]);
         
         const id_liquidacion = resultLiq.insertId;
@@ -1073,6 +1124,17 @@ const liquidarViaje = async (req, res) => {
         if (connection) {
             await connection.rollback();
         }
+
+        // Revertir imagen de Cloudinary si hubo error
+        if (req.file && req.file.filename) {
+            try {
+                await cloudinary.uploader.destroy(req.file.filename);
+                console.log(`[Reversión] Imagen huérfana eliminada: ${req.file.filename}`);
+            } catch (cloudErr) {
+                console.error("Error al eliminar imagen de Cloudinary:", cloudErr);
+            }
+        }
+
         console.error('Error al liquidar viaje:', error);
         
         if (error.code === 'ER_DUP_ENTRY') {
@@ -1174,5 +1236,6 @@ module.exports = {
     registrarIncidenciaViaje,
     obtenerLiquidacionesPendientes,
     liquidarViaje,
-    obtenerHistorialLiquidaciones
+    obtenerHistorialLiquidaciones,
+    obtenerAdelantosViaje
 };
