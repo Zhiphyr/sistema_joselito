@@ -38,20 +38,90 @@ body {
 
 .login-wrapper {
     width: 100%;
-    max-width: 420px;
+    max-width: 850px;
     padding: 20px;
+    transition: max-width 0.3s ease;
 }
 
 .login-container {
     background: var(--surface-card);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-card);
-    padding: 40px;
     border: 1px solid var(--border-subtle);
+    display: flex;
+    overflow: hidden;
+    min-height: 500px;
+}
+
+/* Columna Izquierda: Panel Visual */
+.login-visual {
+    flex: 1.1;
+    background: linear-gradient(135deg, #092e4e 0%, #15558d 100%);
+    position: relative;
+    padding: 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    color: #ffffff;
+    overflow: hidden;
+}
+
+.login-visual::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.05;
+    background-image: radial-gradient(circle, #fff 1px, transparent 1px),
+                      linear-gradient(to right, rgba(255,255,255,0.1) 1px, transparent 1px),
+                      linear-gradient(to bottom, rgba(255,255,255,0.1) 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+
+.visual-content {
+    position: relative;
+    z-index: 2;
+}
+
+.visual-logo {
+    display: inline-flex;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    margin-bottom: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.visual-logo svg {
+    width: 32px;
+    height: 32px;
+    stroke: #ff9800; /* Naranja de seguridad vial */
+}
+
+.login-visual h2 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    line-height: 1.2;
+    letter-spacing: -0.5px;
+}
+
+.login-visual p {
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.75);
+    line-height: 1.5;
+}
+
+/* Columna Derecha: Formulario */
+.login-form-side {
+    flex: 0.9;
+    padding: 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .login-header {
-    text-align: center;
     margin-bottom: 32px;
 }
 
@@ -154,4 +224,23 @@ body {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+    .login-wrapper {
+        max-width: 420px;
+    }
+    
+    .login-container {
+        flex-direction: column;
+        min-height: auto;
+    }
+    
+    .login-visual {
+        display: none;
+    }
+    
+    .login-form-side {
+        padding: 32px 24px;
+    }
 }
