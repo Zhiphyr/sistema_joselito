@@ -67,7 +67,7 @@ function renderListaPendientes(query = '') {
         );
     });
 
-    const sortOrder = document.getElementById('selectOrdenarLiquidacion')?.value || 'asc';
+    const sortOrder = document.getElementById('selectOrdenarLiquidacion')?.value || 'desc';
     filtrados.sort((a, b) => {
         if (sortOrder === 'asc') return a.viaje_num - b.viaje_num;
         return b.viaje_num - a.viaje_num;
@@ -218,6 +218,7 @@ async function cargarHistorialLiquidacionesDesdeServidor() {
         const json = await res.json();
         
         if (json.success) {
+            historialLiquidaciones = json.data;
             renderTablaHistorial(json.data);
         } else {
             listaEl.innerHTML = `<div style="padding: 20px; color: #ef4444; text-align: center;">Error al cargar historial</div>`;
@@ -257,6 +258,7 @@ function renderTablaHistorial(datos) {
                         <th style="padding: 12px 16px; font-weight: 600; text-align: right;">Penalidades</th>
                         <th style="padding: 12px 16px; font-weight: 600; text-align: right;">Neto Pagado</th>
                         <th style="padding: 12px 16px; font-weight: 600;">Fecha</th>
+                        <th style="padding: 12px 16px; font-weight: 600; text-align: center;">Acciones</th>
                     </tr>
                 </thead>
                 <tbody id="tbodyHistorial">
@@ -304,6 +306,11 @@ function renderTablaHistorial(datos) {
             <td style="padding: 16px; text-align: right;">${penalidadesHtml}</td>
             <td style="padding: 16px; text-align: right; font-weight: 700; color: #047857;">S/ ${formatearNumero(liq.monto_neto_pagado)}</td>
             <td style="padding: 16px; color: var(--text-muted); font-size: 11px;">${liq.fecha}</td>
+            <td style="padding: 16px; text-align: center;">
+                <button onclick="abrirModalDetalleLiquidacion(${liq.id_liquidacion})" style="background: #e0f2fe; color: var(--brand-blue); border: none; width: 32px; height: 32px; border-radius: 6px; font-size: 14px; cursor: pointer; transition: opacity 0.2s;" title="Ver Resumen">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </td>
         `;
         
         tbody.appendChild(tr);
@@ -718,3 +725,48 @@ function asignarEventosEvidencia() {
 window.init_liquidacion = init_liquidacion;
 window.abrirModalLiquidar = abrirModalLiquidar;
 window.cerrarModalLiquidacion = cerrarModalLiquidacion;
+window.abrirModalDetalleLiquidacion = abrirModalDetalleLiquidacion;
+window.cerrarModalDetalleLiquidacion = cerrarModalDetalleLiquidacion;
+
+// Variable global para historial
+let historialLiquidaciones = [];
+
+function abrirModalDetalleLiquidacion(idLiq) {
+    const liq = historialLiquidaciones.find(l => l.id_liquidacion === idLiq);
+    if (!liq) return;
+
+    document.getElementById('modalDetalleLiqViajeTitle').textContent = `Viaje #${liq.id_viaje} - ${liq.ruta}`;
+    document.getElementById('modalDetalleMetodo').textContent = liq.metodo_pago || 'Desconocido';
+    document.getElementById('modalDetalleOperacion').textContent = liq.numero_operacion || '-';
+
+    const voucherContainer = document.getElementById('modalDetalleVoucherContainer');
+    const voucherBtn = document.getElementById('modalDetalleVoucherBtn');
+    
+    if (liq.evidencia_url) {
+        voucherContainer.style.display = 'block';
+        voucherBtn.href = liq.evidencia_url;
+    } else {
+        voucherContainer.style.display = 'none';
+        voucherBtn.href = '#';
+    }
+
+    document.getElementById('modalDetalleBruto').textContent = `S/ ${formatearNumero(liq.monto_bruto)}`;
+    document.getElementById('modalDetalleAdelantos').textContent = `-S/ ${formatearNumero(liq.total_adelantos)}`;
+    document.getElementById('modalDetallePenalidades').textContent = `-S/ ${formatearNumero(liq.total_penalidades)}`;
+    document.getElementById('modalDetalleNeto').textContent = `S/ ${formatearNumero(liq.monto_neto_pagado)}`;
+
+    const modal = document.getElementById('modalDetalleLiquidacion');
+    modal.style.display = 'flex';
+    modal.offsetHeight; // Reflow
+    modal.style.opacity = '1';
+    modal.querySelector('.modal-content').style.transform = 'translateY(0)';
+}
+
+function cerrarModalDetalleLiquidacion() {
+    const modal = document.getElementById('modalDetalleLiquidacion');
+    modal.style.opacity = '0';
+    modal.querySelector('.modal-content').style.transform = 'translateY(20px)';
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 300);
+}

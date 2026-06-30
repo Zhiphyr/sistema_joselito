@@ -11,17 +11,13 @@ const obtenerDeudas = async (req, res) => {
                 c.id_carga,
                 c.id_viaje,
                 v.fecha_llegada,
-                c.flete_total,
+                IFNULL((SELECT SUM(flete_subtotal) FROM Detalle_Carga dc WHERE dc.id_carga = c.id_carga AND dc.estado_operativo IN ('Normal', 'Entregado') AND dc.estado = 1), 0) AS flete_total,
                 c.estado_cobro,
                 c.estado_entrega,
                 cli.nombre_razon_social AS cliente_nombre,
                 rem.nombre_razon_social AS remitente_nombre,
                 cli.telefono AS destinatario_telefono,
-                (SELECT GROUP_CONCAT(CONCAT(dc.cantidad_sacos, 'x ', p.nombre) SEPARATOR ' / ') 
-                 FROM Detalle_Carga dc 
-                 JOIN Productos p ON dc.id_producto = p.id_producto 
-                 WHERE dc.id_carga = c.id_carga AND dc.estado = 1) AS resumen_carga,
-                (c.flete_total - IFNULL((
+                (IFNULL((SELECT SUM(flete_subtotal) FROM Detalle_Carga dc WHERE dc.id_carga = c.id_carga AND dc.estado_operativo IN ('Normal', 'Entregado') AND dc.estado = 1), 0) - IFNULL((
                     SELECT SUM(monto_pagado) 
                     FROM pago_carga pc 
                     WHERE pc.id_carga = c.id_carga AND pc.estado = 1
@@ -32,6 +28,7 @@ const obtenerDeudas = async (req, res) => {
             JOIN Clientes rem ON c.id_remitente = rem.id_cliente
             WHERE c.estado = 1
             AND v.estado_operativo IN ('Llegó a Destino', 'Finalizado')
+            AND c.estado_entrega IN ('Entregado', 'Entregado Parcialmente')
         `;
         
         let queryParams = [];
@@ -123,7 +120,7 @@ const registrarCobro = async (req, res) => {
         // Recalcular saldo pendiente
         const saldoQuery = `
             SELECT 
-                c.flete_total,
+                IFNULL((SELECT SUM(flete_subtotal) FROM Detalle_Carga dc WHERE dc.id_carga = c.id_carga AND dc.estado_operativo IN ('Normal', 'Entregado') AND dc.estado = 1), 0) as flete_total,
                 IFNULL((SELECT SUM(monto_pagado) FROM pago_carga WHERE id_carga = c.id_carga AND estado = 1), 0) as total_pagado
             FROM Carga c
             WHERE c.id_carga = ?
@@ -246,7 +243,7 @@ const anularPago = async (req, res) => {
         // 5. Recalcular saldo pendiente
         const saldoQuery = `
             SELECT 
-                c.flete_total,
+                IFNULL((SELECT SUM(flete_subtotal) FROM Detalle_Carga dc WHERE dc.id_carga = c.id_carga AND dc.estado_operativo IN ('Normal', 'Entregado') AND dc.estado = 1), 0) as flete_total,
                 IFNULL((SELECT SUM(monto_pagado) FROM pago_carga WHERE id_carga = c.id_carga AND estado = 1), 0) as total_pagado
             FROM Carga c
             WHERE c.id_carga = ? FOR UPDATE

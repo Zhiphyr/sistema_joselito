@@ -12,32 +12,53 @@
 
 <body>
     <div class="login-wrapper">
-        <div class="login-container">
-            <div class="login-header">
-                <h1>Transporte Joselito</h1>
-                <p>Acceso al panel administrativo</p>
+        <!-- Columna Izquierda: Visual e Identidad -->
+        <div class="login-visual">
+            <div class="visual-overlay"></div>
+            <div class="visual-content">
+                <img src="img/letras-blancas.png" alt="Transporte Joselito" class="login-logo">
+                <p class="tagline">Seguridad, confianza y eficiencia en cada ruta</p>
+                <div class="route-decoration">
+                    <div class="line"></div>
+                    <div class="dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
             </div>
+        </div>
 
-            <form id="loginForm" class="login-form">
-                <div class="form-group">
-                    <label for="usuario">Usuario</label>
-                    <input type="text" id="usuario" name="usuario" placeholder="Ingresa tu usuario" required
-                        autocomplete="off">
+        <!-- Columna Derecha: Formulario de Acceso -->
+        <div class="login-form-area">
+            <div class="login-container">
+                <div class="login-header">
+                    <h1>Acceso al Sistema</h1>
+                    <p>Acceso al panel administrativo
+                    </p>
                 </div>
 
-                <div class="form-group">
-                    <label for="clave">Contraseña</label>
-                    <input type="password" id="clave" name="clave" placeholder="Ingresa tu contraseña" required>
+                <form id="loginForm" class="login-form">
+                    <div class="form-group">
+                        <label for="usuario">Usuario</label>
+                        <input type="text" id="usuario" name="usuario" placeholder="Ingresa tu usuario" required
+                            autocomplete="off">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="clave">Contraseña</label>
+                        <input type="password" id="clave" name="clave" placeholder="Ingresa tu contraseña" required>
+                    </div>
+
+                    <button type="submit" class="btn-primary" id="btnSubmit">
+                        <span>Iniciar Sesión</span>
+                        <div class="spinner" id="spinner" style="display: none;"></div>
+                    </button>
+                </form>
+
+                <div class="login-footer">
+                    <p>&copy; 2026 Transporte Joselito. Todos los derechos reservados.</p>
                 </div>
-
-                <button type="submit" class="btn-primary" id="btnSubmit">
-                    <span>Iniciar Sesión</span>
-                    <div class="spinner" id="spinner" style="display: none;"></div>
-                </button>
-            </form>
-
-            <div class="login-footer">
-                <p>&copy; 2026 Transporte Joselito. Todos los derechos reservados.</p>
             </div>
         </div>
     </div>

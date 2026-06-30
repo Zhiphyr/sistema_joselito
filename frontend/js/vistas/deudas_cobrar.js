@@ -454,30 +454,37 @@ function renderTablaDeudas(deudas) {
         if (d.estado_cobro === 'Pendiente') {
             badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #fee2e2; color: #dc2626;">PENDIENTE</span>`;
         } else if (d.estado_cobro === 'Parcial') {
-            badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #fef3c7; color: #d97706;">PARCIAL</span>`;
+            badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #e0f2fe; color: #0369a1;">PARCIAL</span>`;
         } else if (d.estado_cobro === 'Completado') {
             badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #dcfce7; color: #16a34a;">COMPLETADO</span>`;
+        } else if (d.estado_cobro === 'Anulado') {
+            badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #fee2e2; color: #dc2626;">ANULADO</span>`;
         } else {
             badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #f1f5f9; color: #64748b;">${d.estado_cobro}</span>`;
         }
 
-        // Estado Entrega y Resumen
+        // Estado Entrega
         let badgeEntregaColor = '#f1f5f9';
         let badgeEntregaText = '#64748b';
         if (d.estado_entrega === 'Entregado') {
             badgeEntregaColor = '#dcfce7';
             badgeEntregaText = '#16a34a';
-        } else if (d.estado_entrega === 'En Almacen de Destino') {
+        } else if (d.estado_entrega === 'En Ruta' || d.estado_entrega === 'En ruta') {
+            badgeEntregaColor = '#e0f2fe';
+            badgeEntregaText = 'var(--brand-blue)';
+        } else if (d.estado_entrega === 'Entregado Parcialmente') {
             badgeEntregaColor = '#fef3c7';
             badgeEntregaText = '#d97706';
+        } else if (d.estado_entrega === 'Rechazado Total') {
+            badgeEntregaColor = '#fee2e2';
+            badgeEntregaText = '#dc2626';
         }
         
         const badgeEntrega = `<div style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: ${badgeEntregaColor}; color: ${badgeEntregaText};">${d.estado_entrega || '-'}</div>`;
-        const resumenCarga = `<div style="margin-top: 6px; font-size: 11px; color: var(--text-muted); line-height: 1.3; max-width: 180px; white-space: normal;">${d.resumen_carga || 'Sin detalle de carga'}</div>`;
 
         // Lógica para mostrar/ocultar botón de cobro
         let btnCobrarHTML = '';
-        if (d.estado_cobro !== 'Completado') {
+        if (d.estado_cobro !== 'Completado' && d.estado_cobro !== 'Anulado') {
             btnCobrarHTML = `
                 <button class="btn-cobrar" data-id="${d.id_carga}" data-flete="${fleteTotal}" data-saldo="${saldoPendiente}" title="Registrar Cobro" style="background: #16a34a; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
                     <i class="fas fa-hand-holding-usd"></i>
@@ -494,7 +501,7 @@ function renderTablaDeudas(deudas) {
                 <td class="tabla-td" style="font-size: 12px; vertical-align: top; padding-top: 12px;">${fLlegada}${moraHTML}</td>
                 <td class="tabla-td" style="font-size: 11px; font-weight: 500; color: var(--text-secondary); max-width: 200px; white-space: normal; line-height: 1.4; vertical-align: top; padding-top: 12px;">${remitente}</td>
                 <td class="tabla-td" style="font-size: 11px; font-weight: 500; color: var(--text-secondary); max-width: 200px; white-space: normal; line-height: 1.4; vertical-align: top; padding-top: 12px;">${deudor}</td>
-                <td class="tabla-td" style="vertical-align: top; padding-top: 12px;">${badgeEntrega}${resumenCarga}</td>
+                <td class="tabla-td" style="vertical-align: top; padding-top: 12px;">${badgeEntrega}</td>
                 <td class="tabla-td" style="font-weight: 600; color: var(--text-primary); font-size: 12px; vertical-align: top; padding-top: 12px;">S/ ${fleteTotal.toFixed(2)}</td>
                 <td class="tabla-td" style="font-weight: 700; color: ${saldoPendiente > 0 ? '#dc2626' : '#16a34a'}; font-size: 12px; vertical-align: top; padding-top: 12px;">S/ ${saldoPendiente.toFixed(2)}</td>
                 <td class="tabla-td" style="vertical-align: top; padding-top: 12px;">${badgeCobro}</td>

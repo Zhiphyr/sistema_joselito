@@ -1323,6 +1323,10 @@ const obtenerHistorialLiquidaciones = async (req, res) => {
                 l.total_adelantos,
                 l.total_penalidades,
                 l.monto_neto_pagado,
+                l.metodo_pago,
+                l.numero_operacion,
+                l.evidencia_url,
+                l.observaciones,
                 c.nombre AS camion_modelo,
                 c.placa AS camion_placa,
                 c.conductor AS chofer_nombre,
@@ -1349,7 +1353,21 @@ const obtenerHistorialLiquidaciones = async (req, res) => {
                     FROM detalle_liquidacion_penalidad dlp
                     JOIN incidencia_viaje i ON dlp.id_incidencia = i.id_incidencia
                     WHERE dlp.id_liquidacion = l.id_liquidacion
-                ) AS detalle_penalidades
+                ) AS detalle_penalidades,
+
+                -- Extraer adelantos como un JSON array
+                (
+                    SELECT JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            'monto', a.monto,
+                            'fecha', DATE_FORMAT(a.fecha_registro, '%Y-%m-%d'),
+                            'metodo', a.metodo_entrega
+                        )
+                    )
+                    FROM adelantos_viaje a
+                    WHERE a.id_viaje = l.id_viaje AND a.estado = 1
+                ) AS detalle_adelantos
+
                 
             FROM liquidacion_viaje l
             JOIN viaje v ON l.id_viaje = v.id_viaje
@@ -1371,10 +1389,20 @@ const obtenerHistorialLiquidaciones = async (req, res) => {
                         : row.detalle_penalidades;
                 } catch(e) {}
             }
+
+            let adelantosParsed = [];
+            if (row.detalle_adelantos) {
+                try {
+                    adelantosParsed = typeof row.detalle_adelantos === 'string' 
+                        ? JSON.parse(row.detalle_adelantos) 
+                        : row.detalle_adelantos;
+                } catch(e) {}
+            }
             
             return {
                 ...row,
-                detalle_penalidades: penalidadesParsed
+                detalle_penalidades: penalidadesParsed,
+                detalle_adelantos: adelantosParsed
             };
         });
 
