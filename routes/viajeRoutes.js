@@ -3,7 +3,7 @@ const router = express.Router();
 const viajeController = require('../controllers/viajeController');
 const { upload } = require('../config/cloudinary');
 
-router.post('/', viajeController.registrarViaje);
+router.post('/', upload.single('evidencia'), viajeController.registrarViaje);
 router.get('/liquidaciones/pendientes', viajeController.obtenerLiquidacionesPendientes);
 router.get('/liquidaciones/historial', viajeController.obtenerHistorialLiquidaciones);
 router.get('/', viajeController.obtenerHistorialViajes);
@@ -18,6 +18,7 @@ router.post('/transbordo', viajeController.confirmarTransbordo);
 router.get('/:id/incidencias', viajeController.obtenerIncidenciasViaje);
 router.post('/:id/incidencias', viajeController.registrarIncidenciaViaje);
 router.get('/:id/adelantos', viajeController.obtenerAdelantosViaje);
+router.post('/:id/adelantos', upload.single('evidencia'), viajeController.registrarAdelantoViaje);
 
 router.post('/:id/liquidar', upload.single('evidencia'), viajeController.liquidarViaje);
 

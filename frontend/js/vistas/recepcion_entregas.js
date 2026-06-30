@@ -407,8 +407,14 @@ function renderizarCargasGestionar(cargas, idViaje, estadoOperativo) {
             colorEntrega = '#16a34a'; bgEntrega = '#dcfce7'; borderEntrega = '#bbf7d0'; // Verde
         } else if (carga.estado_entrega === 'En Almacen de Destino') { 
             colorEntrega = '#d97706'; bgEntrega = '#fef3c7'; borderEntrega = '#fde68a'; // Amarillo
-        } else if (carga.estado_entrega === 'Rechazado') {
+        } else if (carga.estado_entrega === 'Rechazado' || carga.estado_entrega === 'Rechazado Total' || carga.estado_entrega === 'Siniestrado') {
             colorEntrega = '#dc2626'; bgEntrega = '#fef2f2'; borderEntrega = '#fecaca'; // Rojo
+        } else if (carga.estado_entrega === 'Transbordado') {
+            colorEntrega = '#475569'; bgEntrega = '#f1f5f9'; borderEntrega = '#e2e8f0'; // Gris
+        } else if (carga.estado_entrega === 'Siniestrado Parcialmente') {
+            colorEntrega = '#9a3412'; bgEntrega = '#ffedd5'; borderEntrega = '#fed7aa'; // Naranja oscuro
+        } else if (carga.estado_entrega === 'Entregado Parcialmente') {
+            colorEntrega = '#0284c7'; bgEntrega = '#e0f2fe'; borderEntrega = '#bae6fd'; // Azul claro
         }
         
         let btnAccionHtml = '';
@@ -420,11 +426,28 @@ function renderizarCargasGestionar(cargas, idViaje, estadoOperativo) {
                     </button>
                 </div>
             `;
-        } else if (carga.estado_entrega === 'Rechazado') {
+        } else if (carga.estado_entrega === 'Entregado Parcialmente') {
+            btnAccionHtml = `
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-entregar-cliente entregado" disabled style="width: 100%; background: #e0f2fe; color: #0284c7; border-color: #bae6fd;">
+                        <i class="fas fa-check-double"></i> Entrega Parcial
+                    </button>
+                </div>
+            `;
+        } else if (carga.estado_entrega === 'Rechazado' || carga.estado_entrega === 'Rechazado Total') {
             btnAccionHtml = `
                 <div style="display: flex; gap: 8px;">
                     <button class="btn-entregar-cliente entregado" disabled style="width: 100%; background: #fee2e2; color: #dc2626; border-color: #fecaca;">
                         <i class="fas fa-times"></i> Carga Rechazada
+                    </button>
+                </div>
+            `;
+        } else if (carga.estado_entrega === 'Transbordado' || carga.estado_entrega === 'Siniestrado' || carga.estado_entrega === 'Siniestrado Parcialmente') {
+            let desc = carga.estado_entrega === 'Transbordado' ? 'Transbordada a otro Viaje' : 'Marcada como Siniestro';
+            btnAccionHtml = `
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-entregar-cliente entregado" disabled style="width: 100%; background: #f8fafc; color: #64748b; border-color: #e2e8f0;">
+                        <i class="fas fa-history"></i> Histórico: ${desc}
                     </button>
                 </div>
             `;
@@ -969,7 +992,6 @@ document.addEventListener('click', async (e) => {
             const idDetalle = input.getAttribute('data-id-detalle');
             const cantAPasar = parseInt(input.value) || 0;
             const cantOriginal = parseInt(input.getAttribute('data-max'));
-            const isPerdidaTotal = input.closest('.producto-transbordo-row').querySelector('.chk-perdida-total').checked;
             
             const detalleOriginal = carga.detalles.find(d => d.id_detalle === Number(idDetalle));
             
@@ -981,11 +1003,11 @@ document.addEventListener('click', async (e) => {
             }
             
             const cantResto = cantOriginal - cantAPasar;
-            if (cantResto > 0 || isPerdidaTotal) {
+            if (cantResto > 0) {
                 resto.push({
                     ...detalleOriginal,
                     cantidad_sacos: cantResto,
-                    perdida_total: isPerdidaTotal
+                    perdida_total: true // Para compatibilidad
                 });
             }
         });
@@ -1001,27 +1023,21 @@ document.addEventListener('click', async (e) => {
         actualizarListasTransbordo();
     }
 
-    const chkPerdidaTotal = e.target.closest('.chk-perdida-total');
-    if (chkPerdidaTotal) {
-        const rowDiv = chkPerdidaTotal.closest('.producto-transbordo-row');
-        const inputCant = rowDiv ? rowDiv.querySelector('.input-transbordo-cant') : null;
-        const nombreDiv = rowDiv ? rowDiv.querySelector('.producto-transbordo-nombre') : null;
-        
-        if (inputCant) {
-            if (chkPerdidaTotal.checked) {
-                inputCant.dataset.previousValue = inputCant.value;
-                inputCant.value = 0;
-                inputCant.disabled = true;
+    document.addEventListener('input', (e) => {
+        if (e.target.classList.contains('input-transbordo-cant')) {
+            const val = parseInt(e.target.value) || 0;
+            const rowDiv = e.target.closest('.producto-transbordo-row');
+            const nombreDiv = rowDiv ? rowDiv.querySelector('.producto-transbordo-nombre') : null;
+            
+            if (val === 0) {
                 if (rowDiv) rowDiv.style.backgroundColor = '#fef2f2';
                 if (nombreDiv) nombreDiv.style.color = '#dc2626';
             } else {
-                inputCant.value = inputCant.dataset.previousValue || inputCant.getAttribute('data-max');
-                inputCant.disabled = false;
                 if (rowDiv) rowDiv.style.backgroundColor = 'white';
                 if (nombreDiv) nombreDiv.style.color = '#1e293b';
             }
         }
-    }
+    });
 
     const btnConfirmarTransbordo = e.target.closest('#btn-confirmar-transbordo');
     if (btnConfirmarTransbordo) {
@@ -1073,7 +1089,7 @@ document.addEventListener('click', async (e) => {
             
             if (state.resto) {
                 state.resto.forEach(d => {
-                    const cantPerdida = d.perdida_total ? d.cantidad_sacos : 0;
+                    const cantPerdida = d.cantidad_sacos;
                     const existingDetalle = detalles.find(x => x.id_detalle_original === d.id_detalle);
                     
                     if (existingDetalle) {
@@ -1611,10 +1627,11 @@ function actualizarListasTransbordo() {
         if (!state) {
             listaAccidentado.insertAdjacentHTML('beforeend', generarHtmlCardIzquierda(carga, false, carga.detalles));
         } else {
+            const hasTransferidosForThisCarga = state.transferidos && state.transferidos.length > 0;
             if (state.resto && state.resto.length > 0) {
-                listaAccidentado.insertAdjacentHTML('beforeend', generarHtmlCardIzquierda(carga, true, state.resto));
+                listaAccidentado.insertAdjacentHTML('beforeend', generarHtmlCardIzquierda(carga, true, state.resto, !hasTransferidosForThisCarga));
             }
-            if (state.transferidos && state.transferidos.length > 0) {
+            if (hasTransferidosForThisCarga) {
                 hasTransferidos = true;
                 listaNuevo.insertAdjacentHTML('beforeend', generarHtmlCardDerecha(carga, state.transferidos));
             }
@@ -1633,7 +1650,7 @@ function actualizarListasTransbordo() {
     }
 }
 
-function generarHtmlCardIzquierda(carga, isResto, detalles) {
+function generarHtmlCardIzquierda(carga, isResto, detalles, isTotalSiniestro = false) {
     let detallesHtml = '';
     if (detalles && detalles.length > 0) {
         detalles.forEach(d => {
@@ -1651,11 +1668,24 @@ function generarHtmlCardIzquierda(carga, isResto, detalles) {
         ? `<button class="btn-deshacer-seleccion" data-id="${carga.id_carga}" style="width: 100%; padding: 8px; background: white; border: 1px solid #fca5a5; border-radius: 6px; color: #dc2626; font-weight: 700; font-size: 13px; cursor: pointer; transition: all 0.2s;">Deshacer Selección</button>`
         : `<button class="btn-transbordar-item" data-id="${carga.id_carga}" style="width: 100%; padding: 8px; background: #ffedd5; border: none; border-radius: 6px; color: #ea580c; font-weight: 700; font-size: 13px; cursor: pointer; transition: all 0.2s;">Transbordar <i class="fas fa-arrow-right" style="margin-left: 4px;"></i></button>`;
 
+    let badgeHtml = '';
+    if (isResto) {
+        if (isTotalSiniestro) {
+            badgeHtml = `<span style="background: #fee2e2; color: #b91c1c; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">Siniestrada</span>`;
+        } else {
+            badgeHtml = `<span style="background: #ffedd5; color: #9a3412; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">Siniestro Parcial</span>`;
+        }
+    } else {
+        badgeHtml = `<span style="background: #f1f5f9; color: #64748b; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">Sin Definir</span>`;
+    }
+
+    const borderColor = isResto ? '#fecaca' : '#e2e8f0';
+
     return `
-        <div id="tarjeta-transbordo-carga-${carga.id_carga}" style="background: white; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+        <div id="tarjeta-transbordo-carga-${carga.id_carga}" style="background: white; border: 1px solid ${borderColor}; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <h5 style="margin: 0; font-size: 15px; font-weight: 700; color: #0f172a;">Carga #${carga.id_carga}${tituloSuffix}</h5>
-                <span style="background: #fee2e2; color: #b91c1c; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">Siniestrada</span>
+                ${badgeHtml}
             </div>
             <div style="font-size: 12px; color: #475569; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px;">
                 <div><span style="font-weight: 600; color: #64748b;">Remitente:</span> ${carga.remitente_nombre || 'Desconocido'}</div>
@@ -1727,22 +1757,18 @@ function expandirFormularioTransbordo(idCarga) {
             const isLast = idx === carga.detalles.length - 1;
             const borderBottom = isLast ? '' : 'border-bottom: 1px solid #e2e8f0;';
             detallesFormHtml += `
-                <div class="producto-transbordo-row" style="padding: 12px; background: white; ${borderBottom} transition: background-color 0.2s;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <div class="producto-transbordo-nombre" style="font-size: 13px; font-weight: 700; color: #1e293b; transition: color 0.2s;">${d.producto}</div>
-                        <div style="font-size: 12px; color: #64748b;">Orig: ${d.cantidad_sacos}</div>
+                <div class="producto-transbordo-row" style="padding: 16px; background: white; ${borderBottom} transition: background-color 0.2s; display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+                    <!-- Columna Izquierda (Info del producto) -->
+                    <div style="flex: 1;">
+                        <div class="producto-transbordo-nombre" style="font-size: 15px; font-weight: 700; color: #1e293b; transition: color 0.2s; margin-bottom: 4px;">${d.producto}</div>
+                        <div style="font-size: 12px; color: #94a3b8; font-style: italic; margin-bottom: 6px;">Marca: ${d.marca_visual || 'Sin marca'}</div>
+                        <span style="font-size: 11px; font-weight: 600; color: #64748b; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">Orig: ${d.cantidad_sacos}</span>
                     </div>
-                    <div style="font-size: 11px; color: #94a3b8; font-style: italic; margin-bottom: 12px;">Marca visual: ${d.marca_visual || 'Sin marca'}</div>
                     
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 12px; color: #475569;">Cant. a pasar</span>
-                            <input type="number" class="input-transbordo-cant" data-id-detalle="${d.id_detalle}" data-max="${d.cantidad_sacos}" value="${d.cantidad_sacos}" min="0" max="${d.cantidad_sacos}" style="width: 60px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; outline: none;">
-                        </div>
-                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                            <input type="checkbox" class="chk-perdida-total" style="width: 14px; height: 14px; accent-color: #dc2626;">
-                            <span style="font-size: 12px; font-weight: 600; color: #dc2626;">Pérdida Total</span>
-                        </label>
+                    <!-- Columna Derecha (Input a pasar) -->
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+                        <span style="font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase;">Cant. a transbordar</span>
+                        <input type="number" class="input-transbordo-cant" data-id-detalle="${d.id_detalle}" data-max="${d.cantidad_sacos}" value="${d.cantidad_sacos}" min="0" max="${d.cantidad_sacos}" style="width: 80px; padding: 10px; border: 2px solid #cbd5e1; border-radius: 6px; font-size: 16px; font-weight: 700; text-align: center; color: #0f172a; outline: none; transition: border-color 0.2s;">
                     </div>
                 </div>
             `;

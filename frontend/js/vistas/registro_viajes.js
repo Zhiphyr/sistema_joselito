@@ -282,24 +282,72 @@ function crearNuevaPestaniaViaje(esRestauracion = false) {
     if (inputFleteGlobal) inputFleteGlobal.addEventListener('input', validarTarifas);
     if (inputTarifa) inputTarifa.addEventListener('input', validarTarifas);
 
-    // Eventos para Adelanto Inicial
     const chkAdelanto = divContenido.querySelector('.chk-adelanto');
     const contAdelanto = divContenido.querySelector('.contenedor-campos-adelanto');
     const inputMontoAdelanto = divContenido.querySelector('.input-monto-adelanto');
     const selectMetodoAdelanto = divContenido.querySelector('.select-metodo-adelanto');
+    
+    const contCamposExtra = divContenido.querySelector('.cont-campos-extra-adelanto');
+    const inputOperacion = divContenido.querySelector('.input-operacion-adelanto');
+    const inputEvidencia = divContenido.querySelector('.input-evidencia-adelanto');
+    const spanNombreArchivo = divContenido.querySelector('.nombre-archivo-adelanto');
 
     if (chkAdelanto) {
         chkAdelanto.addEventListener('change', (e) => {
             if (e.target.checked) {
                 contAdelanto.style.display = 'flex';
                 inputMontoAdelanto.required = true;
+                if (selectMetodoAdelanto && selectMetodoAdelanto.value !== 'Efectivo') {
+                    contCamposExtra.style.display = 'flex';
+                    inputOperacion.required = true;
+                }
             } else {
                 contAdelanto.style.display = 'none';
                 inputMontoAdelanto.required = false;
                 inputMontoAdelanto.value = '';
+                
+                if (contCamposExtra) contCamposExtra.style.display = 'none';
+                if (inputOperacion) {
+                    inputOperacion.required = false;
+                    inputOperacion.value = '';
+                }
+                if (inputEvidencia) inputEvidencia.value = '';
+                if (spanNombreArchivo) {
+                    spanNombreArchivo.textContent = '';
+                    spanNombreArchivo.title = '';
+                }
             }
             validarTarifas();
             guardarEstadoEnLocalStorage(idViaje);
+        });
+    }
+
+    if (selectMetodoAdelanto && contCamposExtra) {
+        selectMetodoAdelanto.addEventListener('change', (e) => {
+            if (e.target.value !== 'Efectivo') {
+                contCamposExtra.style.display = 'flex';
+                inputOperacion.required = true;
+            } else {
+                contCamposExtra.style.display = 'none';
+                inputOperacion.required = false;
+                inputOperacion.value = '';
+                inputEvidencia.value = '';
+                spanNombreArchivo.textContent = '';
+                spanNombreArchivo.title = '';
+            }
+            guardarEstadoEnLocalStorage(idViaje);
+        });
+    }
+
+    if (inputEvidencia && spanNombreArchivo) {
+        inputEvidencia.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                spanNombreArchivo.textContent = e.target.files[0].name;
+                spanNombreArchivo.title = e.target.files[0].name;
+            } else {
+                spanNombreArchivo.textContent = '';
+                spanNombreArchivo.title = '';
+            }
         });
     }
 
@@ -322,7 +370,7 @@ function crearNuevaPestaniaViaje(esRestauracion = false) {
         selectCamion, selectRuta, 
         divContenido.querySelector('.fecha-salida-input'),
         inputFleteGlobal, inputTarifa,
-        selectMetodoAdelanto
+        selectMetodoAdelanto, inputOperacion
     ];
     inputsAEscuchar.forEach(inp => {
         if(inp) {
@@ -952,6 +1000,7 @@ function guardarEstadoEnLocalStorage(idViaje) {
         tiene_adelanto: vista.querySelector('.chk-adelanto') ? vista.querySelector('.chk-adelanto').checked : false,
         monto_adelanto: vista.querySelector('.input-monto-adelanto') ? vista.querySelector('.input-monto-adelanto').value : '',
         metodo_adelanto: vista.querySelector('.select-metodo-adelanto') ? vista.querySelector('.select-metodo-adelanto').value : 'Efectivo',
+        numero_operacion: vista.querySelector('.input-operacion-adelanto') ? vista.querySelector('.input-operacion-adelanto').value : '',
         cargas: window.cargasPorViaje[idViaje] || []
     };
 
@@ -998,7 +1047,16 @@ function restaurarEstadoDesdeLocalStorage() {
                             vista.querySelector('.contenedor-campos-adelanto').style.display = 'flex';
                             vista.querySelector('.input-monto-adelanto').required = true;
                             if (data.monto_adelanto) vista.querySelector('.input-monto-adelanto').value = data.monto_adelanto;
-                            if (data.metodo_adelanto) vista.querySelector('.select-metodo-adelanto').value = data.metodo_adelanto;
+                            if (data.metodo_adelanto) {
+                                vista.querySelector('.select-metodo-adelanto').value = data.metodo_adelanto;
+                                if (data.metodo_adelanto !== 'Efectivo') {
+                                    vista.querySelector('.cont-campos-extra-adelanto').style.display = 'flex';
+                                    vista.querySelector('.input-operacion-adelanto').required = true;
+                                    if (data.numero_operacion) {
+                                        vista.querySelector('.input-operacion-adelanto').value = data.numero_operacion;
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -1029,10 +1087,17 @@ async function registrarViajeBackend(btn) {
     const tiene_adelanto = vista.querySelector('.chk-adelanto') ? vista.querySelector('.chk-adelanto').checked : false;
     const monto_adelanto = vista.querySelector('.input-monto-adelanto') ? vista.querySelector('.input-monto-adelanto').value : '';
     const metodo_adelanto = vista.querySelector('.select-metodo-adelanto') ? vista.querySelector('.select-metodo-adelanto').value : '';
+    const numero_operacion = vista.querySelector('.input-operacion-adelanto') ? vista.querySelector('.input-operacion-adelanto').value : '';
+    const fileEvidencia = vista.querySelector('.input-evidencia-adelanto');
     const cargas = window.cargasPorViaje[idViaje] || [];
 
     if (!camion || !ruta || !fecha_salida || !flete_global || !tarifa_transportista) {
         Swal.fire({ icon: 'warning', title: 'Datos incompletos', text: 'Por favor, llene todos los campos de Detalles del Viaje.' });
+        return;
+    }
+    
+    if (tiene_adelanto && metodo_adelanto !== 'Efectivo' && !numero_operacion) {
+        Swal.fire({ icon: 'warning', title: 'Datos incompletos', text: 'Por favor, ingrese el N° de Operación para el adelanto.' });
         return;
     }
     
@@ -1046,23 +1111,31 @@ async function registrarViajeBackend(btn) {
     
     try {
         const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        
+        const formData = new FormData();
+        formData.append('camion', camion);
+        formData.append('ruta', ruta);
+        formData.append('fecha_salida', fecha_salida);
+        formData.append('flete_global', flete_global);
+        formData.append('tarifa_transportista', tarifa_transportista);
+        formData.append('tiene_adelanto', tiene_adelanto);
+        formData.append('monto_adelanto', monto_adelanto);
+        formData.append('metodo_adelanto', metodo_adelanto);
+        formData.append('cargas', JSON.stringify(cargas));
+        
+        if (tiene_adelanto && metodo_adelanto !== 'Efectivo') {
+            formData.append('numero_operacion', numero_operacion);
+            if (fileEvidencia && fileEvidencia.files.length > 0) {
+                formData.append('evidencia', fileEvidencia.files[0]);
+            }
+        }
+        
         const res = await fetch('/api/viajes', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
                 'x-user-profile': sessionData.id_perfil || 1
             },
-            body: JSON.stringify({
-                camion,
-                ruta,
-                fecha_salida,
-                flete_global,
-                tarifa_transportista,
-                tiene_adelanto,
-                monto_adelanto,
-                metodo_adelanto,
-                cargas
-            })
+            body: formData
         });
         
         const data = await res.json();

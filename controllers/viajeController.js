@@ -4,8 +4,26 @@ const { cloudinary } = require('../config/cloudinary');
 const registrarViaje = async (req, res) => {
     let connection;
     try {
-        const { camion, ruta, flete_global, tarifa_transportista, fecha_salida, cargas, tiene_adelanto, monto_adelanto, metodo_adelanto } = req.body;
+        let { camion, ruta, flete_global, tarifa_transportista, fecha_salida, cargas, tiene_adelanto, monto_adelanto, metodo_adelanto, numero_operacion } = req.body;
         const userId = req.headers['x-user-profile'] || 1; // Ajustar según tu autenticación
+
+        // Parsear datos si vienen de FormData (multipart)
+        if (typeof cargas === 'string') {
+            try {
+                cargas = JSON.parse(cargas);
+            } catch (e) {
+                return res.status(400).json({ success: false, message: 'Formato de cargas inválido' });
+            }
+        }
+        
+        if (typeof tiene_adelanto === 'string') {
+            tiene_adelanto = (tiene_adelanto === 'true');
+        }
+        
+        let evidencia_url = null;
+        if (req.file) {
+            evidencia_url = req.file.path;
+        }
 
         // Validaciones básicas
         if (!camion || !ruta || !flete_global || !tarifa_transportista || !fecha_salida) {
@@ -85,14 +103,16 @@ const registrarViaje = async (req, res) => {
         // 4. Insertar Adelanto Inicial si aplica
         if (tiene_adelanto && Number(monto_adelanto) > 0) {
             const sqlAdelanto = `
-                INSERT INTO adelantos_viaje (id_viaje, id_usuario, monto, metodo_entrega, motivo_referencial)
-                VALUES (?, ?, ?, ?, 'Viáticos iniciales')
+                INSERT INTO adelantos_viaje (id_viaje, id_usuario, monto, metodo_entrega, numero_operacion, evidencia_url, motivo_referencial)
+                VALUES (?, ?, ?, ?, ?, ?, 'Viáticos iniciales')
             `;
             await connection.query(sqlAdelanto, [
                 idViajeInsertado,
                 userId,
                 Number(monto_adelanto),
-                metodo_adelanto || 'Efectivo'
+                metodo_adelanto || 'Efectivo',
+                numero_operacion || null,
+                evidencia_url || null
             ]);
         }
 
@@ -189,7 +209,7 @@ const obtenerHistorialViajes = async (req, res) => {
                 COUNT(DISTINCT cg.id_carga) as total_cargas,
                 COALESCE(SUM(dc.peso_total), 0) as peso_total_kg,
                 (SELECT COALESCE(SUM(flete_total), 0) FROM Carga WHERE id_viaje = v.id_viaje AND estado != 2) as flete_total,
-                (SELECT COUNT(*) FROM Carga WHERE id_viaje = v.id_viaje AND estado_entrega = 'Rechazado' AND estado != 2) as cargas_rechazadas,
+                (SELECT COUNT(*) FROM Detalle_Carga dc JOIN Carga c ON dc.id_carga = c.id_carga WHERE c.id_viaje = v.id_viaje AND dc.estado_operativo = 'Rechazado' AND dc.estado != 2) as productos_rechazados,
                 (SELECT COUNT(*) FROM Incidencia_Viaje iv WHERE iv.id_viaje = v.id_viaje AND iv.estado = 1) > 0 as tiene_incidencia_reportada
             FROM Viaje v
             JOIN Camiones c ON v.id_camion = c.id_camion
@@ -243,7 +263,7 @@ const obtenerCargasPorViaje = async (req, res) => {
             SELECT 
                 dc.id_detalle, dc.id_producto, dc.id_carga, p.nombre AS producto, dc.marca_visual, 
                 dc.cantidad_sacos, dc.peso_unitario, dc.peso_total, 
-                dc.precio_peso, dc.flete_subtotal
+                dc.precio_peso, dc.flete_subtotal, dc.estado_operativo
             FROM Detalle_Carga dc
             JOIN productos p ON dc.id_producto = p.id_producto
             WHERE dc.id_carga IN (?) AND dc.estado != 2
@@ -404,27 +424,43 @@ const entregarCarga = async (req, res) => {
         
         const idViaje = cargaRows[0].id_viaje;
         
-        // 2. Actualizar estado de la carga
+        // 2. Actualizar estado de los detalles
+        const sqlUpdateDetalles = `
+            UPDATE Detalle_Carga
+            SET estado_operativo = 'Entregado'
+            WHERE id_carga = ? AND estado_operativo = 'Normal' AND estado != 2
+        `;
+        await connection.query(sqlUpdateDetalles, [idCarga]);
+
+        // 3. Recalcular flete de los Entregados
+        const sqlSumFlete = `
+            SELECT SUM(flete_subtotal) AS totalFlete
+            FROM Detalle_Carga
+            WHERE id_carga = ? AND estado_operativo = 'Entregado' AND estado != 2
+        `;
+        const [sumRows] = await connection.query(sqlSumFlete, [idCarga]);
+        const nuevoFlete = sumRows[0].totalFlete || 0;
+
+        // 4. Actualizar estado de la carga
         const sqlUpdateCarga = `
             UPDATE Carga
-            SET estado_entrega = 'Entregado'
+            SET estado_entrega = 'Entregado', flete_total = ?
             WHERE id_carga = ?
         `;
+        await connection.query(sqlUpdateCarga, [nuevoFlete, idCarga]);
         
-        const [result] = await connection.query(sqlUpdateCarga, [idCarga]);
-        
-        // 3. Verificar si quedan cargas pendientes de entrega (ignorando Entregado y Rechazado)
+        // 5. Verificar si quedan cargas pendientes de entrega
         const sqlCheckAll = `
             SELECT COUNT(*) AS pendientes 
             FROM Carga 
-            WHERE id_viaje = ? AND estado_entrega NOT IN ('Entregado', 'Rechazado') AND estado != 2
+            WHERE id_viaje = ? AND estado_entrega NOT IN ('Entregado', 'Rechazado', 'Entregado Parcialmente', 'Rechazado Total') AND estado != 2
         `;
         const [checkRows] = await connection.query(sqlCheckAll, [idViaje]);
         
         let viajeFinalizado = false;
         
         if (checkRows[0].pendientes === 0) {
-            // 4. Si todas están entregadas, el viaje finaliza
+            // 4. Si todas están entregadas/rechazadas, el viaje finaliza
             const sqlUpdateViaje = `
                 UPDATE Viaje 
                 SET estado_operativo = 'Finalizado' 
@@ -457,7 +493,6 @@ const entregaParcialCarga = async (req, res) => {
     try {
         const idCargaOriginal = req.params.id;
         const { productosAceptados, productosRechazados } = req.body;
-        const userId = req.headers['x-user-profile'] || 1;
 
         if (!productosAceptados || !productosRechazados) {
             return res.status(400).json({ success: false, message: 'Datos incompletos para entrega parcial' });
@@ -470,88 +505,95 @@ const entregaParcialCarga = async (req, res) => {
         if (cargaRows.length === 0) throw new Error('Carga original no encontrada');
         const cargaOriginal = cargaRows[0];
 
-        // FASE 1: Nueva Carga (Aceptados)
-        if (productosAceptados.length > 0) {
-            const [resultNuevaCarga] = await connection.query(`
-                INSERT INTO Carga (id_viaje, id_remitente, id_destinatario, flete_total, estado_cobro, estado_entrega, id_usuario)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            `, [
-                cargaOriginal.id_viaje,
-                cargaOriginal.id_remitente,
-                cargaOriginal.id_destinatario,
-                0.00,
-                'Pendiente',
-                'Entregado',
-                userId
-            ]);
-            const idNuevaCarga = resultNuevaCarga.insertId;
+        let nuevoFleteTotal = 0;
+        let tieneAceptados = false;
+        let tieneRechazados = false;
 
-            let nuevoFleteTotal = 0;
-
-            for (const prod of productosAceptados) {
-                const [detRows] = await connection.query(`SELECT * FROM Detalle_Carga WHERE id_detalle = ?`, [prod.id_detalle]);
-                if (detRows.length > 0) {
-                    const detOriginal = detRows[0];
-                    const nuevaCantidad = Number(prod.cantidad);
-                    const nuevoPesoTotal = nuevaCantidad * Number(detOriginal.peso_unitario);
-                    const nuevoFleteSubtotal = nuevoPesoTotal * Number(detOriginal.precio_peso);
-                    
-                    nuevoFleteTotal += nuevoFleteSubtotal;
-
-                    await connection.query(`
-                        INSERT INTO Detalle_Carga (id_carga, id_producto, marca_visual, cantidad_sacos, peso_unitario, peso_total, precio_peso, flete_subtotal)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    `, [
-                        idNuevaCarga,
-                        detOriginal.id_producto,
-                        detOriginal.marca_visual,
-                        nuevaCantidad,
-                        detOriginal.peso_unitario,
-                        nuevoPesoTotal,
-                        detOriginal.precio_peso,
-                        nuevoFleteSubtotal
-                    ]);
-                }
-            }
-
-            await connection.query(`UPDATE Carga SET flete_total = ? WHERE id_carga = ?`, [nuevoFleteTotal, idNuevaCarga]);
-        }
-
-        // FASE 2: Vieja Carga (Rechazados)
-        let fleteOriginalRestante = 0;
-        
         const [detallesOriginales] = await connection.query(`SELECT * FROM Detalle_Carga WHERE id_carga = ? AND estado != 2`, [idCargaOriginal]);
-        
+
         for (const det of detallesOriginales) {
+            const prodAceptado = productosAceptados.find(p => p.id_detalle == det.id_detalle);
             const prodRechazado = productosRechazados.find(p => p.id_detalle == det.id_detalle);
-            const cantRechazada = prodRechazado ? Number(prodRechazado.cantidad) : 0;
             
-            if (cantRechazada > 0) {
-                const nuevoPesoTotal = cantRechazada * Number(det.peso_unitario);
-                const nuevoFleteSubtotal = nuevoPesoTotal * Number(det.precio_peso);
-                fleteOriginalRestante += nuevoFleteSubtotal;
-                
+            const cantAceptada = prodAceptado ? Number(prodAceptado.cantidad) : 0;
+            const cantRechazada = prodRechazado ? Number(prodRechazado.cantidad) : 0;
+
+            if (cantAceptada > 0) tieneAceptados = true;
+            if (cantRechazada > 0) tieneRechazados = true;
+
+            if (cantAceptada > 0 && cantRechazada > 0) {
+                // Hay aceptados y rechazados de este producto
+                // 1. Modificar original para los Aceptados
+                const pesoTotalAcept = cantAceptada * Number(det.peso_unitario);
+                const fleteSubtotalAcept = pesoTotalAcept * Number(det.precio_peso);
+                nuevoFleteTotal += fleteSubtotalAcept;
+
                 await connection.query(`
                     UPDATE Detalle_Carga 
-                    SET cantidad_sacos = ?, peso_total = ?, flete_subtotal = ? 
+                    SET cantidad_sacos = ?, peso_total = ?, flete_subtotal = ?, estado_operativo = 'Entregado'
                     WHERE id_detalle = ?
-                `, [cantRechazada, nuevoPesoTotal, nuevoFleteSubtotal, det.id_detalle]);
+                `, [cantAceptada, pesoTotalAcept, fleteSubtotalAcept, det.id_detalle]);
+
+                // 2. Insertar nuevo detalle para los Rechazados
+                const pesoTotalRech = cantRechazada * Number(det.peso_unitario);
+                const fleteSubtotalRech = pesoTotalRech * Number(det.precio_peso);
+
+                await connection.query(`
+                    INSERT INTO Detalle_Carga (id_carga, id_producto, marca_visual, cantidad_sacos, peso_unitario, peso_total, precio_peso, flete_subtotal, estado_operativo)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Rechazado')
+                `, [idCargaOriginal, det.id_producto, det.marca_visual, cantRechazada, det.peso_unitario, pesoTotalRech, det.precio_peso, fleteSubtotalRech]);
+                
+            } else if (cantAceptada > 0 && cantRechazada === 0) {
+                // Todo aceptado de este producto
+                const pesoTotalAcept = cantAceptada * Number(det.peso_unitario);
+                const fleteSubtotalAcept = pesoTotalAcept * Number(det.precio_peso);
+                nuevoFleteTotal += fleteSubtotalAcept;
+
+                await connection.query(`
+                    UPDATE Detalle_Carga 
+                    SET cantidad_sacos = ?, peso_total = ?, flete_subtotal = ?, estado_operativo = 'Entregado'
+                    WHERE id_detalle = ?
+                `, [cantAceptada, pesoTotalAcept, fleteSubtotalAcept, det.id_detalle]);
+                
+            } else if (cantAceptada === 0 && cantRechazada > 0) {
+                // Todo rechazado de este producto. Usamos el original para ahorrar inserts.
+                const pesoTotalRech = cantRechazada * Number(det.peso_unitario);
+                const fleteSubtotalRech = pesoTotalRech * Number(det.precio_peso);
+
+                await connection.query(`
+                    UPDATE Detalle_Carga 
+                    SET cantidad_sacos = ?, peso_total = ?, flete_subtotal = ?, estado_operativo = 'Rechazado'
+                    WHERE id_detalle = ?
+                `, [cantRechazada, pesoTotalRech, fleteSubtotalRech, det.id_detalle]);
+                
             } else {
+                // cantAceptada = 0 y cantRechazada = 0
                 await connection.query(`UPDATE Detalle_Carga SET estado = 2 WHERE id_detalle = ?`, [det.id_detalle]);
             }
         }
 
+        let nuevoEstadoEntrega = 'Entregado Parcialmente';
+        let nuevoEstadoCobro = cargaOriginal.estado_cobro; // Se mantiene Pendiente por defecto
+
+        if (!tieneAceptados && tieneRechazados) {
+            nuevoEstadoEntrega = 'Rechazado Total';
+            nuevoEstadoCobro = 'Anulado';
+            nuevoFleteTotal = 0; // Asegurarse
+        } else if (tieneAceptados && !tieneRechazados) {
+            nuevoEstadoEntrega = 'Entregado';
+        }
+
         await connection.query(`
             UPDATE Carga 
-            SET flete_total = ?, estado_entrega = 'Rechazado', estado_cobro = 'Anulado' 
+            SET flete_total = ?, estado_entrega = ?, estado_cobro = ? 
             WHERE id_carga = ?
-        `, [fleteOriginalRestante, idCargaOriginal]);
+        `, [nuevoFleteTotal, nuevoEstadoEntrega, nuevoEstadoCobro, idCargaOriginal]);
 
         // Verificar si quedan cargas pendientes para finalizar el viaje
         const sqlCheckAll = `
             SELECT COUNT(*) AS pendientes 
             FROM Carga 
-            WHERE id_viaje = ? AND estado_entrega NOT IN ('Entregado', 'Rechazado') AND estado != 2
+            WHERE id_viaje = ? AND estado_entrega NOT IN ('Entregado', 'Rechazado', 'Entregado Parcialmente', 'Rechazado Total') AND estado != 2
         `;
         const [checkRows] = await connection.query(sqlCheckAll, [cargaOriginal.id_viaje]);
         
@@ -605,9 +647,16 @@ const rechazarCarga = async (req, res) => {
         
         const idViaje = cargaRows[0].id_viaje;
         
+        const sqlUpdateDetalles = `
+            UPDATE Detalle_Carga
+            SET estado_operativo = 'Rechazado'
+            WHERE id_carga = ? AND estado_operativo = 'Normal' AND estado != 2
+        `;
+        await connection.query(sqlUpdateDetalles, [idCarga]);
+
         const sqlUpdateCarga = `
             UPDATE Carga
-            SET estado_entrega = 'Rechazado', estado_cobro = 'Anulado'
+            SET estado_entrega = 'Rechazado Total', estado_cobro = 'Anulado'
             WHERE id_carga = ?
         `;
         await connection.query(sqlUpdateCarga, [idCarga]);
@@ -615,7 +664,7 @@ const rechazarCarga = async (req, res) => {
         const sqlCheckAll = `
             SELECT COUNT(*) AS pendientes 
             FROM Carga 
-            WHERE id_viaje = ? AND estado_entrega NOT IN ('Entregado', 'Rechazado') AND estado != 2
+            WHERE id_viaje = ? AND estado_entrega NOT IN ('Entregado', 'Rechazado', 'Entregado Parcialmente', 'Rechazado Total') AND estado != 2
         `;
         const [checkRows] = await connection.query(sqlCheckAll, [idViaje]);
         
@@ -708,11 +757,14 @@ const confirmarTransbordo = async (req, res) => {
                     cargaOriginal.id_destinatario,
                     0.00,
                     'Pendiente',
-                    'En ruta', // Minúscula para consistencia con la DB actual
+                    'En ruta', 
                     datos_nuevo_viaje.id_usuario
                 ]);
                 idNuevaCarga = resultNuevaCarga.insertId;
             }
+
+            let totalSiniestradoEnCarga = 0;
+            let totalTransbordadoEnCarga = 0;
 
             // Procesar Detalles
             for (const det of detalles) {
@@ -721,9 +773,13 @@ const confirmarTransbordo = async (req, res) => {
                 const detOrig = detRows[0];
                 
                 const cantPasar = Number(det.cantidad_a_pasar);
-                const cantPerdida = Number(det.cantidad_perdida);
+                const cantOriginal = Number(detOrig.cantidad_sacos);
+                const cantPerdida = cantOriginal - cantPasar;
 
-                // Para lo salvado (INSERT)
+                totalTransbordadoEnCarga += cantPasar;
+                totalSiniestradoEnCarga += cantPerdida;
+
+                // Para lo salvado (INSERT) EN VIAJE B (Rescate)
                 if (cantPasar > 0) {
                     const pesoTotalSalvado = cantPasar * Number(detOrig.peso_unitario);
                     const fleteSubtotalSalvado = pesoTotalSalvado * Number(detOrig.precio_peso);
@@ -744,17 +800,52 @@ const confirmarTransbordo = async (req, res) => {
                     ]);
                 }
 
-                // Para la merma (UPDATE)
-                if (cantPerdida >= 0) {
-                    const pesoTotalPerdido = cantPerdida * Number(detOrig.peso_unitario);
-                    const fleteSubtotalPerdido = pesoTotalPerdido * Number(detOrig.precio_peso);
-                    viejoFleteTotal += fleteSubtotalPerdido;
+                // LÓGICA PARA MANTENER HISTORIA EN VIAJE A (Accidentado)
+                const pesoTotalPerdido = cantPerdida * Number(detOrig.peso_unitario);
+                const fleteSubtotalPerdido = pesoTotalPerdido * Number(detOrig.precio_peso);
+                
+                const pesoTotalSalvadoOrig = cantPasar * Number(detOrig.peso_unitario);
+                const fleteSubtotalSalvadoOrig = pesoTotalSalvadoOrig * Number(detOrig.precio_peso);
 
+                viejoFleteTotal += fleteSubtotalPerdido + fleteSubtotalSalvadoOrig;
+
+                if (cantPerdida > 0 && cantPasar === 0) {
+                    // Todo se perdió
                     await connection.query(`
                         UPDATE Detalle_Carga 
-                        SET cantidad_sacos = ?, peso_total = ?, flete_subtotal = ? 
+                        SET estado_operativo = 'Siniestrado' 
+                        WHERE id_detalle = ?
+                    `, [det.id_detalle_original]);
+                } else if (cantPerdida === 0 && cantPasar > 0) {
+                    // Todo se transbordó
+                    await connection.query(`
+                        UPDATE Detalle_Carga 
+                        SET estado_operativo = 'Transbordado' 
+                        WHERE id_detalle = ?
+                    `, [det.id_detalle_original]);
+                } else if (cantPerdida > 0 && cantPasar > 0) {
+                    // Transbordo parcial (Partición)
+                    // 1. Actualizamos el detalle original para reflejar la pérdida
+                    await connection.query(`
+                        UPDATE Detalle_Carga 
+                        SET cantidad_sacos = ?, peso_total = ?, flete_subtotal = ?, estado_operativo = 'Siniestrado' 
                         WHERE id_detalle = ?
                     `, [cantPerdida, pesoTotalPerdido, fleteSubtotalPerdido, det.id_detalle_original]);
+
+                    // 2. Insertamos un NUEVO detalle en el Viaje A para reflejar lo transbordado
+                    await connection.query(`
+                        INSERT INTO Detalle_Carga (id_carga, id_producto, marca_visual, cantidad_sacos, peso_unitario, peso_total, precio_peso, flete_subtotal, estado_operativo)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Transbordado')
+                    `, [
+                        id_carga_original,
+                        detOrig.id_producto,
+                        detOrig.marca_visual,
+                        cantPasar,
+                        detOrig.peso_unitario,
+                        pesoTotalSalvadoOrig,
+                        detOrig.precio_peso,
+                        fleteSubtotalSalvadoOrig
+                    ]);
                 }
             }
 
@@ -763,12 +854,22 @@ const confirmarTransbordo = async (req, res) => {
                 await connection.query(`UPDATE Carga SET flete_total = ? WHERE id_carga = ?`, [nuevoFleteTotal, idNuevaCarga]);
             }
 
-            // Actualizar carga original a Siniestrado
+            // Determinar estado de la Carga Original en el Viaje A
+            let estadoCargaOriginal = 'Siniestrado'; 
+            if (totalTransbordadoEnCarga > 0 && totalSiniestradoEnCarga === 0) {
+                estadoCargaOriginal = 'Transbordado';
+            } else if (totalSiniestradoEnCarga > 0 && totalTransbordadoEnCarga === 0) {
+                estadoCargaOriginal = 'Siniestrado';
+            } else if (totalTransbordadoEnCarga > 0 && totalSiniestradoEnCarga > 0) {
+                estadoCargaOriginal = 'Siniestrado Parcialmente';
+            }
+
+            // Actualizar carga original
             await connection.query(`
                 UPDATE Carga 
-                SET flete_total = ?, estado_entrega = 'Siniestrado', estado_cobro = 'Anulado' 
+                SET flete_total = ?, estado_entrega = ?, estado_cobro = 'Anulado' 
                 WHERE id_carga = ?
-            `, [viejoFleteTotal, id_carga_original]);
+            `, [viejoFleteTotal, estadoCargaOriginal, id_carga_original]);
         }
 
         await connection.commit();
@@ -827,7 +928,7 @@ const obtenerAdelantosViaje = async (req, res) => {
 
         // Obtener la lista
         const [adelantos] = await db.query(`
-            SELECT a.id_adelanto, a.monto, a.metodo_entrega, a.motivo_referencial, a.fecha_registro as fecha_adelanto,
+            SELECT a.id_adelanto, a.monto, a.metodo_entrega, a.numero_operacion, a.evidencia_url, a.motivo_referencial, a.fecha_registro as fecha_adelanto,
                    u.nombre as usuario_nombre
             FROM adelantos_viaje a
             LEFT JOIN usuarios u ON a.id_usuario = u.id_usuario
@@ -852,6 +953,69 @@ const obtenerAdelantosViaje = async (req, res) => {
             success: false,
             message: 'Error de servidor al obtener los adelantos.'
         });
+    }
+};
+
+const registrarAdelantoViaje = async (req, res) => {
+    try {
+        const idViaje = req.params.id;
+        const { monto, metodo_entrega, motivo_referencial, numero_operacion } = req.body;
+        const userId = req.headers['x-user-id'];
+        const evidencia_url = req.file ? req.file.path : null;
+
+        if (!monto || !metodo_entrega || !userId) {
+            return res.status(400).json({ success: false, message: 'Faltan datos obligatorios para registrar el adelanto.' });
+        }
+
+        // Validación de número de operación si no es Efectivo
+        if (metodo_entrega !== 'Efectivo') {
+            if (!numero_operacion || numero_operacion.trim() === '') {
+                return res.status(400).json({ success: false, message: 'El número de operación es obligatorio para este método de entrega.' });
+            }
+
+            // Validar que el número de operación sea único
+            const [existente] = await db.query('SELECT id_adelanto FROM adelantos_viaje WHERE numero_operacion = ? AND estado = 1', [numero_operacion]);
+            if (existente.length > 0) {
+                return res.status(400).json({ success: false, message: 'Este número de operación ya ha sido registrado en otro adelanto.' });
+            }
+        }
+
+        // Validar que el viaje no esté anulado ni liquidado
+        const [viajeRes] = await db.query('SELECT estado_operativo, estado_pagos FROM viaje WHERE id_viaje = ?', [idViaje]);
+        if (!viajeRes.length) {
+            return res.status(404).json({ success: false, message: 'Viaje no encontrado.' });
+        }
+        
+        const viaje = viajeRes[0];
+        if (viaje.estado_operativo === 'Incidencia' && viaje.estado_pagos === 'Anulado') {
+            return res.status(400).json({ success: false, message: 'El viaje ha sido anulado, no se pueden registrar adelantos.' });
+        }
+        if (viaje.estado_pagos === 'Liquidado') {
+            return res.status(400).json({ success: false, message: 'El viaje ya está liquidado, no se pueden registrar adelantos.' });
+        }
+
+        const montoNumber = Number(monto);
+        if (isNaN(montoNumber) || montoNumber <= 0) {
+            return res.status(400).json({ success: false, message: 'El monto debe ser un número mayor a 0.' });
+        }
+
+        await db.query(`
+            INSERT INTO adelantos_viaje (id_viaje, id_usuario, monto, metodo_entrega, numero_operacion, evidencia_url, motivo_referencial, estado)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        `, [
+            idViaje, 
+            userId, 
+            montoNumber, 
+            metodo_entrega, 
+            numero_operacion || null, 
+            evidencia_url, 
+            motivo_referencial || null
+        ]);
+
+        return res.json({ success: true, message: 'Adelanto registrado correctamente.' });
+    } catch (error) {
+        console.error('Error al registrar adelanto:', error);
+        return res.status(500).json({ success: false, message: 'Error de servidor al registrar el adelanto.' });
     }
 };
 
@@ -1234,6 +1398,7 @@ module.exports = {
     confirmarTransbordo,
     obtenerIncidenciasViaje,
     registrarIncidenciaViaje,
+    registrarAdelantoViaje,
     obtenerLiquidacionesPendientes,
     liquidarViaje,
     obtenerHistorialLiquidaciones,

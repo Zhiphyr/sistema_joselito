@@ -153,7 +153,24 @@
                                 <option value="Efectivo">Efectivo</option>
                                 <option value="Billetera Digital">Billetera Digital</option>
                                 <option value="Transferencia">Transferencia</option>
+                                <option value="Depósito">Depósito</option>
                             </select>
+                        </div>
+                        <div class="cont-campos-extra-adelanto" style="display: none; align-items: center; gap: 8px;">
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <label style="font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">N° Operación</label>
+                                <input type="text" class="form-control input-operacion-adelanto" placeholder="Ej. 0023145" style="width: 100px; padding: 6px 8px; font-size: 13px;">
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <label style="font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Evidencia</label>
+                                <div style="display: flex; align-items: center;">
+                                    <label class="btn-secondary" style="padding: 6px 12px; font-size: 11px; cursor: pointer; border-radius: var(--radius-md); margin: 0;">
+                                        <i class="fas fa-upload" style="margin-right: 4px;"></i> Subir
+                                        <input type="file" class="input-evidencia-adelanto" accept="image/*" style="display: none;">
+                                    </label>
+                                    <span class="nombre-archivo-adelanto" style="font-size: 10px; margin-left: 8px; color: var(--text-muted); max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

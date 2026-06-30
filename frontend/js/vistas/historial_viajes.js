@@ -291,41 +291,71 @@ async function abrirModalCargasViaje(idStr) {
 
                 let colorCobro = '#64748b', bgCobro = '#f1f5f9', borderCobro = '#e2e8f0';
                 if (carga.estado_cobro === 'Completado') { colorCobro = '#16a34a'; bgCobro = '#dcfce7'; borderCobro = '#bbf7d0'; }
-                else if (carga.estado_cobro === 'Parcial') { colorCobro = '#d97706'; bgCobro = '#fef3c7'; borderCobro = '#fde68a'; }
-                else { colorCobro = '#dc2626'; bgCobro = '#fee2e2'; borderCobro = '#fecaca'; } // Pendiente o default
+                else if (carga.estado_cobro === 'Parcial') { colorCobro = '#0369a1'; bgCobro = '#e0f2fe'; borderCobro = '#bae6fd'; }
+                else if (carga.estado_cobro === 'Anulado') { colorCobro = '#dc2626'; bgCobro = '#fee2e2'; borderCobro = '#fecaca'; }
+                else { colorCobro = '#b45309'; bgCobro = '#fef3c7'; borderCobro = '#fde68a'; } // Pendiente o default (amarillo pastel)
 
                 let colorEntrega = '#64748b', bgEntrega = '#f1f5f9', borderEntrega = '#e2e8f0';
                 if (carga.estado_entrega === 'Entregado') { colorEntrega = '#16a34a'; bgEntrega = '#dcfce7'; borderEntrega = '#bbf7d0'; }
                 else if (carga.estado_entrega === 'En ruta') { colorEntrega = '#2563eb'; bgEntrega = '#dbeafe'; borderEntrega = '#bfdbfe'; }
-                else if (carga.estado_entrega === 'Siniestrado') { colorEntrega = '#dc2626'; bgEntrega = '#fee2e2'; borderEntrega = '#fecaca'; }
-                else if (carga.estado_entrega === 'Rechazado') { colorEntrega = '#ea580c'; bgEntrega = '#ffedd5'; borderEntrega = '#fed7aa'; }
+                else if (carga.estado_entrega === 'Siniestrado' || carga.estado_entrega === 'Rechazado' || carga.estado_entrega === 'Rechazado Total') { colorEntrega = '#dc2626'; bgEntrega = '#fee2e2'; borderEntrega = '#fecaca'; }
+                else if (carga.estado_entrega === 'Transbordado') { colorEntrega = '#475569'; bgEntrega = '#f1f5f9'; borderEntrega = '#e2e8f0'; }
+                else if (carga.estado_entrega === 'Siniestrado Parcialmente') { colorEntrega = '#9a3412'; bgEntrega = '#ffedd5'; borderEntrega = '#fed7aa'; }
+                else if (carga.estado_entrega === 'Entregado Parcialmente') { colorEntrega = '#0284c7'; bgEntrega = '#e0f2fe'; borderEntrega = '#bae6fd'; }
                 else { colorEntrega = '#d97706'; bgEntrega = '#fef3c7'; borderEntrega = '#fde68a'; } // En Almacen...
 
-                let isTragedia = (carga.estado_entrega === 'Rechazado' || carga.estado_entrega === 'Siniestrado') && carga.estado_cobro === 'Anulado';
-                let headerCant = isTragedia ? 'CANT. PERDIDA' : 'CANT.';
-                let headerFleteTot = isTragedia ? 'FLETE PERDIDO' : 'FLETE TOT.';
-                let colorFleteCell = isTragedia ? '#dc2626' : 'var(--text-primary)';
-                let colorFleteTotal = isTragedia ? '#dc2626' : '#16a34a';
-                let footerText = isTragedia ? 'Totales de Cargas y Flete Perdido' : 'Totales de Carga y Flete a Cobrar';
+                let isAnulado = carga.estado_cobro === 'Anulado';
+                let headerCant = 'CANTIDAD';
+                let headerFleteTot = 'SUBTOTAL';
+                let footerText = isAnulado ? 'Totales de Carga' : 'Totales de Carga y Flete a Cobrar';
+                let colorFleteTotal = isAnulado ? '#dc2626' : '#16a34a';
 
                 let filasProductos = '';
                 if (carga.detalles && carga.detalles.length > 0) {
                     carga.detalles.forEach(prod => {
-                        totalSacos += Number(prod.cantidad_sacos);
-                        totalKilos += Number(prod.peso_total);
-                        totalFlete += Number(prod.flete_subtotal);
+                        let isTransbordado = prod.estado_operativo === 'Transbordado';
+                        let isSiniestrado = prod.estado_operativo === 'Siniestrado';
+                        let isRechazado = prod.estado_operativo === 'Rechazado';
+                        let isEntregado = prod.estado_operativo === 'Entregado';
 
-                        let isTransbordado = carga.estado_entrega === 'Siniestrado' && carga.estado_cobro === 'Anulado' && Number(prod.cantidad_sacos) === 0;
-                        let textColor = isTransbordado ? 'var(--text-muted)' : 'var(--text-primary)';
-                        let secTextColor = isTransbordado ? 'var(--text-muted)' : 'var(--text-secondary)';
-                        let weightColor = isTransbordado ? 'var(--text-muted)' : 'var(--text-primary)';
-                        let fleteColor = isTransbordado ? 'var(--text-muted)' : colorFleteCell;
-                        let extraBadge = isTransbordado ? '<br><span style="display: inline-block; margin-top: 4px; padding: 2px 6px; background: #f1f5f9; color: #64748b; border-radius: 4px; font-size: 9px; font-weight: 500;">Transbordado a otro viaje</span>' : '';
+                        if (isAnulado || prod.estado_operativo === 'Entregado' || prod.estado_operativo === 'Normal') {
+                            totalSacos += Number(prod.cantidad_sacos);
+                            totalKilos += Number(prod.peso_total);
+                            totalFlete += Number(prod.flete_subtotal);
+                        }
+
+                        let textColor = 'var(--text-primary)';
+                        let secTextColor = 'var(--text-secondary)';
+                        let weightColor = 'var(--text-primary)';
+                        let fleteColor = 'var(--text-primary)';
+
+                        if (isRechazado) {
+                            textColor = '#dc2626';
+                            secTextColor = '#f87171';
+                            fleteColor = '#dc2626';
+                        }
+
+                        let extraBadge = '';
+                        if (isTransbordado) {
+                            extraBadge = '<br><span style="display: inline-block; margin-top: 4px; padding: 2px 6px; background: #f1f5f9; color: #64748b; border-radius: 4px; font-size: 9px; font-weight: 500;"><i class="fas fa-exchange-alt"></i> Transbordado</span>';
+                        } else if (isSiniestrado) {
+                            extraBadge = '<br><span style="display: inline-block; margin-top: 4px; padding: 2px 6px; background: #fee2e2; color: #dc2626; border-radius: 4px; font-size: 9px; font-weight: 500;"><i class="fas fa-exclamation-triangle"></i> Siniestro (Merma)</span>';
+                        } else if (isRechazado) {
+                            extraBadge = '<br><span style="display: inline-block; margin-top: 4px; padding: 2px 6px; background: #fee2e2; color: #dc2626; border-radius: 4px; font-size: 9px; font-weight: 500;"><i class="fas fa-ban"></i> Rechazado</span>';
+                        } else if (isEntregado) {
+                            extraBadge = '<br><span style="display: inline-block; margin-top: 4px; padding: 2px 6px; background: #dcfce7; color: #16a34a; border-radius: 4px; font-size: 9px; font-weight: 500;"><i class="fas fa-check-double"></i> Entregado</span>';
+                        } else {
+                            extraBadge = '<br><span style="display: inline-block; margin-top: 4px; padding: 2px 6px; background: #f0fdf4; color: #15803d; border-radius: 4px; font-size: 9px; font-weight: 500;"><i class="fas fa-check"></i> Normal</span>';
+                        }
 
                         filasProductos += `
                             <tr>
                                 <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-weight: 600; color: ${textColor}; white-space: nowrap;">${prod.producto || '-'}${extraBadge}</td>
-                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; color: ${secTextColor}; white-space: nowrap;">${prod.marca_visual || 'Sin Marca'}</td>
+                                <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; color: ${secTextColor};">
+                                    <div title="${prod.marca_visual || 'Sin Marca'}" style="max-width: 160px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; white-space: normal;">
+                                        ${prod.marca_visual || 'Sin Marca'}
+                                    </div>
+                                </td>
                                 <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; color: ${textColor}; white-space: nowrap;">${prod.cantidad_sacos}</td>
                                 <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; color: ${secTextColor}; white-space: nowrap;">${prod.peso_unitario} kg</td>
                                 <td style="padding: 12px 16px; border-bottom: 1px solid #f1f5f9; text-align: center; font-weight: 700; color: ${weightColor}; white-space: nowrap;">${Number(prod.peso_total).toFixed(2)} kg</td>
@@ -345,27 +375,47 @@ async function abrirModalCargasViaje(idStr) {
                         <td style="padding: 16px; text-align: center; white-space: nowrap;"></td>
                         <td style="padding: 16px; text-align: center; font-weight: 700; color: var(--brand-blue); white-space: nowrap;">${totalKilos.toFixed(2)} kg</td>
                         <td style="padding: 16px; text-align: center; white-space: nowrap;"></td>
-                        <td style="padding: 16px; text-align: right; font-weight: 700; color: ${colorFleteTotal}; font-size: 15px; white-space: nowrap;">S/ ${totalFlete.toFixed(2)}</td>
+                        <td style="padding: 16px; text-align: right; font-weight: 700; color: ${colorFleteTotal}; font-size: 15px; white-space: nowrap;">
+                            ${isAnulado 
+                                ? `<span style="text-decoration: line-through; opacity: 0.7;">S/ ${totalFlete.toFixed(2)}</span>` 
+                                : `S/ ${totalFlete.toFixed(2)}`}
+                        </td>
                     </tr>
                 `;
 
                 htmlContent += `
-                    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
-                        <div style="padding: 16px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 12px; background: #fafafa; flex-wrap: wrap;">
-                            <span style="background: #e0f2fe; color: var(--brand-blue); font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 4px; flex-shrink: 0; white-space: nowrap;">Carga ${index + 1}</span>
-                            <span style="font-weight: 600; color: var(--text-primary); font-size: 12px;">${carga.remitente_nombre}</span>
-                            <i class="fas fa-arrow-right" style="color: var(--text-muted); font-size: 12px;"></i>
-                            <span style="font-weight: 600; color: var(--text-primary); font-size: 12px;">${carga.destinatario_nombre}</span>
+                    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 16px;">
+                        <div style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 8px; background: #fafafa;">
                             
-                            <div style="margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap;">
-                                <span style="background: ${bgEntrega}; color: ${colorEntrega}; border: 1px solid ${borderEntrega}; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; white-space: nowrap;">
-                                    <i class="fas fa-box"></i> ${carga.estado_entrega || 'En Almacen'}
-                                </span>
-                                <span style="background: ${bgCobro}; color: ${colorCobro}; border: 1px solid ${borderCobro}; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; white-space: nowrap;">
-                                    <i class="fas fa-hand-holding-usd"></i> Cobro: ${carga.estado_cobro || 'Pendiente'}
-                                </span>
+                            <!-- Fila 1 -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                                <span style="background: #e0f2fe; color: var(--brand-blue); font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 4px; white-space: nowrap;">Carga ${index + 1}</span>
+                                
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <span style="background: ${bgEntrega}; color: ${colorEntrega}; border: 1px solid ${borderEntrega}; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">
+                                        <i class="fas fa-box"></i> ${carga.estado_entrega || 'En Almacen'}
+                                    </span>
+                                    <span style="background: ${bgCobro}; color: ${colorCobro}; border: 1px solid ${borderCobro}; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">
+                                        <i class="fas fa-hand-holding-usd"></i> Cobro: ${carga.estado_cobro || 'Pendiente'}
+                                    </span>
+                                </div>
                             </div>
+                            
+                            <!-- Fila 2 -->
+                            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding-left: 2px;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <i class="fas fa-user" style="color: var(--text-muted); font-size: 13px;"></i>
+                                    <span style="font-weight: 600; color: var(--text-primary); font-size: 12px;">${carga.remitente_nombre}</span>
+                                </div>
+                                <i class="fas fa-arrow-right" style="color: var(--brand-blue); font-size: 14px;"></i>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <i class="fas fa-user" style="color: var(--text-muted); font-size: 13px;"></i>
+                                    <span style="font-weight: 600; color: var(--text-primary); font-size: 12px;">${carga.destinatario_nombre}</span>
+                                </div>
+                            </div>
+
                         </div>
+
                         <div style="overflow-x: auto; width: 100%;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 750px;">
                                 <thead>
@@ -615,46 +665,82 @@ async function mostrarFormularioNuevaIncidencia() {
                 htmlCargas = '<div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;">No hay cargas registradas en este viaje.</div>';
             } else {
                 cargas.forEach((carga, index) => {
-                    const flete = Number(carga.flete_total) || 0;
-                    totalFleteViaje += flete;
-                    
-                    if (carga.estado_entrega === 'Rechazado' || carga.estado_entrega === 'Siniestrado') {
-                        perdidaTotal += flete;
-                    }
-
-                    // Calcular Kilos
-                    let totalKilos = 0;
-                    if (carga.detalles && carga.detalles.length > 0) {
-                        carga.detalles.forEach(d => totalKilos += Number(d.peso_total));
-                    }
-                    
-                    let txtKilos = `${totalKilos.toFixed(2)} kg`;
-                    if (totalKilos > 1000) {
-                        txtKilos += ` <span style="font-size: 10px; color: var(--text-muted);">(${(totalKilos/1000).toFixed(2)} Ton)</span>`;
-                    }
-
                     let colorEntrega = '#64748b', bgEntrega = '#f1f5f9', borderEntrega = '#e2e8f0';
                     if (carga.estado_entrega === 'Entregado') { colorEntrega = '#16a34a'; bgEntrega = '#dcfce7'; borderEntrega = '#bbf7d0'; }
                     else if (carga.estado_entrega === 'En ruta') { colorEntrega = '#2563eb'; bgEntrega = '#dbeafe'; borderEntrega = '#bfdbfe'; }
-                    else if (carga.estado_entrega === 'Siniestrado') { colorEntrega = '#dc2626'; bgEntrega = '#fee2e2'; borderEntrega = '#fecaca'; }
-                    else if (carga.estado_entrega === 'Rechazado') { colorEntrega = '#ea580c'; bgEntrega = '#ffedd5'; borderEntrega = '#fed7aa'; }
+                    else if (carga.estado_entrega === 'Siniestrado' || carga.estado_entrega === 'Rechazado' || carga.estado_entrega === 'Rechazado Total') { colorEntrega = '#dc2626'; bgEntrega = '#fee2e2'; borderEntrega = '#fecaca'; }
+                    else if (carga.estado_entrega === 'Transbordado') { colorEntrega = '#475569'; bgEntrega = '#f1f5f9'; borderEntrega = '#e2e8f0'; }
+                    else if (carga.estado_entrega === 'Siniestrado Parcialmente') { colorEntrega = '#9a3412'; bgEntrega = '#ffedd5'; borderEntrega = '#fed7aa'; }
+                    else if (carga.estado_entrega === 'Entregado Parcialmente') { colorEntrega = '#0284c7'; bgEntrega = '#e0f2fe'; borderEntrega = '#bae6fd'; }
                     else { colorEntrega = '#d97706'; bgEntrega = '#fef3c7'; borderEntrega = '#fde68a'; }
 
-                    htmlCargas += `
-                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                                <div style="flex: 1; padding-right: 8px;">
-                                    <span style="font-size: 11px; color: var(--brand-blue); font-weight: 700; display: inline-block; margin-bottom: 4px;">CARGA ${index + 1}</span>
-                                    <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); line-height: 1.2;">${carga.remitente_nombre}</div>
-                                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;"><i class="fas fa-arrow-down" style="font-size: 10px; margin-right: 4px;"></i>${carga.destinatario_nombre}</div>
+                    let colorCobro = '#d97706', bgCobro = '#fef3c7', borderCobro = '#fde68a', iconCobro = 'fa-clock';
+                    if (carga.estado_cobro === 'Liquidado') { colorCobro = '#16a34a'; bgCobro = '#dcfce7'; borderCobro = '#bbf7d0'; iconCobro = 'fa-check-double'; }
+                    else if (carga.estado_cobro === 'Anulado') { colorCobro = '#dc2626'; bgCobro = '#fee2e2'; borderCobro = '#fecaca'; iconCobro = 'fa-ban'; }
+
+                    let htmlDetalles = '';
+                    let totalCargaFlete = 0;
+
+                    if (carga.detalles && carga.detalles.length > 0) {
+                        carga.detalles.forEach(d => {
+                            let subtotal = Number(d.flete_subtotal) || 0;
+                            totalCargaFlete += subtotal;
+                            totalFleteViaje += subtotal; // sumamos todo al flete total histórico
+                            
+                            if (d.estado_operativo === 'Rechazado' || d.estado_operativo === 'Siniestrado') {
+                                perdidaTotal += subtotal;
+                            }
+                            
+                            let colorDetalle = '#15803d', bgDetalle = '#f0fdf4';
+                            if (d.estado_operativo === 'Siniestrado' || d.estado_operativo === 'Rechazado') { colorDetalle = '#dc2626'; bgDetalle = '#fee2e2'; }
+                            else if (d.estado_operativo === 'Transbordado') { colorDetalle = '#475569'; bgDetalle = '#f1f5f9'; }
+                            else if (d.estado_operativo === 'Entregado') { colorDetalle = '#16a34a'; bgDetalle = '#dcfce7'; }
+
+                            htmlDetalles += `
+                                <div style="display: grid; grid-template-columns: 3fr 1fr 1.5fr; gap: 8px; padding: 8px 0; border-bottom: 1px dashed #e2e8f0; align-items: start;">
+                                    <div style="display: flex; flex-direction: column; gap: 4px; overflow: hidden;">
+                                        <div style="font-size: 11px; color: var(--text-primary); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${d.producto || 'Producto'}">${d.producto || 'Producto'}</div>
+                                        <div>
+                                            <span style="font-size: 9px; font-weight: 800; background: ${bgDetalle}; color: ${colorDetalle}; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; display: inline-block;">
+                                                ${d.estado_operativo}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-align: center; margin-top: 1px;">${d.cantidad_sacos} ud.</div>
+                                    <div style="font-size: 11px; font-weight: 800; color: var(--text-primary); text-align: right; margin-top: 1px;">S/ ${subtotal.toFixed(2)}</div>
                                 </div>
-                                <span style="background: ${bgEntrega}; color: ${colorEntrega}; border: 1px solid ${borderEntrega}; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; white-space: nowrap;">
-                                    ${carga.estado_entrega}
-                                </span>
+                            `;
+                        });
+                    }
+
+                    htmlCargas += `
+                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                                <span style="font-size: 11px; color: var(--brand-blue); font-weight: 800; text-transform: uppercase;">CARGA ${index + 1}</span>
+                                <div style="display: flex; gap: 4px;">
+                                    <span style="background: ${bgEntrega}; color: ${colorEntrega}; border: 1px solid ${borderEntrega}; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; text-transform: uppercase;">
+                                        ${carga.estado_entrega}
+                                    </span>
+                                    <span style="background: ${bgCobro}; color: ${colorCobro}; border: 1px solid ${borderCobro}; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; text-transform: uppercase; display: flex; align-items: center; gap: 3px;">
+                                        <i class="fas ${iconCobro}"></i> ${carga.estado_cobro || 'Pendiente'}
+                                    </span>
+                                </div>
                             </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #e2e8f0; padding-top: 8px; margin-top: 4px;">
-                                <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary);"><i class="fas fa-weight-hanging" style="margin-right: 4px; color: #94a3b8;"></i>${txtKilos}</div>
-                                <div style="font-size: 13px; font-weight: 700; color: var(--text-primary);">S/ ${flete.toFixed(2)}</div>
+                            
+                            <div style="background: #f8fafc; padding: 8px; border-radius: 6px; margin-bottom: 8px;">
+                                <div style="font-size: 11px; font-weight: 700; color: var(--text-primary); line-height: 1.3;">${carga.remitente_nombre}</div>
+                                <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px; display: flex; align-items: flex-start; gap: 4px;">
+                                    <i class="fas fa-arrow-down" style="margin-top: 2px;"></i> ${carga.destinatario_nombre}
+                                </div>
+                            </div>
+
+                            <div style="padding-top: 4px;">
+                                ${htmlDetalles || '<div style="font-size: 11px; color: var(--text-muted); text-align: center;">Sin detalles registrados.</div>'}
+                            </div>
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #e2e8f0; padding-top: 8px; margin-top: 8px;">
+                                <div style="font-size: 11px; font-weight: 600; color: var(--text-muted);">Total de la carga</div>
+                                <div style="font-size: 12px; font-weight: 800; color: var(--text-primary);">S/ ${totalCargaFlete.toFixed(2)}</div>
                             </div>
                         </div>
                     `;
@@ -716,7 +802,7 @@ async function mostrarFormularioNuevaIncidencia() {
         gridTemplateCols = '1fr 1fr 1fr';
         colAdelantoHTML = `
             <div>
-                <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Adelanto Recuperar (S/)</label>
+                <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Adelanto<br>Recuperar (S/)</label>
                 <input type="number" id="nueva-incidencia-adelanto" value="${totalAdelantos.toFixed(2)}" readonly style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; background-color: #f1f5f9; cursor: not-allowed; color: #ca8a04; font-weight: 700;">
             </div>
         `;
@@ -754,11 +840,11 @@ async function mostrarFormularioNuevaIncidencia() {
                     
                     <div style="display: grid; grid-template-columns: ${gridTemplateCols}; gap: 16px; margin-bottom: 16px;">
                         <div>
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Pérdida Total (S/)</label>
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Pérdida Total (S/)${(esAnulado && totalAdelantos > 0) ? '<br>&nbsp;' : ''}</label>
                             ${inputPerdidaHTML}
                         </div>
                         <div>
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Gastos Adicionales (S/)</label>
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Gastos Adicionales (S/)${(esAnulado && totalAdelantos > 0) ? '&nbsp;' : ''}</label>
                             <input type="number" min="0" step="0.01" id="nueva-incidencia-gastos" placeholder="0" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none;">
                         </div>
                         ${colAdelantoHTML}
@@ -1099,8 +1185,8 @@ function renderizarTarjetasViaje(viajes, isLoadMore = false) {
                         ${viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_reportada 
                             ? `<span class="badge-pulsing-red" style="background: #dc2626; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-exclamation-circle"></i> Siniestro: Requiere Reporte</span>` 
                             : ''}
-                        ${(viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.cargas_rechazadas > 0 && !viaje.tiene_incidencia_reportada
-                            ? `<span class="badge-pulsing-orange" style="background: #f97316; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-exclamation-triangle"></i> Reporte: (${viaje.cargas_rechazadas} Carga${viaje.cargas_rechazadas > 1 ? 's' : ''} Rechazada${viaje.cargas_rechazadas > 1 ? 's' : ''})</span>`
+                        ${(viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.productos_rechazados > 0 && !viaje.tiene_incidencia_reportada
+                            ? `<span class="badge-pulsing-orange" style="background: #f97316; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-exclamation-triangle"></i> Reporte: (${viaje.productos_rechazados} Producto${viaje.productos_rechazados > 1 ? 's' : ''} Rechazado${viaje.productos_rechazados > 1 ? 's' : ''})</span>`
                             : ''}
                         ${viaje.id_viaje_origen 
                             ? `<span style="background: #ffedd5; color: #c2410c; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; display: inline-block;">TRANSBORDO DEL VIAJE #${viaje.id_viaje_origen}</span>` 
@@ -1153,7 +1239,7 @@ function renderizarTarjetasViaje(viajes, isLoadMore = false) {
                     <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: auto;">
                         <button class="btn-viaje btn-ver-detalles" data-id="${viaje.id_viaje}">Ver detalles</button>
                         <button class="btn-viaje btn-ver-cargas" data-id="${viaje.id_viaje}">Ver cargas</button>
-                        <button class="btn-viaje btn-ver-adelantos" data-id="${viaje.id_viaje}"><i class="fas fa-hand-holding-usd"></i> Ver adelantos</button>
+                        <button class="btn-viaje btn-ver-adelantos" data-id="${viaje.id_viaje}">Ver adelantos</button>
                         ${viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_reportada 
                             ? `<button class="btn-viaje btn-incidencia btn-pulsing-red" data-id="${viaje.id_viaje}"><i class="fas fa-exclamation-circle"></i> Reportar</button>`
                             : (viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.cargas_rechazadas > 0 && !viaje.tiene_incidencia_reportada
@@ -1219,7 +1305,7 @@ async function abrirModalAdelantos(idStr) {
                             <i class="fas fa-hand-holding-usd" style="font-size: 32px; color: #f59e0b; margin-bottom: 12px;"></i>
                             <h4 style="margin: 0 0 8px 0; font-size: 16px; color: var(--text-primary);">Aún no hay adelantos</h4>
                             <p style="margin: 0 0 20px 0; font-size: 13px; color: var(--text-secondary);">Este viaje no tiene ningún adelanto registrado al chofer.</p>
-                            <button id="btn-registrar-primer-adelanto" style="background: #d97706; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(217, 119, 6, 0.2); transition: all 0.2s;">
+                            <button onclick="mostrarFormularioNuevoAdelanto(${idViaje})" style="background: #d97706; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(217, 119, 6, 0.2); transition: all 0.2s;">
                                 <i class="fas fa-plus"></i> Registrar Primer Adelanto
                             </button>
                         </div>
@@ -1230,6 +1316,8 @@ async function abrirModalAdelantos(idStr) {
             } else {
                 if (canAdd) {
                     btnNuevo.style.display = 'flex';
+                    // Reasignar onclick del botón de la cabecera
+                    btnNuevo.onclick = () => mostrarFormularioNuevoAdelanto(idViaje);
                 }
                 
                 // Mostrar lista en formato de tabla
@@ -1238,10 +1326,11 @@ async function abrirModalAdelantos(idStr) {
                         <table style="width: 100%; border-collapse: collapse; text-align: left;">
                             <thead style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                                 <tr>
-                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">ID</th>
                                     <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Monto</th>
                                     <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Método de Entrega</th>
-                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Motivo</th>
+                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Nro Operación</th>
+                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Evidencia</th>
+                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; width: 200px;">Motivo</th>
                                     <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Fecha de Registro</th>
                                     <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Registrado Por</th>
                                 </tr>
@@ -1250,14 +1339,30 @@ async function abrirModalAdelantos(idStr) {
                 `;
                 
                 adelantosList.forEach(a => {
+                    const fechaObj = new Date(a.fecha_adelanto);
+                    const fechaStr = fechaObj.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                    const horaStr = fechaObj.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
+
                     listaHtml += `
                                 <tr style="border-bottom: 1px solid #f1f5f9;">
-                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-muted); font-weight: 600;">#${a.id_adelanto}</td>
                                     <td style="padding: 12px 16px; font-size: 14px; font-weight: 700; color: #16a34a; white-space: nowrap;">S/ ${Number(a.monto).toFixed(2)}</td>
                                     <td style="padding: 12px 16px; font-size: 13px; color: var(--text-primary);">${a.metodo_entrega || '-'}</td>
-                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-secondary);">${a.motivo_referencial || '-'}</td>
-                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-primary); white-space: nowrap;">${formatFechaCompleta(a.fecha_adelanto)}</td>
-                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-secondary);"><i class="far fa-user" style="color: var(--text-muted);"></i> ${a.usuario_creador || 'Desconocido'}</td>
+                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-primary);">${a.numero_operacion || '-'}</td>
+                                    <td style="padding: 12px 16px; font-size: 13px; text-align: center;">
+                                        ${a.evidencia_url ? `<a href="${a.evidencia_url}" target="_blank" style="color: var(--brand-blue); text-decoration: none;" title="Ver evidencia"><i class="fas fa-file-image fa-lg"></i></a>` : '-'}
+                                    </td>
+                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-secondary); max-width: 200px;" title="${a.motivo_referencial ? a.motivo_referencial.replace(/"/g, '&quot;') : ''}">
+                                        <div style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; white-space: normal;">
+                                            ${a.motivo_referencial || '-'}
+                                        </div>
+                                    </td>
+                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-primary); white-space: nowrap;">
+                                        <div style="display: flex; flex-direction: column;">
+                                            <span>${fechaStr}</span>
+                                            <span style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${horaStr}</span>
+                                        </div>
+                                    </td>
+                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-secondary);">${a.usuario_creador || 'Desconocido'}</td>
                                 </tr>
                     `;
                 });
@@ -1280,3 +1385,167 @@ async function abrirModalAdelantos(idStr) {
 
 // Hacer disponible globalmente
 window.init_historial_viajes = init_historial_viajes;
+window.mostrarFormularioNuevoAdelanto = mostrarFormularioNuevoAdelanto;
+window.mostrarNombreArchivoEvidencia = mostrarNombreArchivoEvidencia;
+
+function mostrarFormularioNuevoAdelanto(idViaje) {
+    const modalBody = document.getElementById('modal-adelantos-body');
+    const btnNuevo = document.getElementById('btn-nuevo-adelanto');
+    
+    // Ocultar botón "Nuevo Adelanto" de la cabecera mientras mostramos el form
+    btnNuevo.style.display = 'none';
+
+    modalBody.innerHTML = `
+        <div id="form-nuevo-adelanto-container" style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px; max-width: 700px; margin: 0 auto;">
+            <h4 style="margin: 0 0 24px 0; font-size: 18px; color: var(--text-primary); font-weight: 700;">Registrar Nuevo Adelanto</h4>
+            
+            <!-- Primera Fila (Monto y Método) -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                <div>
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Monto (S/) *</label>
+                    <input type="number" id="nuevo-adelanto-monto" step="0.01" min="0.01" placeholder="Ej: 500.00" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; transition: border-color 0.2s;">
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Método de Entrega *</label>
+                    <select id="nuevo-adelanto-metodo" onchange="toggleAdelantoOperacion()" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; color: var(--text-primary); outline: none; background: white; transition: border-color 0.2s;">
+                        <option value="Efectivo">Efectivo</option>
+                        <option value="Transferencia">Transferencia</option>
+                        <option value="Billetera Digital">Billetera Digital (Yape/Plin)</option>
+                        <option value="Depósito">Depósito</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Segunda Fila (Operación y Evidencia) - Inicialmente oculta porque por defecto es Efectivo -->
+            <div id="container-adelanto-operacion-evidencia" style="display: none; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                <div>
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Nro. de Operación *</label>
+                    <input type="text" id="nuevo-adelanto-operacion" placeholder="Ej: 123456789" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; transition: border-color 0.2s;">
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Evidencia (Opcional)</label>
+                    <label for="nuevo-adelanto-evidencia" style="cursor: pointer; border: 2px dashed #cbd5e1; padding: 14px; text-align: center; border-radius: 8px; display: block; background: #f8fafc; transition: all 0.2s; min-height: 24px;">
+                        <i class="fas fa-cloud-upload-alt fa-lg" style="color: #64748b; margin-bottom: 8px; display: block;"></i>
+                        <div style="font-size: 13px; color: #475569; font-weight: 600;">Seleccionar comprobante</div>
+                        <div id="nombre-archivo-evidencia" style="font-size: 12px; color: #16a34a; margin-top: 6px; font-weight: 700;"></div>
+                    </label>
+                    <input type="file" id="nuevo-adelanto-evidencia" accept="image/*,.pdf" style="display: none;" onchange="mostrarNombreArchivoEvidencia()">
+                </div>
+            </div>
+
+            <!-- Tercera Fila (Motivo) -->
+            <div style="margin-bottom: 28px;">
+                <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Motivo o Descripción</label>
+                <input type="text" id="nuevo-adelanto-motivo" placeholder="Ej: Viáticos, Peajes..." style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; transition: border-color 0.2s;">
+            </div>
+
+            <!-- Botones -->
+            <div style="display: flex; justify-content: flex-end; gap: 12px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                <button type="button" onclick="abrirModalAdelantos(${idViaje})" style="padding: 12px 24px; border: 1px solid #cbd5e1; background: white; color: var(--text-secondary); border-radius: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s;">Cancelar</button>
+                <button type="button" id="btn-guardar-adelanto" onclick="guardarAdelantoViaje(${idViaje})" style="padding: 12px 28px; background: #d97706; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.2s; box-shadow: 0 4px 6px -1px rgba(217, 119, 6, 0.2);">
+                    <i class="fas fa-save"></i> Guardar Adelanto
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function mostrarNombreArchivoEvidencia() {
+    const input = document.getElementById('nuevo-adelanto-evidencia');
+    const label = document.getElementById('nombre-archivo-evidencia');
+    if (input.files && input.files.length > 0) {
+        label.textContent = input.files[0].name;
+    } else {
+        label.textContent = '';
+    }
+}
+
+function toggleAdelantoOperacion() {
+    const metodo = document.getElementById('nuevo-adelanto-metodo').value;
+    const container = document.getElementById('container-adelanto-operacion-evidencia');
+    if (metodo !== 'Efectivo') {
+        container.style.display = 'grid';
+    } else {
+        container.style.display = 'none';
+        document.getElementById('nuevo-adelanto-operacion').value = '';
+        document.getElementById('nuevo-adelanto-evidencia').value = ''; // Reset file input
+        document.getElementById('nombre-archivo-evidencia').textContent = ''; // Reset label
+    }
+}
+
+async function guardarAdelantoViaje(idViaje) {
+    const monto = Number(document.getElementById('nuevo-adelanto-monto').value);
+    const metodo = document.getElementById('nuevo-adelanto-metodo').value;
+    const motivo = document.getElementById('nuevo-adelanto-motivo').value.trim();
+    const operacion = document.getElementById('nuevo-adelanto-operacion').value.trim();
+    const evidenciaInput = document.getElementById('nuevo-adelanto-evidencia');
+
+    if (!monto || monto <= 0) {
+        alert('Por favor ingresa un monto válido mayor a 0.');
+        return;
+    }
+
+    if (metodo !== 'Efectivo' && !operacion) {
+        alert('El número de operación es obligatorio para el método de entrega seleccionado.');
+        return;
+    }
+
+    const result = await Swal.fire({
+        title: '¿Registrar Adelanto?',
+        text: '¿Estás seguro de registrar este adelanto por S/ ' + monto.toFixed(2) + '?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#d97706',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Sí, guardar',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) return;
+
+    const btnGuardar = document.getElementById('btn-guardar-adelanto');
+    btnGuardar.disabled = true;
+    btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        
+        const formData = new FormData();
+        formData.append('monto', monto);
+        formData.append('metodo_entrega', metodo);
+        formData.append('motivo_referencial', motivo);
+        if (metodo !== 'Efectivo') {
+            formData.append('numero_operacion', operacion);
+        }
+        
+        if (evidenciaInput.files.length > 0) {
+            formData.append('evidencia', evidenciaInput.files[0]);
+        }
+
+        const response = await fetch(`/api/viajes/${idViaje}/adelantos`, {
+            method: 'POST',
+            headers: {
+                'x-user-id': sessionData.id_usuario || 1
+            },
+            body: formData
+        });
+
+        const res = await response.json();
+        if (response.ok && res.success) {
+            Swal.fire('¡Guardado!', 'El adelanto se registró correctamente.', 'success');
+            // Recargar la lista de adelantos (vuelve a la vista de tabla)
+            abrirModalAdelantos(idViaje);
+            // Refrescar tarjetas de historial
+            fetchViajes(false);
+        } else {
+            throw new Error(res.message || 'Error al guardar el adelanto');
+        }
+    } catch (error) {
+        console.error('Error al guardar adelanto:', error);
+        Swal.fire('Error', error.message || 'Falla de conexión al guardar el adelanto', 'error');
+        btnGuardar.disabled = false;
+        btnGuardar.innerHTML = '<i class="fas fa-save"></i> Guardar Adelanto';
+    }
+}
