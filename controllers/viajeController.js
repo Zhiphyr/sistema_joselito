@@ -1367,7 +1367,9 @@ const obtenerHistorialLiquidaciones = async (req, res) => {
                 c.placa AS camion_placa,
                 c.conductor AS chofer_nombre,
                 c.numero_documento AS chofer_dni,
+                c.id_camion,
                 v.id_viaje,
+                v.tarifa_transportista,
                 CONCAT(ro.ciudad_origen, ' - ', ro.ciudad_destino) AS ruta,
                 
                 -- Calcular el peso total en kg

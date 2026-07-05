@@ -327,7 +327,7 @@ function renderTablaHistorial(datos) {
                     <button onclick="abrirModalDetalleLiquidacion(${liq.id_liquidacion})" title="Ver Detalle" style="background: #e0f2fe; color: var(--brand-blue); border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
                         <i class="fas fa-eye"></i>
                     </button>
-                    <button title="Generar PDF" style="background: #fef2f2; color: #ef4444; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                    <button onclick="procesarBoletaPDF(${liq.id_liquidacion})" title="Generar PDF" style="background: #fef2f2; color: #ef4444; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
                         <i class="fas fa-file-pdf"></i>
                     </button>
                 </div>
@@ -466,6 +466,261 @@ window.cerrarModalEvidenciaPreview = function() {
         document.getElementById('imgEvidenciaPreview').src = '';
     }, 300);
 };
+
+// ==============================================================
+// Lógica para PDF de Liquidación
+// ==============================================================
+
+window.procesarBoletaPDF = async function(id_liquidacion) {
+    const liq = historialLiquidacionesGlobal.find(l => l.id_liquidacion === id_liquidacion);
+    if (!liq) {
+        Swal.fire('Error', 'No se encontraron los datos de la liquidación en el historial.', 'error');
+        return;
+    }
+
+    try {
+        Swal.fire({
+            title: 'Generando documento...',
+            text: 'Obteniendo estado de cuenta actualizado',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        // Obtener deudas pendientes actuales
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const res = await fetch(`/api/camiones/${liq.id_camion}/incidencias_pendientes`, {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const json = await res.json();
+        
+        let deudasActuales = [];
+        if (json.success && json.data) {
+            deudasActuales = json.data;
+        }
+
+        Swal.close();
+        generarBoletaPDF(liq, deudasActuales);
+    } catch (e) {
+        console.error('Error generando PDF:', e);
+        Swal.fire('Error', 'Ocurrió un problema al intentar generar el PDF.', 'error');
+    }
+};
+
+function generarBoletaPDF(liq, deudasActuales) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // Config
+    const marginX = 15;
+    let cursorY = 20;
+
+    // Colores
+    const colMain = [33, 41, 54]; // Slate 800
+    const colMuted = [100, 116, 139]; // Slate 500
+    const colBrand = [37, 99, 235]; // Blue 600
+
+    // Cargar Logo e iniciar
+    const imgLogo = new Image();
+    imgLogo.src = 'img/letras-negras.png';
+    
+    imgLogo.onload = () => {
+        // --- CABECERA ---
+        doc.addImage(imgLogo, 'PNG', marginX, cursorY, 52.5, 18);
+        
+        doc.setFontSize(20);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(colMain[0], colMain[1], colMain[2]);
+        doc.text("Boleta de Liquidación", 200 - marginX, cursorY + 8, { align: "right" });
+        
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(colMuted[0], colMuted[1], colMuted[2]);
+        doc.text(`Fecha de Liquidación: ${liq.fecha}`, 200 - marginX, cursorY + 14, { align: "right" });
+
+        cursorY += 25;
+        doc.setDrawColor(226, 232, 240); // slate 200
+        doc.line(marginX, cursorY, 200 - marginX, cursorY);
+        cursorY += 8;
+
+        // --- INFO VIAJE Y TRANSPORTISTA ---
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(colMain[0], colMain[1], colMain[2]);
+        doc.text("DATOS DEL TRANSPORTISTA", marginX, cursorY);
+        doc.text("DATOS DEL VIAJE", 110, cursorY);
+        cursorY += 6;
+
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        // Columna Izquierda
+        doc.text(`Nombre: ${liq.chofer_nombre}`, marginX, cursorY);
+        doc.text(`DNI: ${liq.chofer_dni}`, marginX, cursorY + 6);
+        doc.text(`Camión: ${liq.camion_placa} · ${liq.camion_modelo}`, marginX, cursorY + 12);
+        
+        // Columna Derecha
+        doc.text(`Viaje N°: ${liq.id_viaje}`, 110, cursorY);
+        doc.text(`Ruta: ${liq.ruta}`, 110, cursorY + 6);
+        const pesoTon = liq.total_peso ? (liq.total_peso / 1000).toFixed(2) : '0.00';
+        doc.text(`Peso Total: ${pesoTon} Ton. (${liq.total_peso} kg)`, 110, cursorY + 12);
+        const tarifaText = liq.tarifa_transportista ? `S/ ${formatearNumero(liq.tarifa_transportista)} / kg` : 'N/A';
+        doc.text(`Tarifa: ${tarifaText}`, 110, cursorY + 18);
+        
+        cursorY += 28;
+        doc.line(marginX, cursorY, 200 - marginX, cursorY);
+        cursorY += 10;
+
+        // --- RESUMEN FINANCIERO ---
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(colMain[0], colMain[1], colMain[2]);
+        doc.text("RESUMEN FINANCIERO", marginX, cursorY);
+        cursorY += 6;
+
+        // Preparar array de finanzas para autotable (una tabla vertical)
+        const finanzasData = [
+            ["Monto Bruto", `S/ ${formatearNumero(liq.monto_bruto)}`],
+            ["Descuento por Adelantos", `- S/ ${formatearNumero(liq.total_adelantos)}`]
+        ];
+        
+        // Agregar penalidades específicas de este viaje (si hubo)
+        if (liq.detalle_penalidades && liq.detalle_penalidades.length > 0) {
+            liq.detalle_penalidades.forEach(p => {
+                finanzasData.push([`Descuento: ${p.incidencia}`, `- S/ ${formatearNumero(p.monto)}`]);
+            });
+        } else if (liq.total_penalidades > 0) {
+            // Fallback si no viniera el desglose
+            finanzasData.push(["Descuento Penalidades", `- S/ ${formatearNumero(liq.total_penalidades)}`]);
+        }
+
+        // Agregar Total Neto a la tabla, pero se le da un estilo bold en el didParseCell
+        finanzasData.push(["NETO PAGADO", `S/ ${formatearNumero(liq.monto_neto_pagado)}`]);
+
+        doc.autoTable({
+            startY: cursorY,
+            margin: { left: marginX, right: marginX },
+            theme: 'plain',
+            body: finanzasData,
+            styles: { fontSize: 10, cellPadding: 2, textColor: colMain },
+            columnStyles: {
+                0: { fontStyle: 'normal' },
+                1: { fontStyle: 'normal', halign: 'right' }
+            },
+            didParseCell: function(data) {
+                if (data.row.index === finanzasData.length - 1) {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.fontSize = 11;
+                    if (data.column.index === 1) {
+                        data.cell.styles.textColor = colMain; // Green 600
+                    }
+                } else if (data.row.index > 0 && data.row.index < finanzasData.length - 1) {
+                    if (data.column.index === 1) {
+                        data.cell.styles.textColor = colMain; // Red 600 for discounts
+                    }
+                }
+            }
+        });
+        cursorY = doc.lastAutoTable.finalY + 12;
+
+        // --- DETALLE DE PAGOS ---
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(colMain[0], colMain[1], colMain[2]);
+        doc.text("PAGOS REGISTRADOS", marginX, cursorY);
+        cursorY += 4;
+
+        if (liq.pagos && liq.pagos.length > 0) {
+            const pagosData = liq.pagos.map(p => [
+                p.metodo_pago, 
+                p.numero_operacion || '-', 
+                `S/ ${formatearNumero(p.monto_pagado)}`
+            ]);
+            doc.autoTable({
+                startY: cursorY,
+                margin: { left: marginX },
+                tableWidth: 170, // 200 - marginX*2
+                head: [['Método de Pago', 'N° Operación', 'Monto']],
+                body: pagosData,
+                theme: 'grid',
+                headStyles: { fillColor: [248, 250, 252], textColor: colMuted, fontSize: 9, fontStyle: 'bold' },
+                bodyStyles: { fontSize: 10, textColor: colMain },
+                columnStyles: { 2: { halign: 'right', fontStyle: 'bold' } }
+            });
+            cursorY = doc.lastAutoTable.finalY + 12;
+        } else {
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "italic");
+            doc.text("No hay desglose de pagos disponible.", marginX, cursorY + 4);
+            cursorY += 14;
+        }
+
+        // --- ESTADO DE CUENTA (Penalidades Pendientes) ---
+        // Prevenir salto de página agresivo en las firmas
+        if (cursorY > 210) { doc.addPage(); cursorY = 20; }
+        
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(colMain[0], colMain[1], colMain[2]);
+        doc.text("ESTADO DE CUENTA (PENALIDADES PENDIENTES A LA FECHA)", marginX, cursorY);
+        cursorY += 4;
+
+        if (deudasActuales && deudasActuales.length > 0) {
+            const deudasData = deudasActuales.map(d => [
+                d.tipo_incidencia,
+                `S/ ${formatearNumero(d.monto_descuento_chofer)}`,
+                `S/ ${formatearNumero(d.monto_cobrado)}`,
+                `S/ ${formatearNumero(d.monto_descuento_chofer - d.monto_cobrado)}`
+            ]);
+            doc.autoTable({
+                startY: cursorY,
+                margin: { left: marginX },
+                tableWidth: 170,
+                head: [['Incidencia', 'Total Penalidad', 'Cobrado Hasta Ahora', 'Saldo Pendiente']],
+                body: deudasData,
+                theme: 'grid',
+                headStyles: { fillColor: [248, 250, 252], textColor: colMuted, fontSize: 9, fontStyle: 'bold' },
+                bodyStyles: { fontSize: 10, textColor: colMain },
+                columnStyles: { 
+                    1: { halign: 'right' }, 
+                    2: { halign: 'right' }, 
+                    3: { halign: 'right', fontStyle: 'bold', textColor: colMain } 
+                }
+            });
+            cursorY = doc.lastAutoTable.finalY + 15;
+        } else {
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(33, 41, 54); //Negro
+            doc.text("El transportista no presenta deudas por penalidades.", marginX, cursorY + 4);
+            cursorY += 15;
+        }
+
+        // --- FIRMAS ---
+        if (cursorY > 240) { doc.addPage(); cursorY = 40; } else { cursorY += 20; }
+
+        doc.setDrawColor(148, 163, 184); // Slate 400
+        
+        // Firma Transportista
+        doc.line(30, cursorY, 80, cursorY);
+        doc.setFontSize(9);
+        doc.setTextColor(colMain[0], colMain[1], colMain[2]);
+        doc.text("Firma del Transportista", 55, cursorY + 5, { align: "center" });
+        doc.text(`DNI: ${liq.chofer_dni}`, 55, cursorY + 9, { align: "center" });
+        
+        // Firma Empresa
+        doc.line(130, cursorY, 180, cursorY);
+        doc.text("Firma o Sello", 155, cursorY + 9, { align: "center" });
+        doc.text("Transporte Joselito", 155, cursorY + 5, { align: "center" });
+        
+        // --- SALIDA ---
+        const pdfBlob = doc.output('blob');
+        const blobUrl = URL.createObjectURL(pdfBlob);
+        window.open(blobUrl, '_blank');
+
+    };
+    imgLogo.onerror = () => {
+        Swal.fire('Error', 'No se pudo cargar el logo para el PDF.', 'error');
+    };
+}
 
 let modalLiquidacionActual = null; // Para guardar la liquidación seleccionada temporalmente
 

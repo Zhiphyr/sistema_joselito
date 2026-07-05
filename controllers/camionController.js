@@ -226,6 +226,8 @@ const obtenerIncidenciasPendientesPorCamion = async (req, res) => {
             SELECT 
                 iv.id_incidencia,
                 iv.tipo_incidencia,
+                iv.monto_descuento_chofer,
+                iv.monto_cobrado,
                 v.id_viaje,
                 (iv.monto_descuento_chofer - iv.monto_cobrado) AS saldo_deuda
             FROM incidencia_viaje iv
