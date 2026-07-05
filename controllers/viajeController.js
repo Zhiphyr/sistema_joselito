@@ -1197,13 +1197,10 @@ const liquidarViaje = async (req, res) => {
             total_adelantos, 
             total_penalidades, 
             monto_neto_pagado, 
-            metodo_pago, 
-            numero_operacion,
             observaciones, 
-            penalidades_descontadas 
+            penalidades_descontadas,
+            carrito_pagos // nuevo array
         } = req.body;
-
-        const evidencia_url = req.file ? req.file.path : null;
 
         if (!id_usuario) {
             return res.status(401).json({ success: false, message: 'Usuario no autenticado' });
@@ -1213,41 +1210,36 @@ const liquidarViaje = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El monto neto no puede ser negativo' });
         }
 
-        // Parsear penalidades si viene de FormData
+        // Parsear JSONs si vienen de FormData
         if (typeof penalidades_descontadas === 'string') {
-            try {
-                penalidades_descontadas = JSON.parse(penalidades_descontadas);
-            } catch (e) {
-                penalidades_descontadas = [];
-            }
+            try { penalidades_descontadas = JSON.parse(penalidades_descontadas); } catch (e) { penalidades_descontadas = []; }
+        }
+        if (typeof carrito_pagos === 'string') {
+            try { carrito_pagos = JSON.parse(carrito_pagos); } catch (e) { carrito_pagos = []; }
         }
 
         connection = await db.getConnection();
         await connection.beginTransaction();
 
-        // 1. Insertar en liquidacion_viaje
+        // 1. Insertar en liquidacion_viaje (ahora sin detalles de pago)
         const sqlInsertLiquidacion = `
             INSERT INTO liquidacion_viaje 
-            (id_viaje, id_usuario, monto_bruto, total_adelantos, total_penalidades, monto_neto_pagado, metodo_pago, numero_operacion, evidencia_url, observaciones)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id_viaje, id_usuario, monto_bruto, total_adelantos, total_penalidades, monto_neto_pagado, observaciones)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         `;
         const [resultLiq] = await connection.query(sqlInsertLiquidacion, [
-            id, id_usuario, monto_bruto, total_adelantos, total_penalidades, monto_neto_pagado, metodo_pago, numero_operacion || null, evidencia_url, observaciones || null
+            id, id_usuario, monto_bruto, total_adelantos, total_penalidades, monto_neto_pagado, observaciones || null
         ]);
-        
         const id_liquidacion = resultLiq.insertId;
 
-        // 2 & 3. Procesar Penalidades Descontadas
+        // 2. Procesar Penalidades Descontadas
         if (penalidades_descontadas && penalidades_descontadas.length > 0) {
             for (let pen of penalidades_descontadas) {
-                // Insertar detalle_liquidacion_penalidad
                 await connection.query(`
                     INSERT INTO detalle_liquidacion_penalidad (id_liquidacion, id_incidencia, monto_descontado)
                     VALUES (?, ?, ?)
                 `, [id_liquidacion, pen.id_incidencia, pen.monto_descontado]);
 
-                // Actualizar incidencia_viaje
-                // Necesitamos el monto_cobrado actual y monto_descuento_chofer para actualizar estado
                 const [rowsInc] = await connection.query(
                     `SELECT monto_descuento_chofer, monto_cobrado FROM incidencia_viaje WHERE id_incidencia = ? FOR UPDATE`,
                     [pen.id_incidencia]
@@ -1257,12 +1249,8 @@ const liquidarViaje = async (req, res) => {
                     const inc = rowsInc[0];
                     const nuevo_cobrado = Number(inc.monto_cobrado) + Number(pen.monto_descontado);
                     const deuda_total = Number(inc.monto_descuento_chofer);
-                    
                     let nuevo_estado = 'Cobrado Parcial';
-                    // Deuda saldada (usamos una tolerancia mínima por decimales si es necesario, o >= )
-                    if (nuevo_cobrado >= deuda_total - 0.01) {
-                        nuevo_estado = 'Cobrado';
-                    }
+                    if (nuevo_cobrado >= deuda_total - 0.01) nuevo_estado = 'Cobrado';
 
                     await connection.query(`
                         UPDATE incidencia_viaje 
@@ -1273,7 +1261,70 @@ const liquidarViaje = async (req, res) => {
             }
         }
 
-        // 4. Marcar viaje como Liquidado
+        // 3. Procesar Carrito de Pagos (Liquidaciones Mixtas)
+        if (carrito_pagos && carrito_pagos.length > 0) {
+            // Buscar la cuenta física por defecto
+            const [cajaFisica] = await connection.query('SELECT id_cuenta FROM cuenta_bancaria WHERE es_sistema = 1 LIMIT 1');
+            const id_caja_fisica = cajaFisica.length > 0 ? cajaFisica[0].id_cuenta : null;
+
+            for (let i = 0; i < carrito_pagos.length; i++) {
+                const pago = carrito_pagos[i];
+                // Buscar si hay archivo para este indice
+                const fileField = 'evidencia_' + i;
+                const fileObj = (req.files || []).find(f => f.fieldname === fileField);
+                const evidencia_url = fileObj ? fileObj.path : null;
+
+                // Insertar en detalle_pago
+                await connection.query(`
+                    INSERT INTO detalle_liquidacion_pago 
+                    (id_liquidacion, metodo_pago, id_cuenta, id_billetera, monto_pagado, numero_operacion, evidencia_url)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `, [
+                    id_liquidacion, 
+                    pago.metodo_pago, 
+                    pago.id_cuenta || null, 
+                    pago.id_billetera || null, 
+                    pago.monto_pagado, 
+                    pago.numero_operacion || null, 
+                    evidencia_url
+                ]);
+
+                // 4. Inyectar en Libro Mayor (movimiento_caja)
+                let id_cuenta_origen = null;
+                let id_billetera_origen = null;
+
+                if (pago.metodo_pago === 'Efectivo' || pago.metodo_pago === 'Depósito') {
+                    id_cuenta_origen = id_caja_fisica;
+                } else if (pago.metodo_pago === 'Transferencia') {
+                    id_cuenta_origen = pago.id_cuenta;
+                } else if (pago.metodo_pago === 'Billetera Digital') {
+                    id_billetera_origen = pago.id_billetera;
+                    // Buscar si tiene cuenta vinculada
+                    const [billRows] = await connection.query('SELECT id_cuenta_vinculada FROM billetera_digital WHERE id_billetera = ?', [pago.id_billetera]);
+                    if (billRows.length > 0 && billRows[0].id_cuenta_vinculada) {
+                        id_cuenta_origen = billRows[0].id_cuenta_vinculada;
+                    }
+                }
+
+                const conceptoLibro = `Liquidación de viaje #${id} (${pago.metodo_pago})`;
+                await connection.query(`
+                    INSERT INTO movimiento_caja 
+                    (tipo_movimiento, concepto, monto, metodo_pago, id_cuenta_origen, id_billetera_origen, id_cuenta_destino, id_billetera_destino, modulo_origen, id_registro_origen, numero_operacion, id_usuario)
+                    VALUES ('EGRESO', ?, ?, ?, ?, ?, NULL, NULL, 'LIQUIDACION', ?, ?, ?)
+                `, [
+                    conceptoLibro,
+                    pago.monto_pagado,
+                    pago.metodo_pago,
+                    id_cuenta_origen,
+                    id_billetera_origen,
+                    id_liquidacion,
+                    pago.numero_operacion || null,
+                    id_usuario
+                ]);
+            }
+        }
+
+        // 5. Marcar viaje como Liquidado
         await connection.query(`
             UPDATE viaje 
             SET estado_pagos = 'Liquidado' 
@@ -1288,24 +1339,13 @@ const liquidarViaje = async (req, res) => {
         if (connection) {
             await connection.rollback();
         }
-
-        // Revertir imagen de Cloudinary si hubo error
-        if (req.file && req.file.filename) {
-            try {
-                await cloudinary.uploader.destroy(req.file.filename);
-                console.log(`[Reversión] Imagen huérfana eliminada: ${req.file.filename}`);
-            } catch (cloudErr) {
-                console.error("Error al eliminar imagen de Cloudinary:", cloudErr);
-            }
-        }
-
         console.error('Error al liquidar viaje:', error);
         
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ success: false, message: 'Este viaje ya ha sido liquidado anteriormente.' });
         }
         
-        return res.status(500).json({ success: false, message: 'Error interno al procesar la liquidación.' });
+        return res.status(500).json({ success: false, message: 'Error interno del servidor al procesar la liquidación' });
     } finally {
         if (connection) {
             connection.release();

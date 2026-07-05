@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const autoSeed = require('./config/seeder');
 
 const app = express();
 
@@ -25,6 +26,7 @@ const camionRoutes = require('./routes/camionRoutes');
 const rutaRoutes = require('./routes/rutaRoutes');
 const viajeRoutes = require('./routes/viajeRoutes');
 const deudaRoutes = require('./routes/deudaRoutes');
+const cuentaBancariaRoutes = require('./routes/cuentaBancariaRoutes');
 
 // Registro de rutas
 app.use('/api/auth', authRoutes);
@@ -38,6 +40,7 @@ app.use('/api/camiones', camionRoutes);
 app.use('/api/rutas', rutaRoutes);
 app.use('/api/viajes', viajeRoutes);
 app.use('/api/deudas', deudaRoutes);
+app.use('/api/cuentas-bancarias', cuentaBancariaRoutes);
 
 // Ruta de prueba
 app.get('/api/ping', (req, res) => {
@@ -47,6 +50,7 @@ app.get('/api/ping', (req, res) => {
 // Configuración del puerto
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`Servidor de Transporte Joselito corriendo en el puerto ${PORT}`);
+    await autoSeed();
 });

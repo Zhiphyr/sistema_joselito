@@ -230,7 +230,8 @@ const obtenerIncidenciasPendientesPorCamion = async (req, res) => {
                 (iv.monto_descuento_chofer - iv.monto_cobrado) AS saldo_deuda
             FROM incidencia_viaje iv
             JOIN viaje v ON iv.id_viaje = v.id_viaje
-            WHERE v.id_camion = ?
+            JOIN camiones c ON v.id_camion = c.id_camion
+            WHERE c.numero_documento = (SELECT numero_documento FROM camiones WHERE id_camion = ?)
               AND iv.estado = 1
               AND iv.monto_descuento_chofer IS NOT NULL
               AND iv.estado_cobro_penalidad IN ('Pendiente', 'Cobrado Parcial')

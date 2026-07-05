@@ -10,16 +10,27 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Configuración del storage
-const storage = new CloudinaryStorage({
+// Configuración del storage para comprobantes
+const storageComprobantes = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'sistema_joselito/comprobantes', // Carpeta donde se guardarán
+    folder: 'sistema_joselito/comprobantes',
     allowed_formats: ['jpg', 'png', 'jpeg', 'webp', 'pdf'],
     public_id: (req, file) => 'voucher_' + Date.now(),
   },
 });
 
-const upload = multer({ storage: storage });
+// Configuración del storage para códigos QR
+const storageQR = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'sistema_joselito/codigos_qr',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+    public_id: (req, file) => 'qr_' + Date.now(),
+  },
+});
 
-module.exports = { cloudinary, upload };
+const upload = multer({ storage: storageComprobantes });
+const uploadQR = multer({ storage: storageQR });
+
+module.exports = { cloudinary, upload, uploadQR };

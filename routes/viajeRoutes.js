@@ -20,6 +20,6 @@ router.post('/:id/incidencias', viajeController.registrarIncidenciaViaje);
 router.get('/:id/adelantos', viajeController.obtenerAdelantosViaje);
 router.post('/:id/adelantos', upload.single('evidencia'), viajeController.registrarAdelantoViaje);
 
-router.post('/:id/liquidar', upload.single('evidencia'), viajeController.liquidarViaje);
+router.post('/:id/liquidar', upload.any(), viajeController.liquidarViaje);
 
 module.exports = router;
