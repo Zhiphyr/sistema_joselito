@@ -1,4 +1,4 @@
-// frontend/js/vistas/liquidacion.js
+﻿// frontend/js/vistas/liquidacion.js
 
 let liquidacionesPendientes = [];
 
@@ -218,6 +218,8 @@ function asignarEventoBusqueda() {
     selectSort?.addEventListener('change', handleFilterChange);
 }
 
+let historialLiquidacionesGlobal = []; // Para buscar por id
+
 async function cargarHistorialLiquidacionesDesdeServidor() {
     const listaEl = document.getElementById('listaLiquidaciones');
     listaEl.innerHTML = `
@@ -232,6 +234,7 @@ async function cargarHistorialLiquidacionesDesdeServidor() {
         const json = await res.json();
         
         if (json.success) {
+            historialLiquidacionesGlobal = json.data;
             renderTablaHistorial(json.data);
         } else {
             listaEl.innerHTML = `<div style="padding: 20px; color: #ef4444; text-align: center;">Error al cargar historial</div>`;
@@ -271,6 +274,7 @@ function renderTablaHistorial(datos) {
                         <th style="padding: 12px 16px; font-weight: 600; text-align: right;">Penalidades</th>
                         <th style="padding: 12px 16px; font-weight: 600; text-align: right;">Neto Pagado</th>
                         <th style="padding: 12px 16px; font-weight: 600;">Fecha</th>
+                        <th style="padding: 12px 16px; font-weight: 600; text-align: center;">Acciones</th>
                     </tr>
                 </thead>
                 <tbody id="tbodyHistorial">
@@ -318,6 +322,16 @@ function renderTablaHistorial(datos) {
             <td style="padding: 16px; text-align: right;">${penalidadesHtml}</td>
             <td style="padding: 16px; text-align: right; font-weight: 700; color: #047857;">S/ ${formatearNumero(liq.monto_neto_pagado)}</td>
             <td style="padding: 16px; color: var(--text-muted); font-size: 11px;">${liq.fecha}</td>
+            <td style="padding: 16px; text-align: center;">
+                <div style="display: flex; gap: 8px; justify-content: center;">
+                    <button onclick="abrirModalDetalleLiquidacion(${liq.id_liquidacion})" title="Ver Detalle" style="background: #e0f2fe; color: var(--brand-blue); border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button title="Generar PDF" style="background: #fef2f2; color: #ef4444; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                        <i class="fas fa-file-pdf"></i>
+                    </button>
+                </div>
+            </td>
         `;
         
         tbody.appendChild(tr);
@@ -361,6 +375,97 @@ window.togglePenalidadesAccordion = function(id) {
         icon.style.transform = 'rotate(0deg)';
     }
 }
+
+window.abrirModalDetalleLiquidacion = function(id) {
+    const liq = historialLiquidacionesGlobal.find(l => l.id_liquidacion === id);
+    if (!liq) return;
+
+    document.getElementById('modalDetalleLiqViajeTitle').textContent = `Viaje #${liq.id_viaje} - ${liq.chofer_nombre}`;
+    
+    // Lista de Pagos
+    const contenedorPagos = document.getElementById('modalDetalleListaPagos');
+    contenedorPagos.innerHTML = '';
+    
+    if (liq.pagos && liq.pagos.length > 0) {
+        liq.pagos.forEach(pago => {
+            let infoOperacion = '';
+            if (pago.numero_operacion) {
+                infoOperacion = `
+                    <div style="text-align: right;">
+                        <div style="font-size: 11px; color: var(--text-secondary);">N° Operación</div>
+                        <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${pago.numero_operacion}</div>
+                    </div>
+                `;
+            }
+            
+            let infoEvidencia = '';
+            if (pago.evidencia_url) {
+                infoEvidencia = `
+                    <div style="margin-top: 8px;">
+                        <button onclick="abrirModalEvidenciaPreview('${pago.evidencia_url}')" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #e0f2fe; color: var(--brand-blue); border: none; font-size: 12px; font-weight: 600; border-radius: 4px; cursor: pointer;">
+                            <i class="fas fa-image"></i> Ver Comprobante
+                        </button>
+                    </div>
+                `;
+            }
+
+            contenedorPagos.innerHTML += `
+                <div style="padding: 12px; background: #f8fafc; border: 1px solid var(--border-light); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-secondary);">Método</div>
+                            <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">${pago.metodo_pago}</div>
+                        </div>
+                        <div style="text-align: right; padding: 0 12px;">
+                            <div style="font-size: 11px; color: var(--text-secondary);">Monto</div>
+                            <div style="font-size: 14px; font-weight: 700; color: #16a34a;">S/ ${formatearNumero(pago.monto_pagado)}</div>
+                        </div>
+                        ${infoOperacion}
+                    </div>
+                    ${infoEvidencia}
+                </div>
+            `;
+        });
+    } else {
+        contenedorPagos.innerHTML = '<div style="font-size: 13px; color: var(--text-muted);">No se registraron detalles de pagos mixtos para esta liquidación.</div>';
+    }
+
+    // Finanzas
+    document.getElementById('modalDetalleBruto').textContent = `S/ ${formatearNumero(liq.monto_bruto)}`;
+    document.getElementById('modalDetalleAdelantos').textContent = `-S/ ${formatearNumero(liq.total_adelantos)}`;
+    document.getElementById('modalDetallePenalidades').textContent = `-S/ ${formatearNumero(liq.total_penalidades)}`;
+    document.getElementById('modalDetalleNeto').textContent = `S/ ${formatearNumero(liq.monto_neto_pagado)}`;
+
+    const modal = document.getElementById('modalDetalleLiquidacion');
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => {
+        modal.style.opacity = '1';
+        modal.querySelector('.modal-content').style.transform = 'translateY(0)';
+    });
+};
+
+window.cerrarModalDetalleLiquidacion = function() {
+    const modal = document.getElementById('modalDetalleLiquidacion');
+    modal.style.opacity = '0';
+    modal.querySelector('.modal-content').style.transform = 'translateY(20px)';
+    setTimeout(() => { modal.style.display = 'none'; }, 300);
+};
+
+window.abrirModalEvidenciaPreview = function(url) {
+    document.getElementById('imgEvidenciaPreview').src = url;
+    const modal = document.getElementById('modalEvidenciaPreview');
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => { modal.style.opacity = '1'; });
+};
+
+window.cerrarModalEvidenciaPreview = function() {
+    const modal = document.getElementById('modalEvidenciaPreview');
+    modal.style.opacity = '0';
+    setTimeout(() => { 
+        modal.style.display = 'none'; 
+        document.getElementById('imgEvidenciaPreview').src = '';
+    }, 300);
+};
 
 let modalLiquidacionActual = null; // Para guardar la liquidación seleccionada temporalmente
 
@@ -1008,15 +1113,17 @@ window.procesarLiquidacion = async function() {
     let total_penalidades = 0;
     
     const penalidadesData = [];
-    const inputs = document.querySelectorAll('.input-descuento');
+    const inputs = document.querySelectorAll('.input-descuento-penalidad');
     inputs.forEach(input => {
-        const val = Number(input.value) || 0;
-        if (val > 0) {
-            total_penalidades += val;
-            penalidadesData.push({
-                id_incidencia: input.dataset.id_incidencia,
-                monto_descontado: val
-            });
+        if (!input.disabled) {
+            const val = Number(input.value) || 0;
+            if (val > 0) {
+                total_penalidades += val;
+                penalidadesData.push({
+                    id_incidencia: input.dataset.id,
+                    monto_descontado: val
+                });
+            }
         }
     });
 
@@ -1111,33 +1218,6 @@ window.procesarLiquidacion = async function() {
         const json = await res.json();
         
         if (json.success) {
-            // ... (resto del bloque success: PDF, sweetalert, cerrar)
-            const resDeudas = await fetch(`/api/camiones/${modalLiquidacionActual.id_camion}/incidencias_pendientes`, {
-                headers: { 'x-user-profile': sessionData.id_perfil }
-            });
-            const jsonDeudas = await resDeudas.json();
-            let deudas = [];
-            if (jsonDeudas.success && Array.isArray(jsonDeudas.data)) deudas = jsonDeudas.data;
-            const saldo_actual_deuda = deudas.reduce((sum, d) => sum + Number(d.saldo_deuda), 0);
-
-            const datosPDF = {
-                id_viaje: modalLiquidacionActual.viaje_num,
-                ruta: modalLiquidacionActual.ruta,
-                chofer_nombre: modalLiquidacionActual.chofer_nombre,
-                chofer_dni: modalLiquidacionActual.chofer_dni,
-                camion: `${modalLiquidacionActual.camion_placa} - ${modalLiquidacionActual.camion_modelo}`,
-                peso_kg: modalLiquidacionActual.total_peso,
-                tarifa: modalLiquidacionActual.tarifa_transportista,
-                monto_bruto: bruto,
-                adelanto: adelanto,
-                total_penalidades: total_penalidades,
-                neto_pagado: neto_pagado,
-                penalidades_aplicadas: penalidadesData,
-                observaciones: observaciones,
-                saldo_actual_deuda: saldo_actual_deuda
-            };
-
-            await generarBoletaPDF(datosPDF);
             Swal.fire({ icon: 'success', title: 'Liquidación Registrada', text: 'El pago del viaje se ha registrado exitosamente.' });
             cerrarModalLiquidacion();
             await cargarLiquidacionesDesdeServidor();

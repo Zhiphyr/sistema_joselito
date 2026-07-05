@@ -1389,7 +1389,21 @@ const obtenerHistorialLiquidaciones = async (req, res) => {
                     FROM detalle_liquidacion_penalidad dlp
                     JOIN incidencia_viaje i ON dlp.id_incidencia = i.id_incidencia
                     WHERE dlp.id_liquidacion = l.id_liquidacion
-                ) AS detalle_penalidades
+                ) AS detalle_penalidades,
+                
+                -- Extraer los pagos mixtos como un JSON array
+                (
+                    SELECT JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            'metodo_pago', dlpago.metodo_pago,
+                            'monto_pagado', dlpago.monto_pagado,
+                            'numero_operacion', dlpago.numero_operacion,
+                            'evidencia_url', dlpago.evidencia_url
+                        )
+                    )
+                    FROM detalle_liquidacion_pago dlpago
+                    WHERE dlpago.id_liquidacion = l.id_liquidacion
+                ) AS pagos
                 
             FROM liquidacion_viaje l
             JOIN viaje v ON l.id_viaje = v.id_viaje
@@ -1412,9 +1426,19 @@ const obtenerHistorialLiquidaciones = async (req, res) => {
                 } catch(e) {}
             }
             
+            let pagosParsed = [];
+            if (row.pagos) {
+                try {
+                    pagosParsed = typeof row.pagos === 'string' 
+                        ? JSON.parse(row.pagos) 
+                        : row.pagos;
+                } catch(e) {}
+            }
+            
             return {
                 ...row,
-                detalle_penalidades: penalidadesParsed
+                detalle_penalidades: penalidadesParsed,
+                pagos: pagosParsed
             };
         });
 
