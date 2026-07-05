@@ -512,6 +512,8 @@ window.procesarBoletaPDF = async function(id_liquidacion) {
     } catch (e) {
         console.error('Error generando PDF:', e);
         Swal.fire('Error', 'Ocurrió un problema al intentar generar el PDF.', 'error');
+        document.body.style.overflow = '';
+        document.body.style.pointerEvents = '';
     }
 };
 
@@ -721,9 +723,17 @@ function generarBoletaPDF(liq, deudasActuales) {
         doc.text("Transporte Joselito", 155, cursorY + 5, { align: "center" });
         
         // --- SALIDA ---
+        Swal.close();
+        document.body.style.overflow = '';
+        document.body.style.pointerEvents = '';
+        // Remover overlays de SweetAlert que pudieron quedar
+        document.querySelectorAll('.swal2-container').forEach(el => el.remove());
+
         const pdfBlob = doc.output('blob');
         const blobUrl = URL.createObjectURL(pdfBlob);
         window.open(blobUrl, '_blank');
+        // Liberar el blob URL después de que el navegador lo haya procesado
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
 
     };
     imgLogo.onerror = () => {
@@ -1061,17 +1071,18 @@ function renderizarCarritoPagosLiq() {
 
     carritoPagosLiq.forEach((pago, index) => {
         // Filtrar cuentas del sistema (caja interna)
-        const cuentasFiltradas = cuentasLiq.filter(c => !c.es_sistema || c.es_sistema === 0);
+        const cuentasFiltradas = cuentasLiq.filter(c => (!c.es_sistema || c.es_sistema === 0) && c.estado === 1);
         const opcionesCuentas = cuentasFiltradas.map(c =>
             `<option value="${c.id_cuenta}" ${pago.id_cuenta == c.id_cuenta ? 'selected' : ''}>${c.entidad_financiera} - ${c.tipo_cuenta} (${c.nro_cuenta})</option>`
         ).join('');
 
-        const opcionesBilleteras = billeterasLiq.map(b =>
+        const billeterasFiltradas = billeterasLiq.filter(b => b.estado === 1);
+        const opcionesBilleteras = billeterasFiltradas.map(b =>
             `<option value="${b.id_billetera}" ${pago.id_billetera == b.id_billetera ? 'selected' : ''}>${b.tipo_billetera} - ${b.numero_celular} (${b.titular})</option>`
         ).join('');
 
         const metodo = pago.metodo_pago || 'Efectivo';
-        const mostrarCuenta = metodo === 'Transferencia' || metodo === 'Deposito' || metodo === 'Depósito';
+        const mostrarCuenta = metodo === 'Transferencia';
         const mostrarBilletera = metodo === 'Billetera Digital';
         const mostrarNumOp = metodo !== 'Efectivo';
         const mostrarEvidencia = metodo !== 'Efectivo';
