@@ -1,4 +1,4 @@
-﻿// frontend/js/vistas/liquidacion.js
+// frontend/js/vistas/liquidacion.js
 
 let liquidacionesPendientes = [];
 
@@ -167,9 +167,15 @@ function renderListaPendientes(query = '') {
 
                     <!-- Botones -->
                     <div style="display: flex; align-items: center; gap: 8px;">
+                        ${liq.bloquear_liquidacion ? `
+                        <button class="btn-liquidar" disabled title="Liquidación bloqueada: Existen cargas rechazadas pendientes de justificar." style="padding: 8px 16px; border-radius: 6px; border: none; background: #94a3b8; color: white; font-weight: 600; font-size: 13px; cursor: not-allowed; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-lock"></i> Bloqueado
+                        </button>
+                        ` : `
                         <button class="btn-liquidar" onclick="abrirModalLiquidar(${liq.id})" style="padding: 8px 16px; border-radius: 6px; border: none; background: #047857; color: white; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.2s ease;">
                             <i class="fas fa-wallet"></i> Liquidar
                         </button>
+                        `}
                     </div>
 
                 </div>

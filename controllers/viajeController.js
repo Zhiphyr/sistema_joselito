@@ -209,7 +209,8 @@ const obtenerHistorialViajes = async (req, res) => {
                 COUNT(DISTINCT cg.id_carga) as total_cargas,
                 COALESCE(SUM(dc.peso_total), 0) as peso_total_kg,
                 (SELECT COALESCE(SUM(flete_total), 0) FROM Carga WHERE id_viaje = v.id_viaje AND estado != 2) as flete_total,
-                (SELECT COUNT(*) FROM Detalle_Carga dc JOIN Carga c ON dc.id_carga = c.id_carga WHERE c.id_viaje = v.id_viaje AND dc.estado_operativo = 'Rechazado' AND dc.estado != 2) as productos_rechazados,
+                (SELECT COUNT(*) FROM Detalle_Carga dc JOIN Carga c ON dc.id_carga = c.id_carga WHERE c.id_viaje = v.id_viaje AND dc.estado_operativo = 'Rechazado' AND dc.estado != 2) as cargas_rechazadas,
+                (SELECT COUNT(*) FROM Detalle_Carga dc JOIN Carga c ON dc.id_carga = c.id_carga WHERE c.id_viaje = v.id_viaje AND dc.estado_operativo = 'Rechazado' AND dc.incidencia_justificada = 1 AND dc.estado != 2) as productos_rechazados_sin_justificar,
                 (SELECT COUNT(*) FROM Incidencia_Viaje iv WHERE iv.id_viaje = v.id_viaje AND iv.estado = 1) > 0 as tiene_incidencia_reportada
             FROM Viaje v
             JOIN Camiones c ON v.id_camion = c.id_camion
@@ -263,7 +264,7 @@ const obtenerCargasPorViaje = async (req, res) => {
             SELECT 
                 dc.id_detalle, dc.id_producto, dc.id_carga, p.nombre AS producto, dc.marca_visual, 
                 dc.cantidad_sacos, dc.peso_unitario, dc.peso_total, 
-                dc.precio_peso, dc.flete_subtotal, dc.estado_operativo
+                dc.precio_peso, dc.flete_subtotal, dc.estado_operativo, dc.incidencia_justificada
             FROM Detalle_Carga dc
             JOIN productos p ON dc.id_producto = p.id_producto
             WHERE dc.id_carga IN (?) AND dc.estado != 2
@@ -539,8 +540,8 @@ const entregaParcialCarga = async (req, res) => {
                 const fleteSubtotalRech = pesoTotalRech * Number(det.precio_peso);
 
                 await connection.query(`
-                    INSERT INTO Detalle_Carga (id_carga, id_producto, marca_visual, cantidad_sacos, peso_unitario, peso_total, precio_peso, flete_subtotal, estado_operativo)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Rechazado')
+                    INSERT INTO Detalle_Carga (id_carga, id_producto, marca_visual, cantidad_sacos, peso_unitario, peso_total, precio_peso, flete_subtotal, estado_operativo, incidencia_justificada)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Rechazado', 1)
                 `, [idCargaOriginal, det.id_producto, det.marca_visual, cantRechazada, det.peso_unitario, pesoTotalRech, det.precio_peso, fleteSubtotalRech]);
                 
             } else if (cantAceptada > 0 && cantRechazada === 0) {
@@ -562,7 +563,7 @@ const entregaParcialCarga = async (req, res) => {
 
                 await connection.query(`
                     UPDATE Detalle_Carga 
-                    SET cantidad_sacos = ?, peso_total = ?, flete_subtotal = ?, estado_operativo = 'Rechazado'
+                    SET cantidad_sacos = ?, peso_total = ?, flete_subtotal = ?, estado_operativo = 'Rechazado', incidencia_justificada = 1
                     WHERE id_detalle = ?
                 `, [cantRechazada, pesoTotalRech, fleteSubtotalRech, det.id_detalle]);
                 
@@ -649,7 +650,7 @@ const rechazarCarga = async (req, res) => {
         
         const sqlUpdateDetalles = `
             UPDATE Detalle_Carga
-            SET estado_operativo = 'Rechazado'
+            SET estado_operativo = 'Rechazado', incidencia_justificada = 1
             WHERE id_carga = ? AND estado_operativo = 'Normal' AND estado != 2
         `;
         await connection.query(sqlUpdateDetalles, [idCarga]);
@@ -1029,7 +1030,8 @@ const registrarIncidenciaViaje = async (req, res) => {
             gastos_adicionales,
             adelanto_recuperar,
             monto_descuento_chofer,
-            monto_asumido_empresa
+            monto_asumido_empresa,
+            detalles_rechazados
         } = req.body;
         
         const userId = req.headers['x-user-profile'] || 1; // Ajustar según tu autenticación
@@ -1048,7 +1050,7 @@ const registrarIncidenciaViaje = async (req, res) => {
         // Validar el Remanente
         const sqlRemanente = `
             SELECT 
-                (SELECT COALESCE(SUM(flete_total), 0) FROM Carga WHERE id_viaje = ? AND estado_entrega IN ('Rechazado', 'Siniestrado') AND estado = 1) AS perdida_total_cargas,
+                (SELECT COALESCE(SUM(dc.flete_subtotal), 0) FROM Detalle_Carga dc JOIN Carga c ON dc.id_carga = c.id_carga WHERE c.id_viaje = ? AND dc.estado_operativo IN ('Rechazado', 'Siniestrado') AND dc.estado != 2 AND c.estado = 1) AS perdida_total_cargas,
                 (SELECT COALESCE(SUM(valor_total_perdida), 0) FROM Incidencia_Viaje WHERE id_viaje = ? AND estado = 1) AS perdida_ya_registrada
         `;
         const [rows] = await db.query(sqlRemanente, [idViaje, idViaje]);
@@ -1072,17 +1074,34 @@ const registrarIncidenciaViaje = async (req, res) => {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', 0.00)
         `;
 
-        await db.query(sql, [
-            idViaje,
-            tipo_incidencia,
-            descripcion_detallada,
-            perdida,
-            gastos,
-            adelanto,
-            empresa, 
-            descuento, 
-            userId
-        ]);
+        const connection = await db.getConnection();
+        try {
+            await connection.beginTransaction();
+            
+            await connection.query(sql, [
+                idViaje,
+                tipo_incidencia,
+                descripcion_detallada,
+                perdida,
+                gastos,
+                adelanto,
+                empresa, 
+                descuento, 
+                userId
+            ]);
+
+            if (detalles_rechazados && Array.isArray(detalles_rechazados) && detalles_rechazados.length > 0) {
+                const sqlUpdateDetalles = `UPDATE Detalle_Carga SET incidencia_justificada = 0 WHERE id_detalle IN (?)`;
+                await connection.query(sqlUpdateDetalles, [detalles_rechazados]);
+            }
+
+            await connection.commit();
+        } catch (trxError) {
+            await connection.rollback();
+            throw trxError;
+        } finally {
+            connection.release();
+        }
 
         return res.status(201).json({ success: true, message: 'Incidencia registrada correctamente.' });
     } catch (error) {
@@ -1130,7 +1149,15 @@ const obtenerLiquidacionesPendientes = async (req, res) => {
                       AND iv.estado = 1 
                       AND iv.monto_descuento_chofer IS NOT NULL
                       AND iv.estado_cobro_penalidad IN ('Pendiente', 'Cobrado Parcial')
-                ) AS penalidades
+                ) AS penalidades,
+
+                -- Bandera para bloquear liquidación si existen detalles rechazados sin justificar
+                (
+                    SELECT COUNT(*) > 0 
+                    FROM detalle_carga dc 
+                    JOIN carga cg ON dc.id_carga = cg.id_carga 
+                    WHERE cg.id_viaje = v.id_viaje AND dc.estado_operativo = 'Rechazado' AND dc.incidencia_justificada = 1 AND dc.estado != 2
+                ) AS bloquear_liquidacion
                 
             FROM viaje v
             JOIN camiones c ON v.id_camion = c.id_camion
@@ -1149,7 +1176,7 @@ const obtenerLiquidacionesPendientes = async (req, res) => {
             const neto_pagar = monto_bruto - Number(row.adelanto);
 
             return {
-                id: row.id_viaje, // Usamos el id_viaje como id de liquidación
+                id: row.id_viaje,
                 id_camion: row.id_camion,
                 chofer_nombre: row.chofer_nombre,
                 chofer_dni: row.chofer_dni,
@@ -1159,12 +1186,13 @@ const obtenerLiquidacionesPendientes = async (req, res) => {
                 ruta: row.ruta,
                 salida: row.salida || 'Sin fecha',
                 llegada: row.llegada || 'Sin fecha',
+                peso_total: Number(row.total_peso),
+                tarifa: Number(row.tarifa_transportista),
                 monto_bruto: monto_bruto,
-                tarifa_transportista: Number(row.tarifa_transportista),
-                total_peso: Number(row.total_peso),
                 adelanto: Number(row.adelanto),
-                penalidades: Number(row.penalidades),
-                neto_pagar: neto_pagar
+                penalidades_pendientes: Number(row.penalidades),
+                neto_pagar: neto_pagar,
+                bloquear_liquidacion: !!row.bloquear_liquidacion
             };
         });
 
