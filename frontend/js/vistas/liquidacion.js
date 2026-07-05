@@ -100,11 +100,11 @@ function renderListaPendientes(query = '') {
     filtrados.forEach(liq => {
         
         let penalidadesHtml = '';
-        if (liq.penalidades > 0) {
+        if (liq.penalidades_pendientes > 0) {
             penalidadesHtml = `
                 <div style="display: flex; flex-direction: column; align-items: flex-end; min-width: 80px;">
                     <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Penalidades</span>
-                    <span style="font-size: 14px; font-weight: 600; color: #ef4444;">-S/ ${formatearNumero(liq.penalidades)}</span>
+                    <span style="font-size: 14px; font-weight: 600; color: #ef4444;">-S/ ${formatearNumero(liq.penalidades_pendientes)}</span>
                 </div>
             `;
         } else {
@@ -168,9 +168,12 @@ function renderListaPendientes(query = '') {
                     <!-- Botones -->
                     <div style="display: flex; align-items: center; gap: 8px;">
                         ${liq.bloquear_liquidacion ? `
-                        <button class="btn-liquidar" disabled title="Liquidación bloqueada: Existen cargas rechazadas pendientes de justificar." style="padding: 8px 16px; border-radius: 6px; border: none; background: #94a3b8; color: white; font-weight: 600; font-size: 13px; cursor: not-allowed; display: flex; align-items: center; gap: 8px;">
-                            <i class="fas fa-lock"></i> Bloqueado
-                        </button>
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                            <button class="btn-liquidar" disabled title="Liquidación bloqueada: Existen cargas rechazadas pendientes de justificar." style="padding: 8px 16px; border-radius: 6px; border: none; background: #94a3b8; color: white; font-weight: 600; font-size: 13px; cursor: not-allowed; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-lock"></i> Liquidar
+                            </button>
+                            <span style="font-size: 10px; color: #ef4444; font-weight: 600;">Reportar incidencias</span>
+                        </div>
                         ` : `
                         <button class="btn-liquidar" onclick="abrirModalLiquidar(${liq.id})" style="padding: 8px 16px; border-radius: 6px; border: none; background: #047857; color: white; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.2s ease;">
                             <i class="fas fa-wallet"></i> Liquidar
@@ -756,11 +759,11 @@ async function abrirModalLiquidar(id) {
     document.getElementById('modalLiqRuta').textContent = liq.ruta;
 
     // Resumen de cálculo
-    const pesoKg = liq.total_peso;
+    const pesoKg = liq.peso_total;
     const pesoTon = pesoKg / 1000;
     
     document.getElementById('modalLiqPeso').textContent = `${formatearNumero(pesoTon)} Ton (${formatearNumero(pesoKg)} kg)`;
-    document.getElementById('modalLiqTarifa').textContent = `S/ ${formatearNumero(liq.tarifa_transportista)} / kg`;
+    document.getElementById('modalLiqTarifa').textContent = `S/ ${formatearNumero(liq.tarifa)} / kg`;
     document.getElementById('modalLiqBruto').textContent = `S/ ${formatearNumero(liq.monto_bruto)}`;
     document.getElementById('modalLiqAdelanto').textContent = `-S/ ${formatearNumero(liq.adelanto)}`;
 
@@ -774,7 +777,7 @@ async function abrirModalLiquidar(id) {
     tablaContainer.style.display = 'none';
     tbody.innerHTML = '';
 
-    if (liq.penalidades > 0) {
+    if (liq.penalidades_pendientes > 0) {
         contenedorPenalidades.style.display = 'block';
         
         // Fetch incidencias

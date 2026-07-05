@@ -474,6 +474,7 @@ async function abrirModalIncidencias(idStr, isReportar = false) {
 
     if (isReportar && viajeInfo && viajeInfo.productos_rechazados_sin_justificar > 0) {
         // Bypass the list and go directly to the form
+        document.getElementById('modal-incidencias-subtitulo').textContent = `Registrar incidencia por cargas rechazadas`;
         return mostrarFormularioNuevaIncidencia(true);
     }
 
