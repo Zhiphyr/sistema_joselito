@@ -1,16 +1,193 @@
-<div class="module-header"
-    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+<div class="module-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
     <div>
-        <h2 style="margin: 0;">Dashboard</h2>
+        <h2 style="margin: 0; font-size: 22px; font-weight: 700; color: var(--text-primary);">Resumen de Operaciones</h2>
+        <p style="color: var(--text-secondary); font-size: 13px; margin-top: 4px;">Control y monitoreo de la flota y finanzas en tiempo real</p>
+    </div>
+    <div style="display: flex; gap: 8px;">
+        <select class="form-control" style="width: auto; padding: 8px 12px; font-size: 13px; font-weight: 500; cursor: pointer; border-radius: var(--radius-md);">
+            <option value="este-mes">Este Mes</option>
+            <option value="hoy">Hoy</option>
+            <option value="esta-semana">Esta Semana</option>
+            <option value="este-ano">Este Año</option>
+        </select>
     </div>
 </div>
 
-<div class="welcome-card">
-    <div style="text-align: center; padding: 50px 20px;">
-        <i class="fas fa-chart-line fa-4x" style="color: var(--brand-blue); margin-bottom: 20px;"></i>
-        <h3 style="color: var(--text-primary); font-size: 24px; margin-bottom: 10px;">¡Bienvenido al Sistema de
-            Transporte Joselito!</h3>
-        <p style="color: var(--text-secondary); font-size: 16px;">Selecciona una opción del menú lateral para comenzar a
-            operar.</p>
+<!-- Grid de Métricas Principales -->
+<div class="dashboard-stats-grid">
+    <!-- Card 1: Ingresos Totales -->
+    <div class="stat-card coral">
+        <div class="stat-card-content">
+            <div class="stat-card-header">
+                <span class="stat-card-title">Fletes e Ingresos</span>
+                <i class="fas fa-money-bill-trend-up stat-card-icon"></i>
+            </div>
+            <div>
+                <div class="stat-card-value">S/ 32,400</div>
+                <div class="stat-card-title" style="font-size: 11px; margin-bottom: 0; text-transform: none; opacity: 0.95;">+12.5% vs mes anterior</div>
+            </div>
+            <div class="stat-card-footer">
+                <i class="far fa-clock"></i>
+                <span>actualizado hace 5 min</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 2: Viajes Completados -->
+    <div class="stat-card green">
+        <div class="stat-card-content">
+            <div class="stat-card-header">
+                <span class="stat-card-title">Viajes Completados</span>
+                <i class="fas fa-truck-fast stat-card-icon"></i>
+            </div>
+            <div>
+                <div class="stat-card-value">145</div>
+                <div class="stat-card-title" style="font-size: 11px; margin-bottom: 0; text-transform: none; opacity: 0.95;">+8 viajes esta semana</div>
+            </div>
+            <div class="stat-card-footer">
+                <i class="far fa-clock"></i>
+                <span>actualizado hace 5 min</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 3: Recepciones Pendientes -->
+    <div class="stat-card pink">
+        <div class="stat-card-content">
+            <div class="stat-card-header">
+                <span class="stat-card-title">Cargas Pendientes</span>
+                <i class="fas fa-boxes-packing stat-card-icon"></i>
+            </div>
+            <div>
+                <div class="stat-card-value">12</div>
+                <div class="stat-card-title" style="font-size: 11px; margin-bottom: 0; text-transform: none; opacity: 0.95;">3 entregas prioritarias</div>
+            </div>
+            <div class="stat-card-footer">
+                <i class="far fa-clock"></i>
+                <span>actualizado hace 5 min</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 4: Clientes Activos -->
+    <div class="stat-card teal">
+        <div class="stat-card-content">
+            <div class="stat-card-header">
+                <span class="stat-card-title">Clientes Activos</span>
+                <i class="fas fa-users stat-card-icon"></i>
+            </div>
+            <div>
+                <div class="stat-card-value">500</div>
+                <div class="stat-card-title" style="font-size: 11px; margin-bottom: 0; text-transform: none; opacity: 0.95;">+5 nuevos registrados</div>
+            </div>
+            <div class="stat-card-footer">
+                <i class="far fa-clock"></i>
+                <span>actualizado hace 5 min</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Fila Central: Gráfico y Widget Radial -->
+<div class="dashboard-main-row">
+    <!-- Tarjeta del Gráfico (70%) -->
+    <div class="dashboard-card" style="min-height: 380px;">
+        <div class="dashboard-card-header">
+            <span class="dashboard-card-title">Rendimiento Mensual de Fletes</span>
+            <div style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+                <span style="display: inline-block; width: 8px; height: 8px; background-color: var(--brand-blue); border-radius: 50%;"></span>
+                <span>Ingresos S/.</span>
+            </div>
+        </div>
+        <div style="flex: 1; position: relative;">
+            <canvas id="revChart" style="width: 100%; height: 100%; max-height: 280px;"></canvas>
+        </div>
+    </div>
+
+    <!-- Tarjeta del Medidor Radial (30%) -->
+    <div class="dashboard-card" style="min-height: 380px; align-items: stretch; justify-content: space-between;">
+        <div>
+            <div class="dashboard-card-header" style="margin-bottom: 10px;">
+                <span class="dashboard-card-title">Estado de la Flota</span>
+            </div>
+            
+            <div class="radial-gauge-wrapper">
+                <svg class="radial-gauge-svg" width="160" height="160" viewBox="0 0 100 100">
+                    <circle class="radial-gauge-bg" cx="50" cy="50" r="40" />
+                    <circle id="fleetGaugeCircle" class="radial-gauge-progress" cx="50" cy="50" r="40" stroke-dashoffset="251.2" />
+                </svg>
+                <div class="radial-gauge-value">
+                    <span class="radial-gauge-number" id="fleetActivePercentage">0%</span>
+                    <span class="radial-gauge-label">En Ruta</span>
+                </div>
+            </div>
+
+            <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-light); padding-bottom: 6px;">
+                    <span style="color: var(--text-secondary);"><i class="fas fa-truck" style="margin-right: 8px; color: var(--brand-blue);"></i>Total Flota:</span>
+                    <strong style="color: var(--text-primary);" id="totalTrucksText">20</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-light); padding-bottom: 6px;">
+                    <span style="color: var(--text-secondary);"><i class="fas fa-road" style="margin-right: 8px; color: #2ecc71;"></i>Camiones Activos:</span>
+                    <strong style="color: var(--text-primary);" id="activeTrucksText">17</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding-bottom: 4px;">
+                    <span style="color: var(--text-secondary);"><i class="fas fa-wrench" style="margin-right: 8px; color: #ff8e6b;"></i>Taller / Inactivos:</span>
+                    <strong style="color: var(--text-primary);" id="inactiveTrucksText">3</strong>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn-primary" id="btnGoToFleet" style="width: 100%; margin-top: 16px; font-size: 13px;">
+            <i class="fas fa-truck"></i> Ver Flota Completa
+        </button>
+    </div>
+</div>
+
+<!-- Sección de Accesos Rápidos (Shortcuts) -->
+<h3 class="shortcuts-section-title">Accesos Rápidos a Módulos</h3>
+<div class="shortcuts-grid">
+    <!-- Registro de Viajes -->
+    <div class="shortcut-card" data-shortcut="registro_viajes">
+        <div class="shortcut-icon-wrapper">
+            <i class="fas fa-road"></i>
+        </div>
+        <div class="shortcut-info">
+            <span class="shortcut-name">Registrar Viaje</span>
+            <span class="shortcut-desc">Programar nuevos fletes y asignar rutas</span>
+        </div>
+    </div>
+
+    <!-- Liquidación -->
+    <div class="shortcut-card" data-shortcut="liquidacion">
+        <div class="shortcut-icon-wrapper">
+            <i class="fas fa-file-invoice-dollar"></i>
+        </div>
+        <div class="shortcut-info">
+            <span class="shortcut-name">Liquidaciones</span>
+            <span class="shortcut-desc">Controlar gastos de ruta y pagos</span>
+        </div>
+    </div>
+
+    <!-- Recepción y Entregas -->
+    <div class="shortcut-card" data-shortcut="recepcion_entregas">
+        <div class="shortcut-icon-wrapper">
+            <i class="fas fa-boxes-packing"></i>
+        </div>
+        <div class="shortcut-info">
+            <span class="shortcut-name">Recepciones</span>
+            <span class="shortcut-desc">Monitorear estados de entrega</span>
+        </div>
+    </div>
+
+    <!-- Deudas por Cobrar -->
+    <div class="shortcut-card" data-shortcut="deudas_cobrar">
+        <div class="shortcut-icon-wrapper">
+            <i class="fas fa-hand-holding-dollar"></i>
+        </div>
+        <div class="shortcut-info">
+            <span class="shortcut-name">Deudas por Cobrar</span>
+            <span class="shortcut-desc">Controlar facturas y cobranzas</span>
+        </div>
     </div>
 </div>
