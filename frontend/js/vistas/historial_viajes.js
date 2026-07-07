@@ -57,8 +57,13 @@ async function init_historial_viajes() {
             if (e.target.classList.contains('btn-incidencia') || e.target.closest('.btn-incidencia')) {
                 const btn = e.target.classList.contains('btn-incidencia') ? e.target : e.target.closest('.btn-incidencia');
                 const idViaje = btn.getAttribute('data-id');
-                const isReportar = btn.classList.contains('btn-pulsing-red') || btn.classList.contains('btn-pulsing-orange');
-                abrirModalIncidencias(idViaje, isReportar);
+                const tipoAlerta = btn.getAttribute('data-tipo-alerta');
+                abrirModalIncidencias(idViaje, tipoAlerta);
+            }
+            if (e.target.classList.contains('btn-menu-incidencia') || e.target.closest('.btn-menu-incidencia')) {
+                const btn = e.target.classList.contains('btn-menu-incidencia') ? e.target : e.target.closest('.btn-menu-incidencia');
+                const idViaje = btn.getAttribute('data-id');
+                abrirMenuIncidencias(idViaje);
             }
             if (e.target.classList.contains('btn-ver-adelantos') || e.target.closest('.btn-ver-adelantos')) {
                 const btn = e.target.classList.contains('btn-ver-adelantos') ? e.target : e.target.closest('.btn-ver-adelantos');
@@ -469,7 +474,38 @@ function cerrarModalCargasViaje() {
     document.getElementById('modal-cargas-viaje').style.display = 'none';
 }
 
-async function abrirModalIncidencias(idStr, isReportar = false) {
+function abrirMenuIncidencias(idStr) {
+    const idViaje = Number(idStr);
+    const viaje = historialViajesTodos.find(v => v.id_viaje === idViaje);
+    if (!viaje) return;
+
+    let htmlBotones = '';
+
+    if (viaje.productos_siniestrados_sin_justificar > 0) {
+        htmlBotones += `<button class="swal2-confirm swal2-styled" style="width: 100%; margin: 5px 0; background-color: #dc2626; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="Swal.close(); abrirModalIncidencias(${idViaje}, 'siniestrados');"><i class="fas fa-box-open"></i> Reportar Productos Siniestrados</button>`;
+    }
+    if ((viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.productos_rechazados_sin_justificar > 0) {
+        htmlBotones += `<button class="swal2-confirm swal2-styled" style="width: 100%; margin: 5px 0; background-color: #f97316; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="Swal.close(); abrirModalIncidencias(${idViaje}, 'rechazados');"><i class="fas fa-box"></i> Reportar Productos Rechazados</button>`;
+    }
+    if (viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_general) {
+        htmlBotones += `<button class="swal2-confirm swal2-styled" style="width: 100%; margin: 5px 0; background-color: #b91c1c; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="Swal.close(); abrirModalIncidencias(${idViaje}, 'reporte_general');"><i class="fas fa-truck-moving"></i> Reportar Gastos del Viaje</button>`;
+    }
+    if (viaje.tiene_incidencia_reportada) {
+        htmlBotones += `<button class="swal2-confirm swal2-styled" style="width: 100%; margin: 5px 0; background-color: #475569; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="Swal.close(); abrirModalIncidencias(${idViaje}, 'ver');"><i class="fas fa-eye"></i> Ver Incidencias Registradas</button>`;
+    }
+
+    Swal.fire({
+        title: 'Acciones de Incidencia',
+        html: `<div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">${htmlBotones}</div>`,
+        showConfirmButton: false,
+        showCancelButton: true,
+        cancelButtonText: 'Cerrar',
+        cancelButtonColor: '#94a3b8',
+        width: '400px'
+    });
+}
+
+async function abrirModalIncidencias(idStr, tipoAlerta = null) {
     const idViaje = Number(idStr);
     const modalIncidencias = document.getElementById('modal-incidencias-viaje');
     const modalBody = document.getElementById('modal-incidencias-body');
@@ -486,10 +522,15 @@ async function abrirModalIncidencias(idStr, isReportar = false) {
     modalIncidencias.style.display = 'flex';
     modalIncidencias.setAttribute('data-id-viaje', idViaje);
 
-    if (isReportar && viajeInfo && viajeInfo.productos_rechazados_sin_justificar > 0) {
-        // Bypass the list and go directly to the form
+    if (tipoAlerta === 'rechazados') {
         document.getElementById('modal-incidencias-subtitulo').textContent = `Registrar incidencia por cargas rechazadas`;
-        return mostrarFormularioNuevaIncidencia(true);
+        return mostrarFormularioNuevaIncidencia(tipoAlerta);
+    } else if (tipoAlerta === 'siniestrados') {
+        document.getElementById('modal-incidencias-subtitulo').textContent = `Registrar incidencia por productos siniestrados`;
+        return mostrarFormularioNuevaIncidencia(tipoAlerta);
+    } else if (tipoAlerta === 'reporte_general') {
+        document.getElementById('modal-incidencias-subtitulo').textContent = `Registrar reporte general del viaje`;
+        return mostrarFormularioNuevaIncidencia(tipoAlerta);
     }
 
     try {
@@ -621,7 +662,7 @@ function cerrarModalIncidencias() {
     document.getElementById('modal-incidencias-viaje').style.display = 'none';
 }
 
-async function mostrarFormularioNuevaIncidencia(isReportar = false) {
+async function mostrarFormularioNuevaIncidencia(tipoAlerta = null) {
     const modalBody = document.getElementById('modal-incidencias-body');
     const idViajeStr = document.getElementById('modal-incidencias-viaje').getAttribute('data-id-viaje');
     const idViaje = Number(idViajeStr);
@@ -719,7 +760,11 @@ async function mostrarFormularioNuevaIncidencia(isReportar = false) {
 
                             let inputCheckbox = '';
                             let dynamicInput = '';
-                            if (isReportar && d.estado_operativo === 'Rechazado' && d.incidencia_justificada === 1) {
+                            let isRechazados = tipoAlerta === 'rechazados';
+                            let isSiniestrados = tipoAlerta === 'siniestrados';
+                            
+                            if ((isRechazados && d.estado_operativo === 'Rechazado' && d.incidencia_justificada === 1) || 
+                                (isSiniestrados && d.estado_operativo === 'Siniestrado' && d.incidencia_justificada === 1)) {
                                 inputCheckbox = `<input type="checkbox" class="chk-detalle-rechazado" data-id="${d.id_detalle}" data-carga="${carga.id_carga}" data-flete="${subtotal.toFixed(2)}" data-cantidad="${d.cantidad_sacos}" style="accent-color: #ea580c; width: 16px; height: 16px; cursor: pointer; margin-top: 2px;">`;
                                 dynamicInput = `
                                     <div class="container-precio-unitario" id="container-precio-${d.id_detalle}" style="display: none; padding-left: 24px; margin-top: 6px; padding-bottom: 6px; border-bottom: 1px dashed #e2e8f0;">
@@ -807,7 +852,11 @@ async function mostrarFormularioNuevaIncidencia(isReportar = false) {
     let totalRepartirInicialNum = remanente + (esAnulado ? totalAdelantos : 0);
     let totalRepartirInicial = totalRepartirInicialNum.toFixed(2);
     
-    if (isReportar) {
+    let isRechazados = tipoAlerta === 'rechazados';
+    let isSiniestrados = tipoAlerta === 'siniestrados';
+    let isReporteGeneral = tipoAlerta === 'reporte_general';
+
+    if (isRechazados || isSiniestrados) {
         inputPerdidaHTML = `
             <input type="number" id="nueva-incidencia-perdida" value="0.00" readonly style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; background-color: #f1f5f9; cursor: not-allowed; color: #dc2626; font-weight: 700;">
             <label style="display: block; font-size: 10px; font-weight: 600; color: var(--text-secondary); margin-bottom: 0px;">(Calculado automáticamente)</label>
@@ -815,7 +864,7 @@ async function mostrarFormularioNuevaIncidencia(isReportar = false) {
         totalRepartirInicialNum = (esAnulado ? totalAdelantos : 0);
         totalRepartirInicial = totalRepartirInicialNum.toFixed(2);
     } else {
-        // Formulario Neutral
+        // Formulario Neutral o Reporte General
         inputPerdidaHTML = `
             <input type="number" id="nueva-incidencia-perdida" value="0.00" readonly style="display:none;">
         `;
@@ -866,20 +915,20 @@ async function mostrarFormularioNuevaIncidencia(isReportar = false) {
                     <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Tipo de Incidencia *</label>
                     <select id="nueva-incidencia-tipo" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; color: var(--text-primary); outline: none;">
                         <option value="Retraso en Ruta">Retraso en Ruta</option>
-                        <option value="Daño / Mala Estiba"${isReportar ? ' selected' : ''}>Daño / Mala Estiba</option>
+                        <option value="Daño / Mala Estiba"${isRechazados ? ' selected' : ''}>Daño / Mala Estiba</option>
                         <option value="Faltante / Pérdida / Robo">Faltante / Pérdida / Robo</option>
-                        <option value="Accidente">Accidente</option>
+                        <option value="Accidente"${isSiniestrados || isReporteGeneral ? ' selected' : ''}>Accidente</option>
                         <option value="Falla Mecánica">Falla Mecánica</option>
                         <option value="Queja de Cliente / Administrativo">Queja de Cliente / Administrativo</option>
                         <option value="Otro">Otro</option>
                     </select>
                 </div>
                 
-                ${isReportar ? `
+                ${(isRechazados || isSiniestrados) ? `
                 <div style="margin-bottom: 16px; padding: 12px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px;">
                     <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #c2410c; cursor: not-allowed;">
                         <input type="checkbox" id="chk-vincular-rechazados" checked onclick="return false;" style="accent-color: #ea580c; width: 16px; height: 16px; cursor: not-allowed;">
-                        Vincular Productos Rechazados
+                        Vincular Productos ${isRechazados ? 'Rechazados' : 'Siniestrados'}
                     </label>
                     <p style="margin: 4px 0 0 24px; font-size: 11px; color: #ea580c;">Seleccione las cargas en el panel lateral. La pérdida se calculará automáticamente.</p>
                 </div>
@@ -1411,7 +1460,10 @@ function renderizarTarjetasViaje(viajes, isLoadMore = false) {
                             <span style="background: ${bgEstado}; color: ${colorEstado}; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-truck-moving"></i> ${viaje.estado_operativo}</span>
                             <span style="background: ${bgPago}; color: ${colorPago}; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-money-bill-wave"></i> ${viaje.estado_pagos || 'Pendiente'}</span>
                         </div>
-                        ${viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_reportada 
+                        ${viaje.productos_siniestrados_sin_justificar > 0
+                            ? `<span class="badge-pulsing-red" style="background: #dc2626; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-exclamation-triangle"></i> Reporte: (${viaje.productos_siniestrados_sin_justificar} Producto${viaje.productos_siniestrados_sin_justificar > 1 ? 's' : ''} Siniestrado${viaje.productos_siniestrados_sin_justificar > 1 ? 's' : ''})</span>`
+                            : ''}
+                        ${viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_general 
                             ? `<span class="badge-pulsing-red" style="background: #dc2626; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-exclamation-circle"></i> Siniestro: Requiere Reporte</span>` 
                             : ''}
                         ${(viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.productos_rechazados_sin_justificar > 0
@@ -1469,11 +1521,17 @@ function renderizarTarjetasViaje(viajes, isLoadMore = false) {
                         <button class="btn-viaje btn-ver-detalles" data-id="${viaje.id_viaje}">Ver detalles</button>
                         <button class="btn-viaje btn-ver-cargas" data-id="${viaje.id_viaje}">Ver cargas</button>
                         <button class="btn-viaje btn-ver-adelantos" data-id="${viaje.id_viaje}">Ver adelantos</button>
-                        ${viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_reportada 
-                            ? `<button class="btn-viaje btn-incidencia btn-pulsing-red" data-id="${viaje.id_viaje}"><i class="fas fa-exclamation-circle"></i> Reportar</button>`
-                            : (viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.productos_rechazados_sin_justificar > 0
-                                ? `<button class="btn-viaje btn-incidencia btn-pulsing-orange" data-id="${viaje.id_viaje}"><i class="fas fa-exclamation-triangle"></i> Reportar</button>`
-                                : `<button class="btn-viaje btn-incidencia" data-id="${viaje.id_viaje}" ${viaje.estado_operativo === 'Incidencia' ? 'style="color: #dc2626; background: #fee2e2;"' : ''}>Ver incidencias</button>`}
+                        ${(() => {
+                            const hasSiniestro = viaje.productos_siniestrados_sin_justificar > 0 || (viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_general);
+                            const hasRechazo = (viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.productos_rechazados_sin_justificar > 0;
+                            
+                            if (hasSiniestro || hasRechazo) {
+                                const btnClass = hasSiniestro ? 'btn-pulsing-red' : 'btn-pulsing-orange';
+                                return `<button class="btn-viaje btn-menu-incidencia ${btnClass}" data-id="${viaje.id_viaje}"><i class="fas fa-exclamation-triangle"></i> Acciones de Incidencia</button>`;
+                            } else {
+                                return `<button class="btn-viaje btn-incidencia" data-id="${viaje.id_viaje}" data-tipo-alerta="ver" ${viaje.estado_operativo === 'Incidencia' ? 'style="color: #dc2626; background: #fee2e2;"' : ''}>Ver incidencias</button>`;
+                            }
+                        })()}
                     </div>
                 </div>
             </div>

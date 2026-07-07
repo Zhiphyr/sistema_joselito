@@ -211,7 +211,9 @@ const obtenerHistorialViajes = async (req, res) => {
                 (SELECT COALESCE(SUM(flete_total), 0) FROM Carga WHERE id_viaje = v.id_viaje AND estado != 2) as flete_total,
                 (SELECT COUNT(*) FROM Detalle_Carga dc JOIN Carga c ON dc.id_carga = c.id_carga WHERE c.id_viaje = v.id_viaje AND dc.estado_operativo = 'Rechazado' AND dc.estado != 2) as cargas_rechazadas,
                 (SELECT COUNT(*) FROM Detalle_Carga dc JOIN Carga c ON dc.id_carga = c.id_carga WHERE c.id_viaje = v.id_viaje AND dc.estado_operativo = 'Rechazado' AND dc.incidencia_justificada = 1 AND dc.estado != 2) as productos_rechazados_sin_justificar,
-                (SELECT COUNT(*) FROM Incidencia_Viaje iv WHERE iv.id_viaje = v.id_viaje AND iv.estado = 1) > 0 as tiene_incidencia_reportada
+                (SELECT COUNT(*) FROM Detalle_Carga dc JOIN Carga c ON dc.id_carga = c.id_carga WHERE c.id_viaje = v.id_viaje AND dc.estado_operativo = 'Siniestrado' AND dc.incidencia_justificada = 1 AND dc.estado != 2) as productos_siniestrados_sin_justificar,
+                (SELECT COUNT(*) FROM Incidencia_Viaje iv WHERE iv.id_viaje = v.id_viaje AND iv.estado = 1) > 0 as tiene_incidencia_reportada,
+                (SELECT COUNT(*) FROM Incidencia_Viaje iv LEFT JOIN Incidencia_Detalle_Carga idc ON iv.id_incidencia = idc.id_incidencia WHERE iv.id_viaje = v.id_viaje AND iv.estado = 1 AND idc.id_incidencia IS NULL) > 0 as tiene_incidencia_general
             FROM Viaje v
             JOIN Camiones c ON v.id_camion = c.id_camion
             JOIN rutas r ON v.id_ruta = r.id_ruta
@@ -814,7 +816,7 @@ const confirmarTransbordo = async (req, res) => {
                     // Todo se perdió
                     await connection.query(`
                         UPDATE Detalle_Carga 
-                        SET estado_operativo = 'Siniestrado' 
+                        SET estado_operativo = 'Siniestrado', incidencia_justificada = 1
                         WHERE id_detalle = ?
                     `, [det.id_detalle_original]);
                 } else if (cantPerdida === 0 && cantPasar > 0) {
@@ -829,7 +831,7 @@ const confirmarTransbordo = async (req, res) => {
                     // 1. Actualizamos el detalle original para reflejar la pérdida
                     await connection.query(`
                         UPDATE Detalle_Carga 
-                        SET cantidad_sacos = ?, peso_total = ?, flete_subtotal = ?, estado_operativo = 'Siniestrado' 
+                        SET cantidad_sacos = ?, peso_total = ?, flete_subtotal = ?, estado_operativo = 'Siniestrado', incidencia_justificada = 1
                         WHERE id_detalle = ?
                     `, [cantPerdida, pesoTotalPerdido, fleteSubtotalPerdido, det.id_detalle_original]);
 
