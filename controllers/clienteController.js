@@ -12,9 +12,9 @@ const listarClientes = async (req, res) => {
 
 const registrar = async (req, res) => {
     try {
-        const { tipo_documento, numero_documento, nombre_razon_social, direccion, telefono, correo } = req.body;
+        const { tipo_documento, numero_documento, nombre_razon_social, telefono, correo } = req.body;
 
-        if (!tipo_documento || !numero_documento || !nombre_razon_social || !direccion || !telefono) {
+        if (!tipo_documento || !numero_documento || !nombre_razon_social || !telefono) {
             return res.status(400).json({ success: false, message: 'Los campos marcados con * son obligatorios' });
         }
 
@@ -41,7 +41,7 @@ const registrar = async (req, res) => {
         }
 
         const id = await ClienteModel.registrarCliente({
-            tipo_documento, numero_documento, nombre_razon_social, direccion, telefono, correo
+            tipo_documento, numero_documento, nombre_razon_social, telefono, correo
         });
 
         return res.status(201).json({ success: true, message: 'Cliente registrado exitosamente', id });
@@ -54,9 +54,9 @@ const registrar = async (req, res) => {
 const actualizar = async (req, res) => {
     try {
         const { id } = req.params;
-        const { nombre_razon_social, direccion, telefono, correo } = req.body;
+        const { nombre_razon_social, telefono, correo } = req.body;
 
-        if (!nombre_razon_social || !direccion || !telefono) {
+        if (!nombre_razon_social || !telefono) {
             return res.status(400).json({ success: false, message: 'Faltan campos obligatorios' });
         }
 
@@ -65,7 +65,7 @@ const actualizar = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Cliente no encontrado' });
         }
 
-        await ClienteModel.actualizarCliente(id, { nombre_razon_social, direccion, telefono, correo });
+        await ClienteModel.actualizarCliente(id, { nombre_razon_social, telefono, correo });
         return res.status(200).json({ success: true, message: 'Cliente actualizado exitosamente' });
     } catch (error) {
         console.error('Error en actualizar cliente:', error);

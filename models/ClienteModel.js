@@ -3,7 +3,7 @@ const db = require('../config/db');
 class ClienteModel {
     static async obtenerClientes() {
         const query = `
-            SELECT id_cliente, tipo_documento, numero_documento, nombre_razon_social, direccion, telefono, correo, estado
+            SELECT id_cliente, tipo_documento, numero_documento, nombre_razon_social, telefono, correo, estado
             FROM clientes
             WHERE estado IN (0, 1)
             ORDER BY id_cliente ASC
@@ -25,23 +25,23 @@ class ClienteModel {
     }
 
     static async registrarCliente(datos) {
-        const { tipo_documento, numero_documento, nombre_razon_social, direccion, telefono, correo } = datos;
+        const { tipo_documento, numero_documento, nombre_razon_social, telefono, correo } = datos;
         const query = `
-            INSERT INTO clientes (tipo_documento, numero_documento, nombre_razon_social, direccion, telefono, correo) 
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO clientes (tipo_documento, numero_documento, nombre_razon_social, telefono, correo) 
+            VALUES (?, ?, ?, ?, ?)
         `;
-        const [result] = await db.query(query, [tipo_documento, numero_documento, nombre_razon_social, direccion, telefono, correo]);
+        const [result] = await db.query(query, [tipo_documento, numero_documento, nombre_razon_social, telefono, correo]);
         return result.insertId;
     }
 
     static async actualizarCliente(id_cliente, datos) {
-        const { nombre_razon_social, direccion, telefono, correo } = datos;
+        const { nombre_razon_social, telefono, correo } = datos;
         const query = `
             UPDATE clientes 
-            SET nombre_razon_social = ?, direccion = ?, telefono = ?, correo = ? 
+            SET nombre_razon_social = ?, telefono = ?, correo = ? 
             WHERE id_cliente = ?
         `;
-        const [result] = await db.query(query, [nombre_razon_social, direccion, telefono, correo, id_cliente]);
+        const [result] = await db.query(query, [nombre_razon_social, telefono, correo, id_cliente]);
         return result.affectedRows;
     }
 

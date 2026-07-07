@@ -129,7 +129,6 @@ window.abrirModalEditarCliente = function (id) {
     document.getElementById('tipo_documento').value = data.tipo_documento;
     document.getElementById('numero_documento').value = data.numero_documento;
     document.getElementById('nombre_razon_social').value = data.nombre_razon_social;
-    document.getElementById('direccion').value = data.direccion;
     document.getElementById('telefono').value = data.telefono;
     document.getElementById('correo').value = data.correo || '';
 
@@ -154,7 +153,6 @@ async function guardarCliente(e) {
         tipo_documento: tipoDocEl.options[tipoDocEl.selectedIndex].value,
         numero_documento: numDocEl.value,
         nombre_razon_social: document.getElementById('nombre_razon_social').value,
-        direccion: document.getElementById('direccion').value,
         telefono: document.getElementById('telefono').value,
         correo: document.getElementById('correo').value
     };
@@ -224,7 +222,6 @@ function abrirModalEdicionEspecial(data) {
     document.getElementById('tipo_documento').value = data.tipo_documento;
     document.getElementById('numero_documento').value = data.numero_documento;
     document.getElementById('nombre_razon_social').value = data.nombre_razon_social;
-    document.getElementById('direccion').value = data.direccion;
     document.getElementById('telefono').value = data.telefono;
     document.getElementById('correo').value = data.correo || '';
 
@@ -326,10 +323,6 @@ async function buscarDocumentoEnApiExterna() {
 
         if (response.ok && result.success) {
             inputNombre.value = result.nombre;
-            const inputDireccion = document.getElementById('direccion');
-            if (result.direccion && !inputDireccion.value.trim()) {
-                inputDireccion.value = result.direccion;
-            }
         } else {
             inputNombre.value = '';
             Swal.fire({ icon: 'error', title: 'Consulta fallida', text: result.message || 'No se encontró el documento' });
