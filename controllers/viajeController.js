@@ -1027,6 +1027,8 @@ const registrarIncidenciaViaje = async (req, res) => {
             tipo_incidencia,
             descripcion_detallada,
             valor_total_perdida,
+            valor_indemnizar,
+            id_carga,
             gastos_adicionales,
             adelanto_recuperar,
             monto_descuento_chofer,
@@ -1041,11 +1043,23 @@ const registrarIncidenciaViaje = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Faltan datos obligatorios para la incidencia' });
         }
 
-        const perdida = Number(valor_total_perdida) || 0;
-        const gastos = Number(gastos_adicionales) || 0;
-        const adelanto = Number(adelanto_recuperar) || 0;
-        const descuento = monto_descuento_chofer !== '' && monto_descuento_chofer !== null ? Number(monto_descuento_chofer) : 0;
-        const empresa = monto_asumido_empresa !== '' && monto_asumido_empresa !== null ? Number(monto_asumido_empresa) : 0;
+        // Sanitización básica Backend (Eliminar etiquetas HTML)
+        const descSanitizada = descripcion_detallada.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+        // Helper para limitar a DECIMAL(10,2) max 99999999.99
+        const capDecimal = (val) => {
+            let num = Number(val) || 0;
+            if (num > 99999999.99) num = 99999999.99;
+            return num;
+        };
+
+        const perdida = capDecimal(valor_total_perdida);
+        const indemnizar = capDecimal(valor_indemnizar);
+        const gastos = capDecimal(gastos_adicionales);
+        const adelanto = capDecimal(adelanto_recuperar);
+        const descuento = monto_descuento_chofer !== '' && monto_descuento_chofer !== null ? capDecimal(monto_descuento_chofer) : 0;
+        const empresa = monto_asumido_empresa !== '' && monto_asumido_empresa !== null ? capDecimal(monto_asumido_empresa) : 0;
+        const idCargaObj = id_carga ? Number(id_carga) : null;
 
         // Validar el Remanente
         const sqlRemanente = `
@@ -1062,27 +1076,29 @@ const registrarIncidenciaViaje = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El monto de pérdida supera el saldo disponible para este viaje.' });
         }
 
-        const totalRepartir = perdida + gastos + adelanto;
+        const totalRepartir = perdida + indemnizar + gastos + adelanto;
         // Evitar problemas de precisión con decimales
         if (Math.abs(totalRepartir - (descuento + empresa)) > 0.01) {
-            return res.status(400).json({ success: false, message: 'Los montos de descuento y asunción deben cubrir el 100% del costo del incidente y adelantos.' });
+            return res.status(400).json({ success: false, message: 'Los montos de descuento y asunción deben cubrir el 100% del costo del incidente (flete perdido + indemnización + cargos) y adelantos.' });
         }
 
         const sql = `
             INSERT INTO Incidencia_Viaje 
-            (id_viaje, tipo_incidencia, descripcion_detallada, valor_total_perdida, gastos_adicionales, adelanto_recuperar, monto_asumido_empresa, monto_descuento_chofer, id_usuario, estado_cobro_penalidad, monto_cobrado)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', 0.00)
+            (id_viaje, id_carga, tipo_incidencia, descripcion_detallada, valor_total_perdida, valor_indemnizar, gastos_adicionales, adelanto_recuperar, monto_asumido_empresa, monto_descuento_chofer, id_usuario, estado_cobro_penalidad, monto_cobrado)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', 0.00)
         `;
 
         const connection = await db.getConnection();
         try {
             await connection.beginTransaction();
             
-            await connection.query(sql, [
+            const [resultInsert] = await connection.query(sql, [
                 idViaje,
+                idCargaObj,
                 tipo_incidencia,
-                descripcion_detallada,
+                descSanitizada,
                 perdida,
+                indemnizar,
                 gastos,
                 adelanto,
                 empresa, 
@@ -1090,9 +1106,27 @@ const registrarIncidenciaViaje = async (req, res) => {
                 userId
             ]);
 
+            const idIncidenciaInsertada = resultInsert.insertId;
+
             if (detalles_rechazados && Array.isArray(detalles_rechazados) && detalles_rechazados.length > 0) {
+                // If it is an array of objects, map the ids. Otherwise fallback to the old way.
+                const idsDetalle = detalles_rechazados.map(d => typeof d === 'object' ? d.id_detalle : d);
+                
                 const sqlUpdateDetalles = `UPDATE Detalle_Carga SET incidencia_justificada = 0 WHERE id_detalle IN (?)`;
-                await connection.query(sqlUpdateDetalles, [detalles_rechazados]);
+                await connection.query(sqlUpdateDetalles, [idsDetalle]);
+
+                // Insertar en la tabla intermedia
+                const insertDetallesValues = detalles_rechazados.map(d => {
+                    if (typeof d === 'object') {
+                        return [idIncidenciaInsertada, d.id_detalle, d.precio_unitario || 0, d.subtotal || 0];
+                    }
+                    return [idIncidenciaInsertada, d, 0, 0];
+                });
+                
+                await connection.query(
+                    `INSERT INTO Incidencia_Detalle_Carga (id_incidencia, id_detalle, precio_unitario_acordado, subtotal_indemnizar) VALUES ?`, 
+                    [insertDetallesValues]
+                );
             }
 
             await connection.commit();

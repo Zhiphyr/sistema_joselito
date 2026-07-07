@@ -117,6 +117,7 @@ async function init_historial_viajes() {
         }
 
         const perdidaInput = document.getElementById('nueva-incidencia-perdida');
+        const indemnizarInput = document.getElementById('nueva-incidencia-indemnizar');
         const gastosInput = document.getElementById('nueva-incidencia-gastos');
         const descuentoInput = document.getElementById('nueva-incidencia-descuento');
         const empresaInput = document.getElementById('nueva-incidencia-empresa');
@@ -125,12 +126,23 @@ async function init_historial_viajes() {
         if (!perdidaInput || !gastosInput || !descuentoInput || !empresaInput || !labelTotal) return;
 
         const p = Number(perdidaInput.value) || 0;
+        const i = indemnizarInput ? (Number(indemnizarInput.value) || 0) : 0;
         const g = Number(gastosInput.value) || 0;
         const adelantoInput = document.getElementById('nueva-incidencia-adelanto');
         const a = adelantoInput ? (Number(adelantoInput.getAttribute('value')) || Number(adelantoInput.value) || 0) : 0;
-        const total = p + g + a;
+        const total = p + i + g + a;
 
-        if (targetId === 'nueva-incidencia-perdida' || targetId === 'nueva-incidencia-gastos') {
+        const enforceGlobalDecimal = (input) => {
+            let val = input.value;
+            if (!val) return;
+            if (Number(val) > 99999999.99) {
+                input.value = 99999999.99;
+            }
+        };
+
+        if (targetId === 'nueva-incidencia-perdida' || targetId === 'nueva-incidencia-indemnizar' || targetId === 'nueva-incidencia-gastos') {
+            if (gastosInput && targetId === 'nueva-incidencia-gastos') enforceGlobalDecimal(gastosInput);
+            
             labelTotal.textContent = `S/ ${total.toFixed(2)}`;
             // Reajustar si ya habían montos y ahora el total es menor
             let d = Number(descuentoInput.value) || 0;
@@ -142,6 +154,7 @@ async function init_historial_viajes() {
                 empresaInput.value = (total - d).toFixed(2);
             }
         } else if (targetId === 'nueva-incidencia-descuento') {
+            enforceGlobalDecimal(descuentoInput);
             let d = Number(descuentoInput.value) || 0;
             if (d > total) {
                 d = total;
@@ -149,6 +162,7 @@ async function init_historial_viajes() {
             }
             empresaInput.value = (total - d).toFixed(2);
         } else if (targetId === 'nueva-incidencia-empresa') {
+            enforceGlobalDecimal(empresaInput);
             let emp = Number(empresaInput.value) || 0;
             if (emp > total) {
                 emp = total;
@@ -704,12 +718,21 @@ async function mostrarFormularioNuevaIncidencia(isReportar = false) {
                             else if (d.estado_operativo === 'Entregado') { colorDetalle = '#16a34a'; bgDetalle = '#dcfce7'; }
 
                             let inputCheckbox = '';
+                            let dynamicInput = '';
                             if (isReportar && d.estado_operativo === 'Rechazado' && d.incidencia_justificada === 1) {
-                                inputCheckbox = `<input type="checkbox" class="chk-detalle-rechazado" data-id="${d.id_detalle}" data-flete="${subtotal.toFixed(2)}" style="accent-color: #ea580c; width: 16px; height: 16px; cursor: pointer; margin-top: 2px;">`;
+                                inputCheckbox = `<input type="checkbox" class="chk-detalle-rechazado" data-id="${d.id_detalle}" data-carga="${carga.id_carga}" data-flete="${subtotal.toFixed(2)}" data-cantidad="${d.cantidad_sacos}" style="accent-color: #ea580c; width: 16px; height: 16px; cursor: pointer; margin-top: 2px;">`;
+                                dynamicInput = `
+                                    <div class="container-precio-unitario" id="container-precio-${d.id_detalle}" style="display: none; padding-left: 24px; margin-top: 6px; padding-bottom: 6px; border-bottom: 1px dashed #e2e8f0;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; background: #fff7ed; padding: 6px 12px; border-radius: 6px; border: 1px solid #ffedd5;">
+                                            <label style="font-size: 11px; font-weight: 700; color: #c2410c;">Precio Acordado por Unidad (S/)</label>
+                                            <input type="number" min="0" step="0.01" class="input-precio-unitario" data-id="${d.id_detalle}" data-cantidad="${d.cantidad_sacos}" placeholder="0.00" style="width: 80px; padding: 4px 8px; border: 1px solid #fdba74; border-radius: 4px; font-size: 12px; text-align: right; outline: none; background: white;">
+                                        </div>
+                                    </div>
+                                `;
                             }
 
                             htmlDetalles += `
-                                <div style="display: grid; grid-template-columns: ${inputCheckbox ? 'auto ' : ''}3fr 1fr 1.5fr; gap: 8px; padding: 8px 0; border-bottom: 1px dashed #e2e8f0; align-items: start;">
+                                <div style="display: grid; grid-template-columns: ${inputCheckbox ? 'auto ' : ''}3fr 1fr 1.5fr; gap: 8px; padding: 8px 0; ${dynamicInput ? '' : 'border-bottom: 1px dashed #e2e8f0;'} align-items: start;">
                                     ${inputCheckbox ? `<div>${inputCheckbox}</div>` : ''}
                                     <div style="display: flex; flex-direction: column; gap: 4px; overflow: hidden;">
                                         <div style="font-size: 11px; color: var(--text-primary); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${d.producto || 'Producto'}">${d.producto || 'Producto'}</div>
@@ -717,11 +740,17 @@ async function mostrarFormularioNuevaIncidencia(isReportar = false) {
                                             <span style="font-size: 9px; font-weight: 800; background: ${bgDetalle}; color: ${colorDetalle}; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; display: inline-block;">
                                                 ${d.estado_operativo}
                                             </span>
+                                            ${(d.estado_operativo === 'Rechazado' || d.estado_operativo === 'Siniestrado') && d.incidencia_justificada === 0 ? `
+                                            <span style="font-size: 8px; font-weight: 800; background: #f1f5f9; color: #64748b; padding: 2px 4px; border-radius: 4px; text-transform: uppercase; display: inline-block; margin-left: 4px; border: 1px solid #cbd5e1;" title="Ya se registró una incidencia para este producto">
+                                                <i class="fas fa-check-double" style="margin-right: 2px;"></i> REGISTRADA
+                                            </span>
+                                            ` : ''}
                                         </div>
                                     </div>
                                     <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-align: center; margin-top: 1px;">${d.cantidad_sacos} ud.</div>
                                     <div style="font-size: 11px; font-weight: 800; color: var(--text-primary); text-align: right; margin-top: 1px;">S/ ${subtotal.toFixed(2)}</div>
                                 </div>
+                                ${dynamicInput}
                             `;
                         });
                     }
@@ -781,20 +810,17 @@ async function mostrarFormularioNuevaIncidencia(isReportar = false) {
     if (isReportar) {
         inputPerdidaHTML = `
             <input type="number" id="nueva-incidencia-perdida" value="0.00" readonly style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; background-color: #f1f5f9; cursor: not-allowed; color: #dc2626; font-weight: 700;">
-            <label style="display: block; font-size: 10px; font-weight: 600; color: var(--text-secondary); margin-top: 6px;">(Calculado automáticamente)</label>
+            <label style="display: block; font-size: 10px; font-weight: 600; color: var(--text-secondary); margin-bottom: 0px;">(Calculado automáticamente)</label>
         `;
         totalRepartirInicialNum = (esAnulado ? totalAdelantos : 0);
         totalRepartirInicial = totalRepartirInicialNum.toFixed(2);
-    } else if (remanente === 0) {
-        inputPerdidaHTML = `
-            <input type="number" id="nueva-incidencia-perdida" value="0.00" readonly style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; background-color: #f1f5f9; cursor: not-allowed;">
-            <label style="display: block; font-size: 10px; font-weight: 600; color: var(--text-secondary); margin-top: 6px;">(Sin remanente)</label>
-        `;
     } else {
+        // Formulario Neutral
         inputPerdidaHTML = `
-            <input type="number" min="0" max="${remanente.toFixed(2)}" step="0.01" id="nueva-incidencia-perdida" value="${remanente.toFixed(2)}" placeholder="0" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none;">
-            <label style="display: block; font-size: 10px; font-weight: 600; color: var(--text-secondary); margin-top: 6px;">(Máx: S/ ${remanente.toFixed(2)})</label>
+            <input type="number" id="nueva-incidencia-perdida" value="0.00" readonly style="display:none;">
         `;
+        totalRepartirInicialNum = (esAnulado ? totalAdelantos : 0);
+        totalRepartirInicial = totalRepartirInicialNum.toFixed(2);
     }
 
     let alertaRemanenteCero = '';
@@ -839,11 +865,12 @@ async function mostrarFormularioNuevaIncidencia(isReportar = false) {
                 <div style="margin-bottom: 16px;">
                     <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Tipo de Incidencia *</label>
                     <select id="nueva-incidencia-tipo" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; color: var(--text-primary); outline: none;">
-                        <option value="Falla Mecánica">Falla Mecánica</option>
                         <option value="Retraso en Ruta">Retraso en Ruta</option>
-                        <option value="Daño/Mala Estiba">Daño/Mala Estiba</option>
-                        <option value="Faltante / Pérdida">Faltante / Pérdida</option>
+                        <option value="Daño / Mala Estiba"${isReportar ? ' selected' : ''}>Daño / Mala Estiba</option>
+                        <option value="Faltante / Pérdida / Robo">Faltante / Pérdida / Robo</option>
                         <option value="Accidente">Accidente</option>
+                        <option value="Falla Mecánica">Falla Mecánica</option>
+                        <option value="Queja de Cliente / Administrativo">Queja de Cliente / Administrativo</option>
                         <option value="Otro">Otro</option>
                     </select>
                 </div>
@@ -869,14 +896,25 @@ async function mostrarFormularioNuevaIncidencia(isReportar = false) {
                     </p>
                     
                     <div style="display: grid; grid-template-columns: ${gridTemplateCols}; gap: 16px; margin-bottom: 16px;">
+                        ${isReportar ? `
                         <div>
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Pérdida Total (S/)${(esAnulado && totalAdelantos > 0) ? '<br>&nbsp;' : ''}</label>
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Flete Perdido (S/)${(esAnulado && totalAdelantos > 0) ? '<br>&nbsp;' : ''}</label>
                             ${inputPerdidaHTML}
                         </div>
                         <div>
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Gastos Adicionales (S/)${(esAnulado && totalAdelantos > 0) ? '&nbsp;' : ''}</label>
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Indemnización Cliente (S/)${(esAnulado && totalAdelantos > 0) ? '<br>&nbsp;' : ''}</label>
+                            <input type="number" min="0" step="0.01" id="nueva-incidencia-indemnizar" value="0.00" readonly style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; background-color: #f1f5f9; cursor: not-allowed; color: #c2410c; font-weight: 700;">
+                            <label style="display: block; font-size: 10px; font-weight: 600; color: var(--text-secondary); margin-bottom: 0px;">(Calculado automáticamente)</label>
+                            <input type="hidden" id="nueva-incidencia-gastos" value="0">
+                        </div>
+                        ` : `
+                        <div>
+                            ${inputPerdidaHTML}
+                            <input type="hidden" id="nueva-incidencia-indemnizar" value="0">
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Penalidad Administrativa / Otros Cargos (S/)${(esAnulado && totalAdelantos > 0) ? '&nbsp;' : ''}</label>
                             <input type="number" min="0" step="0.01" id="nueva-incidencia-gastos" placeholder="0" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none;">
                         </div>
+                        `}
                         ${colAdelantoHTML}
                     </div>
 
@@ -885,6 +923,7 @@ async function mostrarFormularioNuevaIncidencia(isReportar = false) {
                         <span style="font-size: 14px; font-weight: 800;" id="nueva-incidencia-total-repartir">S/ ${totalRepartirInicial}</span>
                     </div>
 
+                    <h6 style="margin: 0 0 12px 0; font-size: 12px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px;">Asignación de Montos</h6>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                         <div>
                             <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Descuento a Chofer (S/)</label>
@@ -958,55 +997,89 @@ async function mostrarFormularioNuevaIncidencia(isReportar = false) {
             if (el) el.focus();
         }
 
-        const updateReparto = () => {
-            const perdida = Number(document.getElementById('nueva-incidencia-perdida').value) || 0;
-            const gastos = Number(document.getElementById('nueva-incidencia-gastos')?.value) || 0;
-            const adelanto = Number(document.getElementById('nueva-incidencia-adelanto')?.value) || 0;
-            const total = perdida + gastos + adelanto;
-            document.getElementById('nueva-incidencia-total-repartir').textContent = `S/ ${total.toFixed(2)}`;
-            return total;
-        };
-
         if (isReportar) {
             const checkboxes = document.querySelectorAll('.chk-detalle-rechazado');
-            checkboxes.forEach(chk => {
-                chk.addEventListener('change', () => {
-                    let totalP = 0;
-                    document.querySelectorAll('.chk-detalle-rechazado:checked').forEach(c => {
-                        totalP += Number(c.getAttribute('data-flete')) || 0;
-                    });
-                    document.getElementById('nueva-incidencia-perdida').value = totalP.toFixed(2);
-                    updateReparto();
+            
+            // Función para formatear a DECIMAL(10,2)
+            const enforceDecimal10_2 = (input) => {
+                let val = input.value;
+                if (!val) return;
+                
+                // Si el número es extremadamente grande, cortarlo
+                if (Number(val) > 99999999.99) {
+                    input.value = 99999999.99;
+                }
+            };
+            
+            // Función para recalcular la indemnización total
+            const recalcularIndemnizacion = () => {
+                let totalI = 0;
+                document.querySelectorAll('.chk-detalle-rechazado:checked').forEach(c => {
+                    const id = c.getAttribute('data-id');
+                    const qty = Number(c.getAttribute('data-cantidad')) || 0;
+                    const inputPrecio = document.querySelector(`.input-precio-unitario[data-id="${id}"]`);
+                    if (inputPrecio) {
+                        const precio = Number(inputPrecio.value) || 0;
+                        totalI += (precio * qty);
+                    }
+                });
+                document.getElementById('nueva-incidencia-indemnizar').value = totalI.toFixed(2);
+                const event = new Event('input', { bubbles: true });
+                document.getElementById('nueva-incidencia-indemnizar').dispatchEvent(event);
+            };
+
+            // Escuchar cambios en los inputs de precios unitarios
+            document.querySelectorAll('.input-precio-unitario').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    enforceDecimal10_2(e.target);
+                    e.target.style.borderColor = '#fdba74'; // Quitar rojo al escribir
+                    recalcularIndemnizacion();
+                });
+                input.addEventListener('blur', (e) => {
+                    if(e.target.value !== '') e.target.value = Number(e.target.value).toFixed(2);
                 });
             });
-        }
 
-        const btnGastos = document.getElementById('nueva-incidencia-gastos');
-        const btnPerdida = document.getElementById('nueva-incidencia-perdida');
-        const descChofer = document.getElementById('nueva-incidencia-descuento');
-        const asuEmpresa = document.getElementById('nueva-incidencia-empresa');
-
-        if(btnGastos) btnGastos.addEventListener('input', updateReparto);
-        if(!isReportar && btnPerdida) btnPerdida.addEventListener('input', updateReparto);
-
-        if(descChofer && asuEmpresa) {
-            descChofer.addEventListener('input', () => {
-                if(descChofer.value !== '') {
-                    const total = updateReparto();
-                    const d = Number(descChofer.value);
-                    if(d <= total) {
-                        asuEmpresa.value = (total - d).toFixed(2);
+            checkboxes.forEach(chk => {
+                chk.addEventListener('change', (e) => {
+                    let totalP = 0;
+                    let checkedCarga = null;
+                    
+                    const idDetalle = e.target.getAttribute('data-id');
+                    const containerPrecio = document.getElementById(`container-precio-${idDetalle}`);
+                    if (containerPrecio) {
+                        containerPrecio.style.display = e.target.checked ? 'block' : 'none';
+                        if (!e.target.checked) {
+                            // Limpiar valor si se deselecciona
+                            const inputPrecio = containerPrecio.querySelector('.input-precio-unitario');
+                            if (inputPrecio) inputPrecio.value = '';
+                        }
                     }
-                }
-            });
-            asuEmpresa.addEventListener('input', () => {
-                if(asuEmpresa.value !== '') {
-                    const total = updateReparto();
-                    const e = Number(asuEmpresa.value);
-                    if(e <= total) {
-                        descChofer.value = (total - e).toFixed(2);
-                    }
-                }
+                    
+                    document.querySelectorAll('.chk-detalle-rechazado:checked').forEach(c => {
+                        totalP += Number(c.getAttribute('data-flete')) || 0;
+                        checkedCarga = c.getAttribute('data-carga');
+                    });
+                    
+                    // Bloquear checkboxes de otras cargas
+                    checkboxes.forEach(c => {
+                        if (checkedCarga && c.getAttribute('data-carga') !== checkedCarga) {
+                            c.disabled = true;
+                            c.parentElement.style.opacity = '0.5';
+                        } else {
+                            c.disabled = false;
+                            c.parentElement.style.opacity = '1';
+                        }
+                    });
+
+                    document.getElementById('nueva-incidencia-perdida').value = totalP.toFixed(2);
+                    
+                    recalcularIndemnizacion();
+                    
+                    // Disparar evento input para que el listener global actualice los cálculos
+                    const event = new Event('input', { bubbles: true });
+                    document.getElementById('nueva-incidencia-perdida').dispatchEvent(event);
+                });
             });
         }
 
@@ -1018,26 +1091,77 @@ async function guardarIncidencia() {
     if (!idViaje) return;
 
     const tipo = document.getElementById('nueva-incidencia-tipo').value;
-    const descripcion = document.getElementById('nueva-incidencia-descripcion').value.trim();
+    const descripcionElem = document.getElementById('nueva-incidencia-descripcion');
+    let descripcion = descripcionElem.value.trim();
     
     if (!descripcion) {
-        alert('Por favor ingresa una descripción detallada.');
+        descripcionElem.style.borderColor = 'red';
+        Swal.fire({
+            title: 'Faltan datos',
+            text: 'Por favor ingresa una descripción detallada.',
+            icon: 'warning',
+            confirmButtonColor: '#dc2626'
+        });
         return;
+    } else {
+        descripcionElem.style.borderColor = '#cbd5e1'; // Reset
     }
+
+    // Sanitización básica para prevenir XSS/inyecciones en frontend
+    descripcion = descripcion.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
     const chkVincular = document.getElementById('chk-vincular-rechazados');
     const detalles_rechazados = [];
+    let id_carga = null;
+    let hasError = false;
+    
     if (chkVincular && chkVincular.checked) {
         document.querySelectorAll('.chk-detalle-rechazado:checked').forEach(chk => {
-            detalles_rechazados.push(Number(chk.getAttribute('data-id')));
+            const id_det = Number(chk.getAttribute('data-id'));
+            const qty = Number(chk.getAttribute('data-cantidad')) || 0;
+            const inputPrecio = document.querySelector(`.input-precio-unitario[data-id="${id_det}"]`);
+            let precio = 0;
+            if (inputPrecio) {
+                if (inputPrecio.value === '') {
+                    inputPrecio.style.borderColor = 'red';
+                    hasError = true;
+                } else {
+                    inputPrecio.style.borderColor = '#fdba74'; // Reset
+                    precio = Number(inputPrecio.value) || 0;
+                }
+            }
+            detalles_rechazados.push({
+                id_detalle: id_det,
+                precio_unitario: precio,
+                subtotal: precio * qty
+            });
+            if (!id_carga) id_carga = Number(chk.getAttribute('data-carga'));
         });
+        
+        if (hasError) {
+            Swal.fire({
+                title: 'Precios Pendientes',
+                text: 'Por favor ingresa el Precio Acordado por Unidad para todos los productos seleccionados',
+                icon: 'warning',
+                confirmButtonColor: '#dc2626'
+            });
+            return;
+        }
+
         if (detalles_rechazados.length === 0) {
-            alert('Debe seleccionar al menos un producto rechazado a vincular para calcular la pérdida a reportar.');
+            Swal.fire({
+                title: 'Faltan datos',
+                text: 'Debe seleccionar al menos un producto rechazado a vincular para calcular la pérdida a reportar.',
+                icon: 'warning',
+                confirmButtonColor: '#dc2626'
+            });
             return;
         }
     }
 
     const perdida = Number(document.getElementById('nueva-incidencia-perdida').value) || 0;
+    const indemnizarElem = document.getElementById('nueva-incidencia-indemnizar');
+    const indemnizar = indemnizarElem ? (Number(indemnizarElem.value) || 0) : 0;
     const gastos = Number(document.getElementById('nueva-incidencia-gastos').value) || 0;
     const adelantoElem = document.getElementById('nueva-incidencia-adelanto');
     const adelanto = adelantoElem ? (Number(adelantoElem.getAttribute('value')) || Number(adelantoElem.value) || 0) : 0;
@@ -1048,9 +1172,14 @@ async function guardarIncidencia() {
     const descuento = descChoferVal !== '' ? Number(descChoferVal) : 0;
     const empresa = asuEmpresaVal !== '' ? Number(asuEmpresaVal) : 0;
 
-    const totalRepartir = perdida + gastos + adelanto;
+    const totalRepartir = perdida + indemnizar + gastos + adelanto;
     if (Math.abs(totalRepartir - (descuento + empresa)) > 0.01) {
-        alert('Los montos de descuento a chofer y asunción por empresa deben cubrir exactamente el 100% del costo del incidente y adelantos.');
+        Swal.fire({
+            title: 'Descuadre en Repartición',
+            text: 'Los montos de descuento a chofer y asunción por empresa deben cubrir exactamente el 100% del costo del incidente (flete perdido + indemnización + multas/cargos) y adelantos.',
+            icon: 'warning',
+            confirmButtonColor: '#dc2626'
+        });
         return;
     }
 
@@ -1079,6 +1208,8 @@ async function guardarIncidencia() {
             tipo_incidencia: tipo,
             descripcion_detallada: descripcion,
             valor_total_perdida: perdida,
+            valor_indemnizar: indemnizar,
+            id_carga: id_carga,
             gastos_adicionales: gastos,
             adelanto_recuperar: adelanto,
             monto_descuento_chofer: descuento,
