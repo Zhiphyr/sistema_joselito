@@ -2,7 +2,7 @@ const db = require('../config/db');
 
 const obtenerEstadisticas = async (req, res) => {
     try {
-        const { rango = 'este-mes' } = req.query;
+        const { rango = 'este-mes', fecha } = req.query;
 
         // Definir condiciones de fecha según el rango seleccionado
         let whereCarga = '';
@@ -12,6 +12,14 @@ const obtenerEstadisticas = async (req, res) => {
         let whereCargaComparativo = '';
         let whereViajeComparativo = '';
         let whereClientesNuevosComparativo = '';
+
+        let paramsCarga = [];
+        let paramsViaje = [];
+        let paramsClientesNuevos = [];
+        
+        let paramsCargaComparativo = [];
+        let paramsViajeComparativo = [];
+        let paramsClientesNuevosComparativo = [];
 
         let comparativaTexto = 'vs mes anterior';
 
@@ -52,6 +60,48 @@ const obtenerEstadisticas = async (req, res) => {
                 comparativaTexto = 'vs año anterior';
                 break;
 
+            case 'personalizado':
+                let selectedYear = new Date().getFullYear();
+                let selectedMonth = new Date().getMonth() + 1;
+                
+                if (fecha) {
+                    const parts = fecha.split('-');
+                    if (parts.length === 2) {
+                        selectedYear = parseInt(parts[0]);
+                        selectedMonth = parseInt(parts[1]);
+                    }
+                }
+
+                // Período seleccionado
+                whereCarga = 'MONTH(fecha_registro) = ? AND YEAR(fecha_registro) = ?';
+                whereViaje = 'MONTH(fecha_salida) = ? AND YEAR(fecha_salida) = ?';
+                whereClientesNuevos = 'MONTH(fecha_creacion) = ? AND YEAR(fecha_creacion) = ?';
+
+                // Período comparativo anterior (mes anterior)
+                let prevYear = selectedYear;
+                let prevMonth = selectedMonth - 1;
+                if (prevMonth === 0) {
+                    prevMonth = 12;
+                    prevYear = selectedYear - 1;
+                }
+
+                whereCargaComparativo = 'MONTH(fecha_registro) = ? AND YEAR(fecha_registro) = ?';
+                whereViajeComparativo = 'MONTH(fecha_salida) = ? AND YEAR(fecha_salida) = ?';
+                whereClientesNuevosComparativo = 'MONTH(fecha_creacion) = ? AND YEAR(fecha_creacion) = ?';
+
+                const nombresMesesCompleto = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                comparativaTexto = `vs ${nombresMesesCompleto[prevMonth - 1]} de ${prevYear}`;
+
+                // Parámetros para las consultas SQL
+                paramsCarga = [selectedMonth, selectedYear];
+                paramsViaje = [selectedMonth, selectedYear];
+                paramsClientesNuevos = [selectedMonth, selectedYear];
+
+                paramsCargaComparativo = [prevMonth, prevYear];
+                paramsViajeComparativo = [prevMonth, prevYear];
+                paramsClientesNuevosComparativo = [prevMonth, prevYear];
+                break;
+
             case 'este-mes':
             default:
                 whereCarga = 'MONTH(fecha_registro) = MONTH(CURRENT_DATE()) AND YEAR(fecha_registro) = YEAR(CURRENT_DATE())';
@@ -72,7 +122,7 @@ const obtenerEstadisticas = async (req, res) => {
             FROM Carga 
             WHERE ${whereCarga} AND estado != 2
         `;
-        const [resIngresos] = await db.query(sqlIngresos);
+        const [resIngresos] = await db.query(sqlIngresos, paramsCarga);
         const totalFletes = Number(resIngresos[0].total_fletes) || 0;
 
         // Fletes e Ingresos (Periodo comparativo anterior)
@@ -81,7 +131,7 @@ const obtenerEstadisticas = async (req, res) => {
             FROM Carga 
             WHERE ${whereCargaComparativo} AND estado != 2
         `;
-        const [resIngresosComparativo] = await db.query(sqlIngresosComparativo);
+        const [resIngresosComparativo] = await db.query(sqlIngresosComparativo, paramsCargaComparativo);
         const totalFletesComparativo = Number(resIngresosComparativo[0].total_fletes) || 0;
         
         let variacionIngresos = 0;
@@ -96,7 +146,7 @@ const obtenerEstadisticas = async (req, res) => {
             WHERE estado_operativo = 'Finalizado'
               AND ${whereViaje} AND estado != 2
         `;
-        const [resViajes] = await db.query(sqlViajes);
+        const [resViajes] = await db.query(sqlViajes, paramsViaje);
         const viajesCompletados = resViajes[0].total_viajes;
 
         // Viajes Completados (Periodo comparativo anterior)
@@ -106,7 +156,7 @@ const obtenerEstadisticas = async (req, res) => {
             WHERE estado_operativo = 'Finalizado'
               AND ${whereViajeComparativo} AND estado != 2
         `;
-        const [resViajesComparativo] = await db.query(sqlViajesComparativo);
+        const [resViajesComparativo] = await db.query(sqlViajesComparativo, paramsViajeComparativo);
         const viajesComparativo = resViajesComparativo[0].total_viajes;
 
         // 3. Cargas Pendientes (No se ven afectadas por el filtro de periodo porque son un estado acumulativo)
@@ -136,7 +186,7 @@ const obtenerEstadisticas = async (req, res) => {
         `;
         let clientesNuevos = 0;
         try {
-            const [resClientesNuevos] = await db.query(sqlClientesNuevos);
+            const [resClientesNuevos] = await db.query(sqlClientesNuevos, paramsClientesNuevos);
             clientesNuevos = resClientesNuevos[0].clientes_nuevos;
         } catch (e) {
             clientesNuevos = 0;

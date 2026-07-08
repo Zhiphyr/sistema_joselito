@@ -4,13 +4,32 @@ window.init_dashboard = function() {
     // 1. Cargar estadísticas dinámicas por defecto (este mes)
     cargarEstadisticasDashboard('este-mes');
 
-    // 2. Enlazar el selector de rango de tiempo
+    // 2. Enlazar el selector de rango de tiempo y el input de mes personalizado
     const rangeSelect = document.getElementById('dashboardRangeSelect');
-    if (rangeSelect) {
-        // Asegurarse de que esté seleccionado por defecto
+    const monthInput = document.getElementById('dashboardMonthInput');
+    
+    if (rangeSelect && monthInput) {
+        // Inicializar input de mes con el mes actual (ej: "2026-07")
+        const hoy = new Date();
+        const mesStr = String(hoy.getMonth() + 1).padStart(2, '0');
+        const anioStr = hoy.getFullYear();
+        monthInput.value = `${anioStr}-${mesStr}`;
+
         rangeSelect.value = 'este-mes';
+        
         rangeSelect.addEventListener('change', (e) => {
-            cargarEstadisticasDashboard(e.target.value);
+            const valor = e.target.value;
+            if (valor === 'personalizado') {
+                monthInput.style.display = 'block';
+                cargarEstadisticasDashboard('personalizado', monthInput.value);
+            } else {
+                monthInput.style.display = 'none';
+                cargarEstadisticasDashboard(valor);
+            }
+        });
+
+        monthInput.addEventListener('change', (e) => {
+            cargarEstadisticasDashboard('personalizado', e.target.value);
         });
     }
 
@@ -34,11 +53,16 @@ window.init_dashboard = function() {
     });
 };
 
-async function cargarEstadisticasDashboard(rango = 'este-mes') {
+async function cargarEstadisticasDashboard(rango = 'este-mes', fechaPersonalizada = null) {
     const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
     
     try {
-        const response = await fetch(`http://localhost:3000/api/dashboard/stats?rango=${rango}`, {
+        let url = `http://localhost:3000/api/dashboard/stats?rango=${rango}`;
+        if (rango === 'personalizado' && fechaPersonalizada) {
+            url += `&fecha=${fechaPersonalizada}`;
+        }
+
+        const response = await fetch(url, {
             headers: { 'x-user-profile': sessionData.id_perfil || 1 }
         });
         const result = await response.json();
@@ -64,7 +88,7 @@ async function cargarEstadisticasDashboard(rango = 'este-mes') {
             } else if (rango === 'este-mes') {
                 document.getElementById('stat-viajes-comparativa').textContent = `+${data.viajes.completados - data.viajes.comparativa >= 0 ? data.viajes.completados - data.viajes.comparativa : 0} vs mes anterior (${data.viajes.comparativa} viajes)`;
             } else {
-                document.getElementById('stat-viajes-comparativa').textContent = `+${data.viajes.completados - data.viajes.comparativa >= 0 ? data.viajes.completados - data.viajes.comparativa : 0} vs año anterior (${data.viajes.comparativa} viajes)`;
+                document.getElementById('stat-viajes-comparativa').textContent = `+${data.viajes.completados - data.viajes.comparativa >= 0 ? data.viajes.completados - data.viajes.comparativa : 0} ${compViajes} (${data.viajes.comparativa} viajes)`;
             }
             
             // 3. Cargas Pendientes

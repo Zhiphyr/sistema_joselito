@@ -3,13 +3,15 @@
         <h2 style="margin: 0; font-size: 22px; font-weight: 700; color: var(--text-primary);">Resumen de Operaciones</h2>
         <p style="color: var(--text-secondary); font-size: 13px; margin-top: 4px;">Control y monitoreo de la flota y finanzas en tiempo real</p>
     </div>
-    <div style="display: flex; gap: 8px;">
+    <div style="display: flex; gap: 8px; align-items: center;">
         <select class="form-control" id="dashboardRangeSelect" style="width: auto; padding: 8px 12px; font-size: 13px; font-weight: 500; cursor: pointer; border-radius: var(--radius-md);">
-            <option value="este-mes">Este Mes</option>
             <option value="hoy">Hoy</option>
             <option value="esta-semana">Esta Semana</option>
+            <option value="este-mes">Este Mes</option>
+            <option value="personalizado">Elegir un Mes...</option>
             <option value="este-ano">Este Año</option>
         </select>
+        <input type="month" id="dashboardMonthInput" class="form-control" style="width: auto; padding: 8px 12px; font-size: 13px; display: none; border-radius: var(--radius-md); font-weight: 500; cursor: pointer;">
     </div>
 </div>
 
