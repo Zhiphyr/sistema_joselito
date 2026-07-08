@@ -94,11 +94,25 @@
 <div class="dashboard-main-row">
     <!-- Tarjeta del Gráfico (70%) -->
     <div class="dashboard-card" style="min-height: 380px;">
-        <div class="dashboard-card-header">
-            <span class="dashboard-card-title">Rendimiento Mensual de Fletes</span>
-            <div style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
-                <span style="display: inline-block; width: 8px; height: 8px; background-color: var(--brand-blue); border-radius: 50%;"></span>
-                <span>Ingresos S/.</span>
+        <div class="dashboard-card-header" style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; width: 100%;">
+            <span class="dashboard-card-title">Rendimiento de Fletes</span>
+            
+            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                <!-- Leyenda con acumulado dinámico -->
+                <div style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+                    <span style="display: inline-block; width: 8px; height: 8px; background-color: var(--brand-blue); border-radius: 50%;"></span>
+                    <span>Ingresos: <strong>S/. <span id="chartRevenueTotal">0.00</span></strong></span>
+                </div>
+                
+                <!-- Selector de Mes Local (exclusivo para el gráfico en modo detalle diario) -->
+                <input type="month" id="chartMonthInput" class="form-control" style="width: auto; padding: 3px 8px; font-size: 11px; display: none; border-radius: var(--radius-sm); font-weight: 500; cursor: pointer; height: 26px; border: 1px solid var(--border-light); background: var(--card-bg); color: var(--text-primary);">
+
+                <!-- Selector Independiente de Filtros del Gráfico (Opción B) -->
+                <div id="chartViewToggle" style="display: flex; background: var(--border-light); padding: 2px; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+                    <button class="btn-chart-view active" data-view="6meses" style="background: var(--card-bg); border: none; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; border-radius: var(--radius-sm); color: var(--text-primary); transition: all var(--transition-fast); box-shadow: 0 1px 3px rgba(0,0,0,0.05);">6 Meses</button>
+                    <button class="btn-chart-view" data-view="12meses" style="background: transparent; border: none; padding: 4px 10px; font-size: 11px; font-weight: 500; cursor: pointer; border-radius: var(--radius-sm); color: var(--text-secondary); transition: all var(--transition-fast);">Este Año</button>
+                    <button class="btn-chart-view" data-view="mes-detalle" style="background: transparent; border: none; padding: 4px 10px; font-size: 11px; font-weight: 500; cursor: pointer; border-radius: var(--radius-sm); color: var(--text-secondary); transition: all var(--transition-fast);">Detalle Diario</button>
+                </div>
             </div>
         </div>
         <div style="flex: 1; position: relative;">

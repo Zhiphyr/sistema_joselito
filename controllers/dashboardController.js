@@ -2,7 +2,7 @@ const db = require('../config/db');
 
 const obtenerEstadisticas = async (req, res) => {
     try {
-        const { rango = 'este-mes', fecha } = req.query;
+        const { rango = 'este-mes', fecha, graficoRango = '6meses', graficoFecha } = req.query;
 
         // Definir condiciones de fecha según el rango seleccionado
         let whereCarga = '';
@@ -206,30 +206,117 @@ const obtenerEstadisticas = async (req, res) => {
         const flotaActivos = resFlota[0].activos || 0;
         const flotaInactivos = resFlota[0].inactivos || 0;
 
-        // 6. Historial de Ingresos (Últimos 6 meses)
-        const sqlGrafico = `
-            SELECT 
-                DATE_FORMAT(fecha_registro, '%Y-%m') AS mes_anio,
-                MONTH(fecha_registro) AS mes_num,
-                SUM(flete_total) AS total
-            FROM Carga
-            WHERE fecha_registro >= DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH)
-              AND estado != 2
-            GROUP BY DATE_FORMAT(fecha_registro, '%Y-%m'), MONTH(fecha_registro)
-            ORDER BY mes_anio ASC
-        `;
-        
+        // 6. Historial de Ingresos / Rendimiento (Gráfico Dinámico)
+        let sqlGrafico = '';
+        let paramsGrafico = [];
         let datosGrafico = { labels: [], data: [] };
+
+        if (graficoRango === '12meses') {
+            // Todos los meses del año en curso
+            sqlGrafico = `
+                SELECT 
+                    MONTH(fecha_registro) AS mes_num,
+                    SUM(flete_total) AS total
+                FROM Carga
+                WHERE YEAR(fecha_registro) = YEAR(CURRENT_DATE())
+                  AND estado != 2
+                GROUP BY MONTH(fecha_registro)
+                ORDER BY mes_num ASC
+            `;
+        } else if (graficoRango === 'mes-detalle') {
+            // Desglose día por día de un mes específico (o el actual)
+            let selectedYear = new Date().getFullYear();
+            let selectedMonth = new Date().getMonth() + 1;
+
+            const fechaEvaluar = graficoFecha || fecha; // Fallback al selector principal si no se envió fecha específica para el gráfico
+            if (fechaEvaluar) {
+                const parts = fechaEvaluar.split('-');
+                if (parts.length === 2) {
+                    selectedYear = parseInt(parts[0]);
+                    selectedMonth = parseInt(parts[1]);
+                }
+            }
+
+            sqlGrafico = `
+                SELECT 
+                    DAY(fecha_registro) AS dia_num,
+                    SUM(flete_total) AS total
+                FROM Carga
+                WHERE MONTH(fecha_registro) = ? 
+                  AND YEAR(fecha_registro) = ?
+                  AND estado != 2
+                GROUP BY DAY(fecha_registro)
+                ORDER BY dia_num ASC
+            `;
+            paramsGrafico = [selectedMonth, selectedYear];
+        } else {
+            // Por defecto: 6meses (Últimos 6 meses)
+            sqlGrafico = `
+                SELECT 
+                    DATE_FORMAT(fecha_registro, '%Y-%m') AS mes_anio,
+                    MONTH(fecha_registro) AS mes_num,
+                    SUM(flete_total) AS total
+                FROM Carga
+                WHERE fecha_registro >= DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH)
+                  AND estado != 2
+                GROUP BY DATE_FORMAT(fecha_registro, '%Y-%m'), MONTH(fecha_registro)
+                ORDER BY mes_anio ASC
+            `;
+        }
+
         try {
-            const [resGrafico] = await db.query(sqlGrafico);
-            
+            const [resGrafico] = await db.query(sqlGrafico, paramsGrafico);
             const nombresMeses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Set', 'Oct', 'Nov', 'Dic'];
-            
-            resGrafico.forEach(row => {
-                const nombreMes = nombresMeses[row.mes_num - 1] || row.mes_num;
-                datosGrafico.labels.push(nombreMes);
-                datosGrafico.data.push(Number(row.total) || 0);
-            });
+
+            if (graficoRango === 'mes-detalle') {
+                // Obtener cantidad de días del mes evaluado
+                let selectedYear = new Date().getFullYear();
+                let selectedMonth = new Date().getMonth() + 1;
+                const fechaEvaluar = graficoFecha || fecha;
+                if (fechaEvaluar) {
+                    const parts = fechaEvaluar.split('-');
+                    if (parts.length === 2) {
+                        selectedYear = parseInt(parts[0]);
+                        selectedMonth = parseInt(parts[1]);
+                    }
+                }
+                const diasEnMes = new Date(selectedYear, selectedMonth, 0).getDate();
+                
+                // Inicializar mapa de días
+                const diasMapa = {};
+                for (let d = 1; d <= diasEnMes; d++) {
+                    diasMapa[d] = 0;
+                }
+                
+                resGrafico.forEach(row => {
+                    diasMapa[row.dia_num] = Number(row.total) || 0;
+                });
+
+                for (let d = 1; d <= diasEnMes; d++) {
+                    datosGrafico.labels.push(`Día ${d}`);
+                    datosGrafico.data.push(diasMapa[d]);
+                }
+            } else if (graficoRango === '12meses') {
+                // Rellenar los 12 meses
+                const mesesMapa = {};
+                for (let m = 1; m <= 12; m++) {
+                    mesesMapa[m] = 0;
+                }
+                resGrafico.forEach(row => {
+                    mesesMapa[row.mes_num] = Number(row.total) || 0;
+                });
+                for (let m = 1; m <= 12; m++) {
+                    datosGrafico.labels.push(nombresMeses[m - 1]);
+                    datosGrafico.data.push(mesesMapa[m]);
+                }
+            } else {
+                // 6meses normal
+                resGrafico.forEach(row => {
+                    const nombreMes = nombresMeses[row.mes_num - 1] || row.mes_num;
+                    datosGrafico.labels.push(nombreMes);
+                    datosGrafico.data.push(Number(row.total) || 0);
+                });
+            }
         } catch (error) {
             console.error("Error al obtener datos del gráfico:", error);
         }

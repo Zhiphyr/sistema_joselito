@@ -1,39 +1,90 @@
 window.init_dashboard = function() {
     console.log("Dashboard principal inicializado");
 
-    // 1. Cargar estadísticas dinámicas por defecto (este mes)
-    cargarEstadisticasDashboard('este-mes');
+    // 1. Cargar estadísticas dinámicas por defecto (este mes) e inicializar gráfico
+    cargarEstadisticasDashboard('este-mes', null, true);
 
     // 2. Enlazar el selector de rango de tiempo y el input de mes personalizado
     const rangeSelect = document.getElementById('dashboardRangeSelect');
     const monthInput = document.getElementById('dashboardMonthInput');
+    const chartMonthInput = document.getElementById('chartMonthInput');
     
     if (rangeSelect && monthInput) {
         // Inicializar input de mes con el mes actual (ej: "2026-07")
         const hoy = new Date();
         const mesStr = String(hoy.getMonth() + 1).padStart(2, '0');
         const anioStr = hoy.getFullYear();
+        
         monthInput.value = `${anioStr}-${mesStr}`;
+        if (chartMonthInput) {
+            chartMonthInput.value = `${anioStr}-${mesStr}`;
+        }
 
         rangeSelect.value = 'este-mes';
         
         rangeSelect.addEventListener('change', (e) => {
             const valor = e.target.value;
+            const activeChartBtn = document.querySelector('.btn-chart-view.active');
+            const actualizarGrafico = activeChartBtn && activeChartBtn.dataset.view === 'mes-detalle';
+
             if (valor === 'personalizado') {
                 monthInput.style.display = 'block';
-                cargarEstadisticasDashboard('personalizado', monthInput.value);
+                cargarEstadisticasDashboard('personalizado', monthInput.value, actualizarGrafico);
             } else {
                 monthInput.style.display = 'none';
-                cargarEstadisticasDashboard(valor);
+                cargarEstadisticasDashboard(valor, null, false); // No alterar el gráfico al cambiar rango general
             }
         });
 
         monthInput.addEventListener('change', (e) => {
-            cargarEstadisticasDashboard('personalizado', e.target.value);
+            const activeChartBtn = document.querySelector('.btn-chart-view.active');
+            const actualizarGrafico = activeChartBtn && activeChartBtn.dataset.view === 'mes-detalle';
+            
+            cargarEstadisticasDashboard('personalizado', e.target.value, actualizarGrafico);
+            // Sincronizar también el selector de mes del gráfico si está en modo detalle
+            if (chartMonthInput) {
+                chartMonthInput.value = e.target.value;
+            }
         });
     }
 
-    // 3. Enlazar botón de flota completa
+    if (chartMonthInput) {
+        chartMonthInput.addEventListener('change', (e) => {
+            actualizarGraficoFletes('mes-detalle', e.target.value);
+        });
+    }
+
+    // 3. Enlazar los botones de alternancia del gráfico (Opción B)
+    const chartButtons = document.querySelectorAll('.btn-chart-view');
+    chartButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            chartButtons.forEach(b => {
+                b.classList.remove('active');
+                b.style.background = 'transparent';
+                b.style.color = 'var(--text-secondary)';
+                b.style.fontWeight = '500';
+                b.style.boxShadow = 'none';
+            });
+
+            btn.classList.add('active');
+            btn.style.background = 'var(--card-bg)';
+            btn.style.color = 'var(--text-primary)';
+            btn.style.fontWeight = '600';
+            btn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+
+            const view = btn.dataset.view;
+            if (chartMonthInput) {
+                if (view === 'mes-detalle') {
+                    chartMonthInput.style.display = 'block';
+                } else {
+                    chartMonthInput.style.display = 'none';
+                }
+            }
+            actualizarGraficoFletes(view, chartMonthInput ? chartMonthInput.value : null);
+        });
+    });
+
+    // 4. Enlazar botón de flota completa
     const btnGoToFleet = document.getElementById('btnGoToFleet');
     if (btnGoToFleet) {
         btnGoToFleet.addEventListener('click', () => {
@@ -41,7 +92,7 @@ window.init_dashboard = function() {
         });
     }
 
-    // 4. Enlazar accesos rápidos
+    // 5. Enlazar accesos rápidos
     const shortcuts = document.querySelectorAll('.shortcut-card');
     shortcuts.forEach(card => {
         card.addEventListener('click', () => {
@@ -53,13 +104,54 @@ window.init_dashboard = function() {
     });
 };
 
-async function cargarEstadisticasDashboard(rango = 'este-mes', fechaPersonalizada = null) {
+async function actualizarGraficoFletes(graficoRango, fechaLocal = null) {
     const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+    const chartMonthInput = document.getElementById('chartMonthInput');
+    
+    // Obtener la fecha seleccionada para el gráfico en caso de que pida mes-detalle
+    let fecha = fechaLocal;
+    if (!fecha) {
+        if (chartMonthInput) {
+            fecha = chartMonthInput.value;
+        } else {
+            const hoy = new Date();
+            const mesStr = String(hoy.getMonth() + 1).padStart(2, '0');
+            const anioStr = hoy.getFullYear();
+            fecha = `${anioStr}-${mesStr}`;
+        }
+    }
+
+    try {
+        const response = await fetch(`http://localhost:3000/api/dashboard/stats?graficoRango=${graficoRango}&graficoFecha=${fecha}`, {
+            headers: { 'x-user-profile': sessionData.id_perfil || 1 }
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            inicializarGraficoFinanciero(result.data.grafico);
+        }
+    } catch (e) {
+        console.error("Error al actualizar gráfico de fletes:", e);
+    }
+}
+
+async function cargarEstadisticasDashboard(rango = 'este-mes', fechaPersonalizada = null, cargarGrafico = false) {
+    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+    const activeChartBtn = document.querySelector('.btn-chart-view.active');
+    const graficoRango = activeChartBtn ? activeChartBtn.dataset.view : '6meses';
+    const chartMonthInput = document.getElementById('chartMonthInput');
     
     try {
-        let url = `http://localhost:3000/api/dashboard/stats?rango=${rango}`;
+        let graficoFecha = fechaPersonalizada;
+        if (!graficoFecha && chartMonthInput) {
+            graficoFecha = chartMonthInput.value;
+        }
+
+        let url = `http://localhost:3000/api/dashboard/stats?rango=${rango}&graficoRango=${graficoRango}`;
         if (rango === 'personalizado' && fechaPersonalizada) {
             url += `&fecha=${fechaPersonalizada}`;
+        }
+        if (graficoFecha) {
+            url += `&graficoFecha=${graficoFecha}`;
         }
 
         const response = await fetch(url, {
@@ -115,10 +207,12 @@ async function cargarEstadisticasDashboard(rango = 'este-mes', fechaPersonalizad
             // Inicializar/Animar Medidor Flota
             animarMedidorFlota(data.flota.total, data.flota.activos);
             
-            // Inicializar Grafico Financiero
-            cargarChartJS(() => {
-                inicializarGraficoFinanciero(data.grafico);
-            });
+            // Inicializar Grafico Financiero SOLO si es requerido (carga inicial o cambio específico en el gráfico)
+            if (cargarGrafico) {
+                cargarChartJS(() => {
+                    inicializarGraficoFinanciero(data.grafico);
+                });
+            }
             
         } else {
             console.error("Error al obtener estadísticas del dashboard:", result.message);
@@ -157,6 +251,13 @@ function inicializarGraficoFinanciero(datosGrafico) {
     // Si no vienen datos de gráfico, usamos los estáticos de prueba
     const labels = datosGrafico ? datosGrafico.labels : ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
     const data = datosGrafico ? datosGrafico.data : [14200, 18500, 16900, 24000, 21800, 32400];
+
+    // Calcular el acumulado dinámico de ingresos
+    const totalIngresos = data.reduce((total, valor) => total + valor, 0);
+    const elementTotal = document.getElementById('chartRevenueTotal');
+    if (elementTotal) {
+        elementTotal.textContent = totalIngresos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
 
     // Obtener color de la variable CSS o usar default
     const brandColor = getComputedStyle(document.documentElement).getPropertyValue('--brand-blue').trim() || '#0f4c81';
