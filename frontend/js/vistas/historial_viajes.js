@@ -482,20 +482,20 @@ function abrirMenuIncidencias(idStr) {
     let htmlBotones = '';
 
     if (viaje.productos_siniestrados_sin_justificar > 0) {
-        htmlBotones += `<button class="swal2-confirm swal2-styled" style="width: 100%; margin: 5px 0; background-color: #dc2626; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="Swal.close(); abrirModalIncidencias(${idViaje}, 'siniestrados');"><i class="fas fa-box-open"></i> Reportar Productos Siniestrados</button>`;
+        htmlBotones += `<button class="swal2-confirm swal2-styled" style="width: 100%; margin: 2px 0; background-color: #ff8484ff; border: 2px solid #dc2626; border-radius: 10px; color: white; font-weight: 700; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); box-shadow: inset 5px 5px 10px rgba(0, 0, 0, 0.3); display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="Swal.close(); abrirModalIncidencias(${idViaje}, 'siniestrados');"><i class="fa-solid fa-box"></i>Productos Siniestrados</button>`;
     }
     if ((viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.productos_rechazados_sin_justificar > 0) {
-        htmlBotones += `<button class="swal2-confirm swal2-styled" style="width: 100%; margin: 5px 0; background-color: #f97316; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="Swal.close(); abrirModalIncidencias(${idViaje}, 'rechazados');"><i class="fas fa-box"></i> Reportar Productos Rechazados</button>`;
+        htmlBotones += `<button class="swal2-confirm swal2-styled" style="width: 100%; margin: 2px 0; background-color: #ffa86aff; border: 2px solid #f97316; border-radius: 10px; color: white; font-weight: 700; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); box-shadow: inset 5px 5px 10px rgba(0, 0, 0, 0.3); display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="Swal.close(); abrirModalIncidencias(${idViaje}, 'rechazados');"><i class="fa-solid fa-box-open"></i>Productos Rechazados</button>`;
     }
     if (viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_general) {
-        htmlBotones += `<button class="swal2-confirm swal2-styled" style="width: 100%; margin: 5px 0; background-color: #b91c1c; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="Swal.close(); abrirModalIncidencias(${idViaje}, 'reporte_general');"><i class="fas fa-truck-moving"></i> Reportar Gastos del Viaje</button>`;
+        htmlBotones += `<button class="swal2-confirm swal2-styled" style="width: 100%; margin: 2px 0; background-color: #ff8484ff; border: 2px solid #dc2626; border-radius: 10px; color: white; font-weight: 700; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); box-shadow: inset 5px 5px 10px rgba(0, 0, 0, 0.3); display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="Swal.close(); abrirModalIncidencias(${idViaje}, 'reporte_general');"><i class="fa-solid fa-file-invoice-dollar"></i>Gastos del Viaje</button>`;
     }
     if (viaje.tiene_incidencia_reportada) {
-        htmlBotones += `<button class="swal2-confirm swal2-styled" style="width: 100%; margin: 5px 0; background-color: #475569; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="Swal.close(); abrirModalIncidencias(${idViaje}, 'ver');"><i class="fas fa-eye"></i> Ver Incidencias Registradas</button>`;
+        htmlBotones += `<button class="swal2-confirm swal2-styled" style="width: 100%; margin: 2px 0; background-color: #656a72ff; border: 2px solid #475569; border-radius: 10px; color: white; font-weight: 700; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); box-shadow: inset 5px 5px 10px rgba(0, 0, 0, 0.3); display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="Swal.close(); abrirModalIncidencias(${idViaje}, 'ver');"><i class="fa-solid fa-eye"></i>Ver Incidencias Registradas</button>`;
     }
 
     Swal.fire({
-        title: 'Acciones de Incidencia',
+        title: '¿Qué incidencia desea reportar?',
         html: `<div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">${htmlBotones}</div>`,
         showConfirmButton: false,
         showCancelButton: true,
@@ -567,85 +567,128 @@ async function abrirModalIncidencias(idStr, tipoAlerta = null) {
                 return;
             }
 
-            const bloquearNuevas = estaLiquidado || (esAnulado && incidencias.length >= 1);
+            const bloquearNuevas = estaLiquidado;
             if (!bloquearNuevas) {
                 document.getElementById('btn-nueva-incidencia').style.display = 'flex';
             } else {
                 document.getElementById('btn-nueva-incidencia').style.display = 'none';
             }
 
-            let filasIncidencias = '';
+            let filasIncidencias = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;">';
             incidencias.forEach(inc => {
-                const mtoDescuento = inc.monto_descuento_chofer !== null 
-                    ? `<span style="color: #ea580c; font-weight: 600;">S/ ${Number(inc.monto_descuento_chofer).toFixed(2)}</span>` 
-                    : `<span style="color: #94a3b8; font-style: italic;">Por definir</span>`;
-                    
-                const mtoEmpresa = inc.monto_asumido_empresa !== null 
-                    ? `<span style="color: #dc2626; font-weight: 600;">S/ ${Number(inc.monto_asumido_empresa).toFixed(2)}</span>` 
-                    : `<span style="color: #94a3b8; font-style: italic;">Por definir</span>`;
-                    
-                const mtoAdelanto = (inc.adelanto_recuperar !== null && Number(inc.adelanto_recuperar) > 0)
-                    ? `<span style="color: #ca8a04; font-weight: 700; background: #fef08a; padding: 2px 8px; border-radius: 12px; font-size: 11px;">S/ ${Number(inc.adelanto_recuperar).toFixed(2)}</span>`
-                    : `<span style="color: #cbd5e1;">-</span>`;
-                    
                 // Asumiendo date extraido desde YYYY-MM-DD
                 const fechaDate = new Date(inc.fecha_creacion);
                 const fechaStr = fechaDate.toISOString().split('T')[0];
 
-                filasIncidencias += `
-                    <tr>
-                        <td style="padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top;">
-                            <span style="background: #fee2e2; color: #dc2626; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap;">${inc.tipo_incidencia}</span>
-                        </td>
-                        <td style="padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; font-size: 13px; color: var(--text-primary); max-width: 250px; line-height: 1.5;" title="${inc.descripcion_detallada.replace(/"/g, '&quot;')}">
-                            <div style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis;">
-                                ${inc.descripcion_detallada}
+                // Badges dynamics
+                let badgesHTML = '';
+                if (Number(inc.valor_total_perdida) > 0) {
+                    badgesHTML += `<span style="background: #fee2e2; color: #dc2626; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-box-open"></i> Pérdida de Carga</span>`;
+                }
+                if (Number(inc.gastos_adicionales) > 0) {
+                    badgesHTML += `<span style="background: #ffedd5; color: #c2410c; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-exclamation-circle"></i> Penalidad / Gasto</span>`;
+                }
+                if (Number(inc.adelanto_recuperar) > 0) {
+                    badgesHTML += `<span style="background: #dcfce7; color: #15803d; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-money-bill-wave"></i> Recuperación Adelanto</span>`;
+                }
+
+                if (!badgesHTML) {
+                    badgesHTML = `<span style="background: #f1f5f9; color: #475569; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 700;"><i class="fas fa-info-circle"></i> General</span>`;
+                }
+
+                // Financial details
+                let finHTML = '';
+                if (Number(inc.valor_total_perdida) > 0) {
+                    finHTML += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 12px; color: var(--text-secondary);">Pérdida de Productos:</span>
+                            <span style="font-size: 13px; color: var(--text-primary); font-weight: 700;">S/ ${Number(inc.valor_total_perdida).toFixed(2)}</span>
+                        </div>
+                    `;
+                }
+                if (Number(inc.gastos_adicionales) > 0) {
+                    finHTML += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 12px; color: var(--text-secondary);">Penalidades / Gastos:</span>
+                            <span style="font-size: 13px; color: var(--text-primary); font-weight: 700;">S/ ${Number(inc.gastos_adicionales).toFixed(2)}</span>
+                        </div>
+                    `;
+                }
+                if (Number(inc.adelanto_recuperar) > 0) {
+                    finHTML += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 12px; color: var(--text-secondary);">Adelanto a Recuperar:</span>
+                            <span style="font-size: 13px; color: var(--text-primary); font-weight: 700;">S/ ${Number(inc.adelanto_recuperar).toFixed(2)}</span>
+                        </div>
+                    `;
+                }
+
+                // Asignacion de Montos
+                let asignacionHTML = '';
+                const mtoDesc = Number(inc.monto_descuento_chofer);
+                const mtoEmp = Number(inc.monto_asumido_empresa);
+                if (mtoDesc > 0 || mtoEmp > 0) {
+                    asignacionHTML = `<div style="border-top: 1px dashed #e2e8f0; margin-top: 10px; padding-top: 10px;">`;
+                    if (mtoDesc > 0) {
+                        asignacionHTML += `
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <span style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;"><i class="fas fa-user" style="color: #ea580c;"></i> Dcto. a Chofer:</span>
+                                <span style="font-size: 13px; color: #ea580c; font-weight: 800;">S/ ${mtoDesc.toFixed(2)}</span>
                             </div>
-                        </td>
-                        <td style="padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; font-weight: 600; color: var(--text-primary); white-space: nowrap;">
-                            S/ ${Number(inc.valor_total_perdida).toFixed(2)}
-                        </td>
-                        <td style="padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; font-weight: 600; color: var(--text-primary); white-space: nowrap;">
-                            S/ ${Number(inc.gastos_adicionales || 0).toFixed(2)}
-                        </td>
-                        <td style="padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; white-space: nowrap; text-align: center;">
-                            ${mtoAdelanto}
-                        </td>
-                        <td style="padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; white-space: nowrap;">
-                            ${mtoDescuento}
-                        </td>
-                        <td style="padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; white-space: nowrap;">
-                            ${mtoEmpresa}
-                        </td>
-                        <td style="padding: 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; font-size: 12px; color: var(--text-secondary); white-space: nowrap;">
-                            <span style="color: var(--text-primary); font-weight: 500;">${inc.usuario_registro}</span><br>
-                            ${fechaStr}
-                        </td>
-                    </tr>
+                        `;
+                    }
+                    if (mtoEmp > 0) {
+                        asignacionHTML += `
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;"><i class="fas fa-building" style="color: #dc2626;"></i> Asumido por Emp.:</span>
+                                <span style="font-size: 13px; color: #dc2626; font-weight: 800;">S/ ${mtoEmp.toFixed(2)}</span>
+                            </div>
+                        `;
+                    }
+                    asignacionHTML += `</div>`;
+                }
+
+                if (!finHTML && !asignacionHTML) {
+                    finHTML = `<div style="font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; padding: 10px 0;">Sin impacto financiero registrado.</div>`;
+                }
+
+                filasIncidencias += `
+                    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden; display: flex; flex-direction: column; transition: all 0.3s ease; cursor: default;" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 12px 20px -8px rgba(0,0,0,0.15)'; this.style.borderColor='#cbd5e1';" onmouseout="this.style.transform='none'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.02)'; this.style.borderColor='#e2e8f0';">
+                        <div style="padding: 16px; border-bottom: 1px solid #f1f5f9; background: #f8fafc; display: flex; flex-direction: column; gap: 12px;">
+                            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                ${badgesHTML}
+                            </div>
+                            <h4 style="margin: 0; font-size: 15px; font-weight: 800; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+                                ${inc.tipo_incidencia}
+                                <span style="font-size: 12px; font-weight: 500; color: var(--text-muted);"><i class="far fa-calendar-alt"></i> ${fechaStr}</span>
+                            </h4>
+                        </div>
+                        
+                        <div style="padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 16px;">
+                            <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; font-size: 13px; color: var(--text-secondary); line-height: 1.6; font-style: italic; max-height: 100px; overflow-y: auto; border-left: 3px solid #cbd5e1;">
+                                "${inc.descripcion_detallada}"
+                            </div>
+                            
+                            <div style="background: white; border: 1px solid #e2e8f0; padding: 16px; border-radius: 10px;">
+                                <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px;">
+                                    <i class="fas fa-wallet"></i> Resumen Financiero
+                                </div>
+                                ${finHTML}
+                                ${asignacionHTML}
+                            </div>
+                        </div>
+
+                        <div style="padding: 12px 16px; border-top: 1px solid #f1f5f9; background: #fafafa; font-size: 11px; color: var(--text-muted); display: flex; justify-content: flex-end; align-items: center; gap: 6px;">
+                            <i class="fas fa-user-edit"></i> Registrado por <strong>${inc.usuario_registro}</strong>
+                        </div>
+                    </div>
                 `;
             });
+            filasIncidencias += '</div>';
 
             modalBody.innerHTML = `
-                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
-                    <div style="overflow-x: auto; width: 100%;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 800px; text-align: left;">
-                            <thead>
-                                <tr>
-                                    <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-size: 11px;">Tipo</th>
-                                    <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; font-size: 11px;">Descripción</th>
-                                    <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-size: 11px;">Pérdida Total</th>
-                                    <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-size: 11px;">Gastos Extra</th>
-                                    <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-size: 11px; text-align: center;">Adelanto Recup.</th>
-                                    <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-size: 11px;">Descuento a Chofer</th>
-                                    <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-size: 11px;">Pérdida Empresa</th>
-                                    <th style="padding: 12px 16px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; white-space: nowrap; font-size: 11px;">Registro</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${filasIncidencias}
-                            </tbody>
-                        </table>
-                    </div>
+                <div style="padding: 10px 0;">
+                    ${filasIncidencias}
                 </div>
             `;
 
@@ -686,7 +729,7 @@ async function mostrarFormularioNuevaIncidencia(tipoAlerta = null) {
     let totalAdelantos = 0;
     
     const viajeInfoGlobal = historialViajesTodos.find(v => v.id_viaje === idViaje);
-    const esAnulado = viajeInfoGlobal && viajeInfoGlobal.estado_operativo === 'Incidencia' && viajeInfoGlobal.estado_pagos === 'Anulado';
+    const esAnulado = viajeInfoGlobal && viajeInfoGlobal.estado_operativo === 'Incidencia' && viajeInfoGlobal.estado_pagos === 'Anulado' && tipoAlerta === 'reporte_general';
 
     try {
         const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
@@ -884,7 +927,15 @@ async function mostrarFormularioNuevaIncidencia(tipoAlerta = null) {
 
     let alertaAdelantos = '';
     let colAdelantoHTML = '';
-    let gridTemplateCols = '1fr 1fr';
+    
+    // Dynamic Grid Layout for Impacto Financiero
+    let gridTemplateCols = '1fr';
+    if (isRechazados || isSiniestrados) {
+        gridTemplateCols = '1fr 1fr';
+    } else if (esAnulado) {
+        gridTemplateCols = '1fr 1fr';
+    }
+
     if (esAnulado) {
         if (totalAdelantos > 0) {
             alertaAdelantos = `
@@ -894,7 +945,6 @@ async function mostrarFormularioNuevaIncidencia(tipoAlerta = null) {
                 </div>
             `;
         }
-        gridTemplateCols = '1fr 1fr 1fr';
         colAdelantoHTML = `
             <div>
                 <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Adelanto<br>Recuperar (S/)</label>
@@ -945,7 +995,7 @@ async function mostrarFormularioNuevaIncidencia(tipoAlerta = null) {
                     </p>
                     
                     <div style="display: grid; grid-template-columns: ${gridTemplateCols}; gap: 16px; margin-bottom: 16px;">
-                        ${isReportar ? `
+                        ${(isRechazados || isSiniestrados) ? `
                         <div>
                             <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Flete Perdido (S/)${(esAnulado && totalAdelantos > 0) ? '<br>&nbsp;' : ''}</label>
                             ${inputPerdidaHTML}
@@ -960,7 +1010,7 @@ async function mostrarFormularioNuevaIncidencia(tipoAlerta = null) {
                         <div>
                             ${inputPerdidaHTML}
                             <input type="hidden" id="nueva-incidencia-indemnizar" value="0">
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Penalidad Administrativa / Otros Cargos (S/)${(esAnulado && totalAdelantos > 0) ? '&nbsp;' : ''}</label>
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Penalidad / Otros Cargos (S/)${(esAnulado && totalAdelantos > 0) ? '&nbsp;' : ''}</label>
                             <input type="number" min="0" step="0.01" id="nueva-incidencia-gastos" placeholder="0" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none;">
                         </div>
                         `}
@@ -1011,42 +1061,26 @@ async function mostrarFormularioNuevaIncidencia(tipoAlerta = null) {
                 </div>
 
                 <!-- Footer Financiero -->
+                ${(isRechazados || isSiniestrados) ? `
                 <div style="background: white; border-top: 1px solid #e2e8f0; padding: 16px; flex-shrink: 0; box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);">
                     <h6 style="margin: 0 0 12px 0; font-size: 12px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px;">Resumen Financiero</h6>
-                    
-                    ${isReportar ? `
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="font-size: 13px; color: var(--text-secondary); font-weight: 600;">Seleccione los productos para calcular la pérdida.</span>
                     </div>
-                    ` : `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <span style="font-size: 13px; color: var(--text-secondary); font-weight: 600;">Total Flete Viaje</span>
-                        <span style="font-size: 13px; color: var(--text-primary); font-weight: 600;">S/ ${totalFleteViaje.toFixed(2)}</span>
-                    </div>
-
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <span style="font-size: 13px; color: #dc2626; font-weight: 600;">Pérdida (Rechaz./Sinies.)</span>
-                        <span style="font-size: 13px; color: #dc2626; font-weight: 700;">- S/ ${perdidaTotal.toFixed(2)}</span>
-                    </div>
-
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px dashed #cbd5e1;">
-                        <span style="font-size: 14px; color: var(--text-primary); font-weight: 800;">Flete Cobrable Estimado</span>
-                        <span style="font-size: 16px; color: #16a34a; font-weight: 800;">S/ ${fleteCobrable.toFixed(2)}</span>
-                    </div>
-                    `}
                 </div>
+                ` : ''}
 
             </div>
         </div>
     `;
 
     setTimeout(() => {
-        if (!isReportar && remanente === 0) {
+        if (!(isRechazados || isSiniestrados) && remanente === 0) {
             const el = document.getElementById('nueva-incidencia-gastos');
             if (el) el.focus();
         }
 
-        if (isReportar) {
+        if (isRechazados || isSiniestrados) {
             const checkboxes = document.querySelectorAll('.chk-detalle-rechazado');
             
             // Función para formatear a DECIMAL(10,2)
@@ -1527,7 +1561,7 @@ function renderizarTarjetasViaje(viajes, isLoadMore = false) {
                             
                             if (hasSiniestro || hasRechazo) {
                                 const btnClass = hasSiniestro ? 'btn-pulsing-red' : 'btn-pulsing-orange';
-                                return `<button class="btn-viaje btn-menu-incidencia ${btnClass}" data-id="${viaje.id_viaje}"><i class="fas fa-exclamation-triangle"></i> Acciones de Incidencia</button>`;
+                                return `<button class="btn-viaje btn-menu-incidencia ${btnClass}" data-id="${viaje.id_viaje}"><i class="fas fa-exclamation-triangle"></i>Reportar</button>`;
                             } else {
                                 return `<button class="btn-viaje btn-incidencia" data-id="${viaje.id_viaje}" data-tipo-alerta="ver" ${viaje.estado_operativo === 'Incidencia' ? 'style="color: #dc2626; background: #fee2e2;"' : ''}>Ver incidencias</button>`;
                             }
