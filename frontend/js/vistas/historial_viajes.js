@@ -204,6 +204,37 @@ async function init_historial_viajes() {
     await fetchViajes(false);
 }
 
+window.finalizarViaje = async function(idViaje) {
+    const confirm = await Swal.fire({
+        title: '¿Finalizar Viaje?',
+        text: 'Al finalizar este viaje, se cerrará la auditoría y ya no podrás registrar nuevas incidencias ni adelantos. ¿Estás seguro?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Sí, finalizar viaje',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (confirm.isConfirmed) {
+        try {
+            const response = await fetch(`/api/viajes/${idViaje}/finalizar`, {
+                method: 'PUT'
+            });
+            const data = await response.json();
+            if (data.success) {
+                Swal.fire('¡Viaje Finalizado!', data.message, 'success');
+                fetchViajes(false);
+            } else {
+                Swal.fire('Error', data.message || 'No se pudo finalizar el viaje', 'error');
+            }
+        } catch (error) {
+            console.error('Error finalizando viaje:', error);
+            Swal.fire('Error', 'Hubo un error de conexión', 'error');
+        }
+    }
+};
+
 function abrirModalDetallesViaje(idStr) {
     const idViaje = Number(idStr);
     const viaje = historialViajesTodos.find(v => v.id_viaje === idViaje);
@@ -510,9 +541,10 @@ async function abrirModalIncidencias(idStr, tipoAlerta = null) {
     const modalIncidencias = document.getElementById('modal-incidencias-viaje');
     const modalBody = document.getElementById('modal-incidencias-body');
     
-    // Validar estado de pago
+    // Validar estado de pago o viaje finalizado
     const viajeInfo = historialViajesTodos.find(v => v.id_viaje === idViaje);
     const estaLiquidado = viajeInfo && viajeInfo.estado_pagos === 'Liquidado';
+    const estaCerrado = estaLiquidado || (viajeInfo && viajeInfo.estado_operativo === 'Finalizado');
     const esAnulado = viajeInfo && viajeInfo.estado_operativo === 'Incidencia' && viajeInfo.estado_pagos === 'Anulado';
     
     document.getElementById('modal-incidencias-titulo').textContent = `Incidencias del Viaje #${idViaje}`;
@@ -548,10 +580,10 @@ async function abrirModalIncidencias(idStr, tipoAlerta = null) {
                 document.getElementById('btn-nueva-incidencia').style.display = 'none';
                 
                 let btnNuevaEmptyHtml = '';
-                if (!estaLiquidado) {
+                if (!estaCerrado) {
                     btnNuevaEmptyHtml = `<button id="btn-nueva-incidencia-empty" style="background: #dc2626; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2); transition: all 0.2s;"><i class="fas fa-plus"></i> Nueva Incidencia</button>`;
                 } else {
-                    btnNuevaEmptyHtml = `<div style="background: #fef3c7; border: 1px solid #fde68a; color: #d97706; padding: 12px; border-radius: 8px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;"><i class="fas fa-lock"></i> Este viaje ha sido liquidado. No se pueden registrar nuevas incidencias.</div>`;
+                    btnNuevaEmptyHtml = `<div style="background: #fef3c7; border: 1px solid #fde68a; color: #d97706; padding: 12px; border-radius: 8px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;"><i class="fas fa-lock"></i> Este viaje está finalizado/liquidado. No se pueden registrar nuevas incidencias.</div>`;
                 }
 
                 modalBody.innerHTML = `
@@ -567,7 +599,7 @@ async function abrirModalIncidencias(idStr, tipoAlerta = null) {
                 return;
             }
 
-            const bloquearNuevas = estaLiquidado;
+            const bloquearNuevas = estaCerrado;
             if (!bloquearNuevas) {
                 document.getElementById('btn-nueva-incidencia').style.display = 'flex';
             } else {
@@ -1467,9 +1499,21 @@ function renderizarTarjetasViaje(viajes, isLoadMore = false) {
     
     viajes.forEach(viaje => {
         let colorEstado, bgEstado;
+        let esSiniestroFinalizado = false;
+        
         if (viaje.estado_operativo === 'En Ruta') { colorEstado = 'var(--brand-blue)'; bgEstado = '#e0f2fe'; }
         else if (viaje.estado_operativo === 'Llegó a Destino') { colorEstado = '#16a34a'; bgEstado = '#dcfce7'; }
-        else if (viaje.estado_operativo === 'Finalizado') { colorEstado = '#475569'; bgEstado = '#f1f5f9'; }
+        else if (viaje.estado_operativo === 'Descargado') { colorEstado = '#8b5cf6'; bgEstado = '#ede9fe'; }
+        else if (viaje.estado_operativo === 'Finalizado') { 
+            if (!viaje.fecha_llegada) {
+                esSiniestroFinalizado = true;
+                colorEstado = '#dc2626'; 
+                bgEstado = '#fee2e2'; 
+            } else {
+                colorEstado = '#475569'; 
+                bgEstado = '#f1f5f9'; 
+            }
+        }
         else { colorEstado = '#dc2626'; bgEstado = '#fee2e2'; } // Incidencia
 
         let colorPago, bgPago;
@@ -1478,20 +1522,23 @@ function renderizarTarjetasViaje(viajes, isLoadMore = false) {
         else { colorPago = '#d97706'; bgPago = '#fef3c7'; } // Pendiente o default
 
         const tarjetaHtml = `
-            <div class="card-viaje" style="background: #ffffff; border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: flex; gap: 24px;">
+            <div class="card-viaje" style="background: #ffffff; border: 1px solid var(--border-light); ${esSiniestroFinalizado ? 'border-left: 4px solid #dc2626;' : ''} border-radius: var(--radius-lg); padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: flex; gap: 24px;">
                 <div style="display: flex; flex-direction: column; justify-content: space-between; width: 240px; flex-shrink: 0;">
                     <div style="display: flex; gap: 16px;">
                         <div style="width: 48px; height: 48px; border-radius: 12px; background: #e0f2fe; color: var(--brand-blue); display: flex; justify-content: center; align-items: center; font-size: 20px; flex-shrink: 0;">
                             <i class="fas fa-truck"></i>
                         </div>
                         <div style="display: flex; flex-direction: column; align-items: flex-start;">
-                            <h3 style="margin: 0 0 4px 0; font-size: 16px; color: var(--text-primary); font-weight: 700;">Viaje #${viaje.id_viaje}</h3>
+                            <h3 style="margin: 0 0 4px 0; font-size: 16px; color: var(--text-primary); font-weight: 700;">
+                                Viaje #${viaje.id_viaje}
+                                <i class="fa-solid fa-circle-info" style="cursor: pointer; margin-left: 8px; color: var(--brand-blue); font-size: 14px;" title="Ver detalles" onclick="abrirModalDetallesViaje(${viaje.id_viaje})"></i>
+                            </h3>
                             <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">${viaje.ciudad_origen || 'Origen'} - ${viaje.ciudad_destino || 'Destino'}</p>
                         </div>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px; align-items: flex-start;">
                         <div style="display: flex; gap: 8px; margin-bottom: 4px;">
-                            <span style="background: ${bgEstado}; color: ${colorEstado}; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-truck-moving"></i> ${viaje.estado_operativo}</span>
+                            <span style="background: ${bgEstado}; color: ${colorEstado}; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-truck-moving"></i> ${esSiniestroFinalizado ? 'Finalizado (Siniestro)' : viaje.estado_operativo}</span>
                             <span style="background: ${bgPago}; color: ${colorPago}; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-money-bill-wave"></i> ${viaje.estado_pagos || 'Pendiente'}</span>
                         </div>
                         ${viaje.productos_siniestrados_sin_justificar > 0
@@ -1500,7 +1547,7 @@ function renderizarTarjetasViaje(viajes, isLoadMore = false) {
                         ${viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_general 
                             ? `<span class="badge-pulsing-red" style="background: #dc2626; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-exclamation-circle"></i> Siniestro: Requiere Reporte</span>` 
                             : ''}
-                        ${(viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.productos_rechazados_sin_justificar > 0
+                        ${(viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Descargado' || viaje.estado_operativo === 'Finalizado') && viaje.productos_rechazados_sin_justificar > 0
                             ? `<span class="badge-pulsing-orange" style="background: #f97316; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-exclamation-triangle"></i> Reporte: (${viaje.productos_rechazados_sin_justificar} Producto${viaje.productos_rechazados_sin_justificar > 1 ? 's' : ''} Rechazado${viaje.productos_rechazados_sin_justificar > 1 ? 's' : ''})</span>`
                             : ''}
                         ${viaje.id_viaje_origen 
@@ -1545,26 +1592,31 @@ function renderizarTarjetasViaje(viajes, isLoadMore = false) {
                             <i class="far fa-calendar-check"></i> Fecha Llegada
                         </p>
                         <p style="margin: 0; font-size: 14px; color: var(--text-primary); font-weight: 500;">
-                            ${(viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.fecha_llegada ? formatFechaCompleta(viaje.fecha_llegada) : `<span style="color: ${colorEstado}; font-weight: 600;">${viaje.estado_operativo}</span>`}
+                            ${(viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Descargado' || viaje.estado_operativo === 'Finalizado') && viaje.fecha_llegada ? formatFechaCompleta(viaje.fecha_llegada) : `<span style="color: ${colorEstado}; font-weight: 600;">${esSiniestroFinalizado ? 'No llegó a destino' : viaje.estado_operativo}</span>`}
                         </p>
                     </div>
                 </div>
 
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 140px; border-left: 1px solid var(--border-light); padding-left: 24px;">
                     <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: auto;">
-                        <button class="btn-viaje btn-ver-detalles" data-id="${viaje.id_viaje}">Ver detalles</button>
                         <button class="btn-viaje btn-ver-cargas" data-id="${viaje.id_viaje}">Ver cargas</button>
                         <button class="btn-viaje btn-ver-adelantos" data-id="${viaje.id_viaje}">Ver adelantos</button>
                         ${(() => {
+                            let btnHtml = '';
                             const hasSiniestro = viaje.productos_siniestrados_sin_justificar > 0 || (viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_general);
-                            const hasRechazo = (viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.productos_rechazados_sin_justificar > 0;
+                            const hasRechazo = (viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Descargado' || viaje.estado_operativo === 'Finalizado') && viaje.productos_rechazados_sin_justificar > 0;
                             
                             if (hasSiniestro || hasRechazo) {
                                 const btnClass = hasSiniestro ? 'btn-pulsing-red' : 'btn-pulsing-orange';
-                                return `<button class="btn-viaje btn-menu-incidencia ${btnClass}" data-id="${viaje.id_viaje}"><i class="fas fa-exclamation-triangle"></i>Reportar</button>`;
+                                btnHtml += `<button class="btn-viaje btn-menu-incidencia ${btnClass}" data-id="${viaje.id_viaje}"><i class="fas fa-exclamation-triangle"></i>Reportar</button>`;
                             } else {
-                                return `<button class="btn-viaje btn-incidencia" data-id="${viaje.id_viaje}" data-tipo-alerta="ver" ${viaje.estado_operativo === 'Incidencia' ? 'style="color: #dc2626; background: #fee2e2;"' : ''}>Ver incidencias</button>`;
+                                btnHtml += `<button class="btn-viaje btn-incidencia" data-id="${viaje.id_viaje}" data-tipo-alerta="ver" ${viaje.estado_operativo === 'Incidencia' ? 'style="color: #dc2626; background: #fee2e2;"' : ''}>Ver incidencias</button>`;
                             }
+
+                            if (viaje.estado_operativo === 'Descargado' || viaje.estado_operativo === 'Incidencia') {
+                                btnHtml += `<button class="btn-viaje" style="background-color: #f1f5f9; color: #475569; font-weight: 600; border: none; padding: 8px; border-radius: 6px; cursor: pointer;" onclick="finalizarViaje(${viaje.id_viaje})">Finalizar Viaje</button>`;
+                            }
+                            return btnHtml;
                         })()}
                     </div>
                 </div>
@@ -1605,14 +1657,9 @@ async function abrirModalAdelantos(idStr) {
             const op = viaje.estado_operativo;
             const pag = viaje.estado_pagos;
 
-            if (op === 'Incidencia' && pag === 'Anulado') {
+            if (op === 'Finalizado' || pag === 'Liquidado' || (op === 'Incidencia' && pag === 'Anulado')) {
                 canAdd = false;
-            } else if (pag === 'Liquidado') {
-                canAdd = false;
-            } else if (['En Ruta', 'Llegó a Destino', 'Finalizado'].includes(op) && pag === 'Pendiente') {
-                canAdd = true;
-            } else if (pag === 'Pendiente') {
-                // Cualquier otro caso donde siga pendiente
+            } else {
                 canAdd = true;
             }
 
@@ -1632,7 +1679,16 @@ async function abrirModalAdelantos(idStr) {
                         </div>
                     `;
                 } else {
-                    modalBody.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">No hay adelantos registrados y el viaje ya no permite nuevos adelantos.</div>';
+                    modalBody.innerHTML = `
+                        <div style="text-align: center; padding: 40px; margin: auto;">
+                            <div style="width: 64px; height: 64px; border-radius: 50%; background: #f1f5f9; color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 16px;">
+                                <i class="fas fa-hand-holding-usd"></i>
+                            </div>
+                            <h4 style="margin: 0 0 8px 0; font-size: 16px; color: var(--text-primary);">Sin adelantos</h4>
+                            <p style="margin: 0 0 24px 0; font-size: 14px; color: var(--text-secondary);">Este viaje no tiene ningún adelanto registrado al chofer.</p>
+                            <div style="background: #fef3c7; border: 1px solid #fde68a; color: #d97706; padding: 12px; border-radius: 8px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;"><i class="fas fa-lock"></i> Este viaje está finalizado/liquidado. No se pueden registrar nuevos adelantos.</div>
+                        </div>
+                    `;
                 }
             } else {
                 if (canAdd) {

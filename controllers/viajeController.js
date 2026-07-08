@@ -460,17 +460,17 @@ const entregarCarga = async (req, res) => {
         `;
         const [checkRows] = await connection.query(sqlCheckAll, [idViaje]);
         
-        let viajeFinalizado = false;
+        let viajeDescargado = false;
         
         if (checkRows[0].pendientes === 0) {
-            // 4. Si todas están entregadas/rechazadas, el viaje finaliza
+            // 4. Si todas están entregadas/rechazadas, el viaje termina de descargar
             const sqlUpdateViaje = `
                 UPDATE Viaje 
-                SET estado_operativo = 'Finalizado' 
+                SET estado_operativo = 'Descargado' 
                 WHERE id_viaje = ?
             `;
             await connection.query(sqlUpdateViaje, [idViaje]);
-            viajeFinalizado = true;
+            viajeDescargado = true;
         }
         
         await connection.commit();
@@ -479,7 +479,7 @@ const entregarCarga = async (req, res) => {
         return res.status(200).json({ 
             success: true, 
             message: 'Carga marcada como entregada.',
-            viajeFinalizado: viajeFinalizado
+            viajeDescargado: viajeDescargado
         });
     } catch (error) {
         if (connection) {
@@ -600,16 +600,16 @@ const entregaParcialCarga = async (req, res) => {
         `;
         const [checkRows] = await connection.query(sqlCheckAll, [cargaOriginal.id_viaje]);
         
-        let viajeFinalizado = false;
+        let viajeDescargado = false;
         
         if (checkRows[0].pendientes === 0) {
             const sqlUpdateViaje = `
                 UPDATE Viaje 
-                SET estado_operativo = 'Finalizado' 
+                SET estado_operativo = 'Descargado' 
                 WHERE id_viaje = ?
             `;
             await connection.query(sqlUpdateViaje, [cargaOriginal.id_viaje]);
-            viajeFinalizado = true;
+            viajeDescargado = true;
         }
 
         await connection.commit();
@@ -618,7 +618,7 @@ const entregaParcialCarga = async (req, res) => {
         res.status(200).json({ 
             success: true, 
             message: 'Entrega parcial procesada correctamente.',
-            viajeFinalizado: viajeFinalizado
+            viajeDescargado: viajeDescargado
         });
 
     } catch (error) {
@@ -671,17 +671,17 @@ const rechazarCarga = async (req, res) => {
         `;
         const [checkRows] = await connection.query(sqlCheckAll, [idViaje]);
         
-        let viajeFinalizado = false;
+        let viajeDescargado = false;
         
         if (checkRows[0].pendientes === 0) {
-            // 4. Si todas están entregadas, el viaje finaliza
+            // 4. Si todas están entregadas, el viaje se descarga completamente
             const sqlUpdateViaje = `
                 UPDATE Viaje 
-                SET estado_operativo = 'Finalizado' 
+                SET estado_operativo = 'Descargado' 
                 WHERE id_viaje = ?
             `;
             await connection.query(sqlUpdateViaje, [idViaje]);
-            viajeFinalizado = true;
+            viajeDescargado = true;
         }
         
         await connection.commit();
@@ -690,7 +690,7 @@ const rechazarCarga = async (req, res) => {
         return res.status(200).json({ 
             success: true, 
             message: 'Carga marcada como entregada.',
-            viajeFinalizado: viajeFinalizado
+            viajeDescargado: viajeDescargado
         });
     } catch (error) {
         if (connection) {
@@ -1515,6 +1515,37 @@ const obtenerHistorialLiquidaciones = async (req, res) => {
     }
 };
 
+const cerrarViaje = async (req, res) => {
+    try {
+        const idViaje = req.params.id;
+        
+        // Verificar si existe y si está en estado Descargado (o Incidencia)
+        const sqlCheck = `SELECT estado_operativo FROM Viaje WHERE id_viaje = ?`;
+        const [rows] = await db.query(sqlCheck, [idViaje]);
+        
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Viaje no encontrado.' });
+        }
+        
+        const estado = rows[0].estado_operativo;
+        if (estado === 'Finalizado') {
+            return res.status(400).json({ success: false, message: 'El viaje ya se encuentra finalizado.' });
+        }
+
+        const sqlUpdate = `
+            UPDATE Viaje 
+            SET estado_operativo = 'Finalizado' 
+            WHERE id_viaje = ?
+        `;
+        await db.query(sqlUpdate, [idViaje]);
+        
+        return res.status(200).json({ success: true, message: 'Viaje finalizado correctamente. Ya no se pueden registrar incidencias.' });
+    } catch (error) {
+        console.error('Error al cerrar viaje:', error);
+        return res.status(500).json({ success: false, message: 'Error interno al finalizar el viaje.' });
+    }
+};
+
 module.exports = {
     registrarViaje,
     obtenerHistorialViajes,
@@ -1532,5 +1563,6 @@ module.exports = {
     obtenerLiquidacionesPendientes,
     liquidarViaje,
     obtenerHistorialLiquidaciones,
-    obtenerAdelantosViaje
+    obtenerAdelantosViaje,
+    cerrarViaje
 };

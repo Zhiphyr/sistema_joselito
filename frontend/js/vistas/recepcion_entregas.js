@@ -79,8 +79,8 @@ async function confirmarEntregaCarga(idCarga, idViaje, estadoCobro, estadoViaje)
         const data = await response.json();
         
         if (data.success) {
-            if (data.viajeFinalizado) {
-                Swal.fire('¡Viaje Finalizado!', 'Se han entregado todas las cargas. El viaje ha culminado exitosamente.', 'success');
+            if (data.viajeDescargado) {
+                Swal.fire('¡Viaje Descargado!', 'Se han entregado todas las cargas. El viaje ha culminado sus entregas exitosamente.', 'success');
                 document.getElementById('modal-gestionar-entregas').style.display = 'none';
             } else {
                 Swal.fire('¡Carga Entregada!', 'La carga ha sido marcada como entregada exitosamente.', 'success');
@@ -1214,8 +1214,8 @@ document.addEventListener('click', async (e) => {
                 const data = await response.json();
                 
                 if (data.success) {
-                    if (data.viajeFinalizado) {
-                        Swal.fire('¡Viaje Finalizado!', 'Se han entregado y/o procesado todas las cargas. El viaje ha culminado exitosamente.', 'success');
+                    if (data.viajeDescargado) {
+                        Swal.fire('¡Viaje Descargado!', 'Se han entregado y/o procesado todas las cargas. El viaje ha culminado sus entregas exitosamente.', 'success');
                         document.getElementById('modal-gestionar-entregas').style.display = 'none';
                     } else {
                         Swal.fire('¡Carga Rechazada!', 'La carga ha sido rechazada y su cobro anulado.', 'success');
@@ -1390,8 +1390,8 @@ async function confirmarEntregaParcialBackend(idCarga, productosAceptados, produ
         const data = await response.json();
 
         if (data.success) {
-            if (data.viajeFinalizado) {
-                Swal.fire('¡Viaje Finalizado!', 'Se han entregado y/o procesado todas las cargas. El viaje ha culminado exitosamente.', 'success');
+            if (data.viajeDescargado) {
+                Swal.fire('¡Viaje Descargado!', 'Se han entregado y/o procesado todas las cargas. El viaje ha culminado sus entregas exitosamente.', 'success');
                 document.getElementById('modal-entrega-parcial').style.display = 'none';
                 document.getElementById('modal-gestionar-entregas').style.display = 'none';
             } else {

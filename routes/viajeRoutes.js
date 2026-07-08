@@ -21,5 +21,6 @@ router.get('/:id/adelantos', viajeController.obtenerAdelantosViaje);
 router.post('/:id/adelantos', upload.single('evidencia'), viajeController.registrarAdelantoViaje);
 
 router.post('/:id/liquidar', upload.any(), viajeController.liquidarViaje);
+router.put('/:id/finalizar', viajeController.cerrarViaje);
 
 module.exports = router;
