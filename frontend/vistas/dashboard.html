@@ -4,7 +4,7 @@
         <p style="color: var(--text-secondary); font-size: 13px; margin-top: 4px;">Control y monitoreo de la flota y finanzas en tiempo real</p>
     </div>
     <div style="display: flex; gap: 8px;">
-        <select class="form-control" style="width: auto; padding: 8px 12px; font-size: 13px; font-weight: 500; cursor: pointer; border-radius: var(--radius-md);">
+        <select class="form-control" id="dashboardRangeSelect" style="width: auto; padding: 8px 12px; font-size: 13px; font-weight: 500; cursor: pointer; border-radius: var(--radius-md);">
             <option value="este-mes">Este Mes</option>
             <option value="hoy">Hoy</option>
             <option value="esta-semana">Esta Semana</option>
@@ -23,12 +23,12 @@
                 <i class="fas fa-money-bill-trend-up stat-card-icon"></i>
             </div>
             <div>
-                <div class="stat-card-value">S/ 32,400</div>
-                <div class="stat-card-title" style="font-size: 11px; margin-bottom: 0; text-transform: none; opacity: 0.95;">+12.5% vs mes anterior</div>
+                <div class="stat-card-value" id="stat-fletes-valor">S/ 0.00</div>
+                <div class="stat-card-title" id="stat-fletes-comparativa" style="font-size: 11px; margin-bottom: 0; text-transform: none; opacity: 0.95;">+0% vs mes anterior</div>
             </div>
             <div class="stat-card-footer">
                 <i class="far fa-clock"></i>
-                <span>actualizado hace 5 min</span>
+                <span>actualizado ahora</span>
             </div>
         </div>
     </div>
@@ -41,12 +41,12 @@
                 <i class="fas fa-truck-fast stat-card-icon"></i>
             </div>
             <div>
-                <div class="stat-card-value">145</div>
-                <div class="stat-card-title" style="font-size: 11px; margin-bottom: 0; text-transform: none; opacity: 0.95;">+8 viajes esta semana</div>
+                <div class="stat-card-value" id="stat-viajes-valor">0</div>
+                <div class="stat-card-title" id="stat-viajes-comparativa" style="font-size: 11px; margin-bottom: 0; text-transform: none; opacity: 0.95;">+0 viajes esta semana</div>
             </div>
             <div class="stat-card-footer">
                 <i class="far fa-clock"></i>
-                <span>actualizado hace 5 min</span>
+                <span>actualizado ahora</span>
             </div>
         </div>
     </div>
@@ -59,12 +59,12 @@
                 <i class="fas fa-boxes-packing stat-card-icon"></i>
             </div>
             <div>
-                <div class="stat-card-value">12</div>
-                <div class="stat-card-title" style="font-size: 11px; margin-bottom: 0; text-transform: none; opacity: 0.95;">3 entregas prioritarias</div>
+                <div class="stat-card-value" id="stat-cargas-valor">0</div>
+                <div class="stat-card-title" style="font-size: 11px; margin-bottom: 0; text-transform: none; opacity: 0.95;">en ruta / por entregar</div>
             </div>
             <div class="stat-card-footer">
                 <i class="far fa-clock"></i>
-                <span>actualizado hace 5 min</span>
+                <span>actualizado ahora</span>
             </div>
         </div>
     </div>
@@ -77,12 +77,12 @@
                 <i class="fas fa-users stat-card-icon"></i>
             </div>
             <div>
-                <div class="stat-card-value">500</div>
-                <div class="stat-card-title" style="font-size: 11px; margin-bottom: 0; text-transform: none; opacity: 0.95;">+5 nuevos registrados</div>
+                <div class="stat-card-value" id="stat-clientes-valor">0</div>
+                <div class="stat-card-title" id="stat-clientes-comparativa" style="font-size: 11px; margin-bottom: 0; text-transform: none; opacity: 0.95;">+0 registrados este mes</div>
             </div>
             <div class="stat-card-footer">
                 <i class="far fa-clock"></i>
-                <span>actualizado hace 5 min</span>
+                <span>actualizado ahora</span>
             </div>
         </div>
     </div>

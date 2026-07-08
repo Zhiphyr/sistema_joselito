@@ -25,6 +25,7 @@ const camionRoutes = require('./routes/camionRoutes');
 const rutaRoutes = require('./routes/rutaRoutes');
 const viajeRoutes = require('./routes/viajeRoutes');
 const deudaRoutes = require('./routes/deudaRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 // Registro de rutas
 app.use('/api/auth', authRoutes);
@@ -38,6 +39,7 @@ app.use('/api/camiones', camionRoutes);
 app.use('/api/rutas', rutaRoutes);
 app.use('/api/viajes', viajeRoutes);
 app.use('/api/deudas', deudaRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Ruta de prueba
 app.get('/api/ping', (req, res) => {

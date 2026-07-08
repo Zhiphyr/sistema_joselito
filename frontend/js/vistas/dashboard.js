@@ -1,13 +1,18 @@
 window.init_dashboard = function() {
     console.log("Dashboard principal inicializado");
 
-    // 1. Cargar Chart.js si no existe
-    cargarChartJS(() => {
-        inicializarGraficoFinanciero();
-    });
+    // 1. Cargar estadísticas dinámicas por defecto (este mes)
+    cargarEstadisticasDashboard('este-mes');
 
-    // 2. Animar indicador de flota radial
-    animarMedidorFlota();
+    // 2. Enlazar el selector de rango de tiempo
+    const rangeSelect = document.getElementById('dashboardRangeSelect');
+    if (rangeSelect) {
+        // Asegurarse de que esté seleccionado por defecto
+        rangeSelect.value = 'este-mes';
+        rangeSelect.addEventListener('change', (e) => {
+            cargarEstadisticasDashboard(e.target.value);
+        });
+    }
 
     // 3. Enlazar botón de flota completa
     const btnGoToFleet = document.getElementById('btnGoToFleet');
@@ -29,6 +34,86 @@ window.init_dashboard = function() {
     });
 };
 
+async function cargarEstadisticasDashboard(rango = 'este-mes') {
+    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+    
+    try {
+        const response = await fetch(`http://localhost:3000/api/dashboard/stats?rango=${rango}`, {
+            headers: { 'x-user-profile': sessionData.id_perfil || 1 }
+        });
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            const data = result.data;
+            
+            // 1. Fletes e Ingresos
+            document.getElementById('stat-fletes-valor').textContent = `S/ ${data.ingresos.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            const varIngresos = data.ingresos.variacion;
+            const compIngresos = data.ingresos.comparativaTexto || 'vs mes anterior';
+            const textVarIngresos = varIngresos >= 0 ? `+${varIngresos}% ${compIngresos}` : `${varIngresos}% ${compIngresos}`;
+            document.getElementById('stat-fletes-comparativa').textContent = textVarIngresos;
+            
+            // 2. Viajes Completados
+            document.getElementById('stat-viajes-valor').textContent = data.viajes.completados;
+            
+            const compViajes = data.viajes.comparativaTexto || 'vs mes anterior';
+            if (rango === 'hoy') {
+                document.getElementById('stat-viajes-comparativa').textContent = `+${data.viajes.completados - data.viajes.comparativa >= 0 ? data.viajes.completados - data.viajes.comparativa : 0} vs ayer (${data.viajes.comparativa} viajes)`;
+            } else if (rango === 'esta-semana') {
+                document.getElementById('stat-viajes-comparativa').textContent = `+${data.viajes.completados - data.viajes.comparativa >= 0 ? data.viajes.completados - data.viajes.comparativa : 0} vs sem. pasada (${data.viajes.comparativa} viajes)`;
+            } else if (rango === 'este-mes') {
+                document.getElementById('stat-viajes-comparativa').textContent = `+${data.viajes.completados - data.viajes.comparativa >= 0 ? data.viajes.completados - data.viajes.comparativa : 0} vs mes anterior (${data.viajes.comparativa} viajes)`;
+            } else {
+                document.getElementById('stat-viajes-comparativa').textContent = `+${data.viajes.completados - data.viajes.comparativa >= 0 ? data.viajes.completados - data.viajes.comparativa : 0} vs año anterior (${data.viajes.comparativa} viajes)`;
+            }
+            
+            // 3. Cargas Pendientes
+            document.getElementById('stat-cargas-valor').textContent = data.cargas.pendientes;
+            
+            // 4. Clientes Activos
+            document.getElementById('stat-clientes-valor').textContent = data.clientes.activos;
+            
+            if (rango === 'hoy') {
+                document.getElementById('stat-clientes-comparativa').textContent = `+${data.clientes.nuevos} registrados hoy`;
+            } else if (rango === 'esta-semana') {
+                document.getElementById('stat-clientes-comparativa').textContent = `+${data.clientes.nuevos} esta semana`;
+            } else if (rango === 'este-mes') {
+                document.getElementById('stat-clientes-comparativa').textContent = `+${data.clientes.nuevos} este mes`;
+            } else {
+                document.getElementById('stat-clientes-comparativa').textContent = `+${data.clientes.nuevos} este año`;
+            }
+            
+            // 5. Estado de la Flota (Textos e Indicador)
+            document.getElementById('totalTrucksText').textContent = data.flota.total;
+            document.getElementById('activeTrucksText').textContent = data.flota.activos;
+            document.getElementById('inactiveTrucksText').textContent = data.flota.inactivos;
+            
+            // Inicializar/Animar Medidor Flota
+            animarMedidorFlota(data.flota.total, data.flota.activos);
+            
+            // Inicializar Grafico Financiero
+            cargarChartJS(() => {
+                inicializarGraficoFinanciero(data.grafico);
+            });
+            
+        } else {
+            console.error("Error al obtener estadísticas del dashboard:", result.message);
+            // Fallback a animación estática básica si la API falla
+            animarMedidorFlota(20, 17);
+            cargarChartJS(() => {
+                inicializarGraficoFinanciero();
+            });
+        }
+    } catch (error) {
+        console.error("Error de conexión al cargar estadísticas:", error);
+        // Fallback
+        animarMedidorFlota(20, 17);
+        cargarChartJS(() => {
+            inicializarGraficoFinanciero();
+        });
+    }
+}
+
 function cargarChartJS(callback) {
     if (window.Chart) {
         callback();
@@ -41,9 +126,13 @@ function cargarChartJS(callback) {
     document.head.appendChild(script);
 }
 
-function inicializarGraficoFinanciero() {
+function inicializarGraficoFinanciero(datosGrafico) {
     const ctx = document.getElementById('revChart');
     if (!ctx) return;
+
+    // Si no vienen datos de gráfico, usamos los estáticos de prueba
+    const labels = datosGrafico ? datosGrafico.labels : ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
+    const data = datosGrafico ? datosGrafico.data : [14200, 18500, 16900, 24000, 21800, 32400];
 
     // Obtener color de la variable CSS o usar default
     const brandColor = getComputedStyle(document.documentElement).getPropertyValue('--brand-blue').trim() || '#0f4c81';
@@ -54,13 +143,18 @@ function inicializarGraficoFinanciero() {
     gradient.addColorStop(0, 'rgba(15, 76, 129, 0.22)');
     gradient.addColorStop(1, 'rgba(15, 76, 129, 0.00)');
 
-    new Chart(ctx, {
+    // Destruir gráfico anterior si existe para evitar duplicación al recargar SPA
+    if (window.miGraficoDashboard) {
+        window.miGraficoDashboard.destroy();
+    }
+
+    window.miGraficoDashboard = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'],
+            labels: labels,
             datasets: [{
                 label: 'Ingresos Mensuales (S/)',
-                data: [14200, 18500, 16900, 24000, 21800, 32400],
+                data: data,
                 borderColor: brandColor,
                 borderWidth: 3,
                 backgroundColor: gradient,
@@ -132,14 +226,15 @@ function inicializarGraficoFinanciero() {
     });
 }
 
-function animarMedidorFlota() {
+function animarMedidorFlota(totalArg, activeArg) {
     const circle = document.getElementById('fleetGaugeCircle');
     const label = document.getElementById('fleetActivePercentage');
     if (!circle || !label) return;
 
-    const total = 20;
-    const active = 17;
-    const percentage = Math.round((active / total) * 100); // 85%
+    // Valores por defecto
+    const total = totalArg !== undefined ? totalArg : 20;
+    const active = activeArg !== undefined ? activeArg : 17;
+    const percentage = total > 0 ? Math.round((active / total) * 100) : 0;
 
     // Configurar circunferencia
     const radius = circle.r.baseVal.value;
@@ -148,7 +243,7 @@ function animarMedidorFlota() {
     circle.style.strokeDasharray = `${circumference} ${circumference}`;
     circle.style.strokeDashoffset = circumference;
 
-    // Trigger de animación (pequeño delay para que se cargue la vista en el DOM)
+    // Trigger de animación
     setTimeout(() => {
         const offset = circumference - (percentage / 100) * circumference;
         circle.style.strokeDashoffset = offset;
@@ -156,8 +251,13 @@ function animarMedidorFlota() {
         // Animar el número contador
         let current = 0;
         const duration = 1200; // 1.2s
-        const stepTime = Math.max(Math.floor(duration / percentage), 10);
+        const stepTime = percentage > 0 ? Math.max(Math.floor(duration / percentage), 10) : 10;
         
+        if (percentage === 0) {
+            label.textContent = `0%`;
+            return;
+        }
+
         const timer = setInterval(() => {
             current += 1;
             label.textContent = `${current}%`;
@@ -170,7 +270,6 @@ function animarMedidorFlota() {
 }
 
 function navegarAModulo(ruta) {
-    // Buscar en la lista de navegación lateral el link correspondiente
     const links = document.querySelectorAll('#menuList .nav-link');
     let targetLink = null;
 
@@ -181,10 +280,13 @@ function navegarAModulo(ruta) {
     });
 
     if (targetLink) {
-        // Ejecutar evento click para cargar la vista vía SPA
         targetLink.click();
     } else {
         console.warn(`No se encontró enlace lateral para la ruta: ${ruta}`);
     }
 }
+
+
+
+
 
