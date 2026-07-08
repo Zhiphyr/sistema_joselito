@@ -122,7 +122,6 @@ window.abrirModalEditarCamion = function (id) {
     document.getElementById('tipo_documento_camion').value = data.tipo_documento;
     document.getElementById('numero_documento_camion').value = data.numero_documento;
     document.getElementById('conductor_camion').value = data.conductor;
-    document.getElementById('direccion_camion').value = data.direccion;
     document.getElementById('telefono_camion').value = data.telefono;
 
     // En edición: placa inmutable
@@ -147,7 +146,6 @@ async function guardarCamion(e) {
         tipo_documento: document.getElementById('tipo_documento_camion').value,
         numero_documento: document.getElementById('numero_documento_camion').value.trim(),
         conductor: document.getElementById('conductor_camion').value.trim(),
-        direccion: document.getElementById('direccion_camion').value.trim(),
         telefono: document.getElementById('telefono_camion').value.trim()
     };
 
@@ -213,7 +211,6 @@ async function reactivarCamion(id, datos) {
                 tipo_documento: datos.tipo_documento,
                 numero_documento: datos.numero_documento,
                 conductor: datos.conductor,
-                direccion: datos.direccion,
                 telefono: datos.telefono 
             })
         });
@@ -297,11 +294,9 @@ async function buscarDocumentoConductorCamion() {
 
         if (response.ok && result.success) {
             document.getElementById('conductor_camion').value = result.nombre;
-            document.getElementById('direccion_camion').value = result.direccion || '-';
             document.getElementById('numero_documento_camion').style.borderColor = '#10b981';
         } else {
             document.getElementById('conductor_camion').value = '';
-            document.getElementById('direccion_camion').value = '';
             document.getElementById('numero_documento_camion').style.borderColor = '#ef4444';
             Swal.fire({ icon: 'error', title: 'Error', text: result.message || 'No se encontró el documento' });
         }

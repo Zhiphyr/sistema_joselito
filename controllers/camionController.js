@@ -14,7 +14,7 @@ const registrar = async (req, res) => {
     try {
         const { nombre, placa, tipo_documento, numero_documento, conductor, direccion, telefono } = req.body;
 
-        if (!nombre || !placa || !tipo_documento || !numero_documento || !conductor || !direccion || !telefono) {
+        if (!nombre || !placa || !tipo_documento || !numero_documento || !conductor || !telefono) {
             return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
         }
 
@@ -55,7 +55,7 @@ const registrar = async (req, res) => {
             tipo_documento, 
             numero_documento, 
             conductor: conductor.trim(), 
-            direccion: direccion.trim(), 
+            direccion: direccion ? direccion.trim() : '-', 
             telefono: telefono.trim() 
         });
         return res.status(201).json({ success: true, message: 'Camión registrado exitosamente', id });
@@ -71,7 +71,7 @@ const actualizar = async (req, res) => {
         const { id } = req.params;
         const { nombre, tipo_documento, numero_documento, conductor, direccion, telefono } = req.body;
 
-        if (!nombre || !tipo_documento || !numero_documento || !conductor || !direccion || !telefono) {
+        if (!nombre || !tipo_documento || !numero_documento || !conductor || !telefono) {
             return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
         }
 
@@ -85,7 +85,7 @@ const actualizar = async (req, res) => {
             tipo_documento, 
             numero_documento, 
             conductor: conductor.trim(), 
-            direccion: direccion.trim(), 
+            direccion: direccion ? direccion.trim() : camion.direccion, 
             telefono: telefono.trim() 
         });
         return res.status(200).json({ success: true, message: 'Camión actualizado exitosamente' });
