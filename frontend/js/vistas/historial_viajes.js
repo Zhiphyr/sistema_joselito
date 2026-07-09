@@ -1,4 +1,15 @@
 let historialViajesTodos = [];
+
+// Fusiona los viajes recién obtenidos con la caché existente por id_viaje,
+// en vez de reemplazarla. Las pestañas Gestionar/Historial comparten esta
+// caché, así que reemplazarla por completo dejaba sin datos a las tarjetas
+// de la pestaña que no se acaba de recargar (botones dejaban de responder).
+function actualizarCacheViajes(viajes) {
+    const mapa = new Map(historialViajesTodos.map(v => [v.id_viaje, v]));
+    viajes.forEach(v => mapa.set(v.id_viaje, v));
+    historialViajesTodos = Array.from(mapa.values());
+}
+
 let currentTab = 'gestionar';
 let currentPage = 1;
 let currentPageGestionar = 1;
@@ -1481,11 +1492,7 @@ async function fetchViajes(isLoadMore = false) {
             const viajes = res.data;
             const totalRecords = res.totalRecords || 0;
             
-            if (!isLoadMore) {
-                historialViajesTodos = viajes;
-            } else {
-                historialViajesTodos = historialViajesTodos.concat(viajes);
-            }
+            actualizarCacheViajes(viajes);
 
             loadedRecords += viajes.length;
 
