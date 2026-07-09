@@ -26,7 +26,6 @@ async function init_historial_viajes() {
     
     // Configurar listeners de filtrado
     const inputBuscar = document.getElementById('input-buscar-viaje');
-    const selectEstado = document.getElementById('select-estado-viaje');
     const inputFechaSalida = document.getElementById('input-fecha-salida');
     const inputFechaLlegada = document.getElementById('input-fecha-llegada');
     
@@ -88,7 +87,6 @@ async function init_historial_viajes() {
             window.buscarTimeout = setTimeout(resetAndFetch, 500);
         });
     }
-    if (selectEstado) selectEstado.addEventListener('change', resetAndFetch);
     if (inputFechaSalida) inputFechaSalida.addEventListener('change', resetAndFetch);
     if (inputFechaLlegada) inputFechaLlegada.addEventListener('change', resetAndFetch);
 
@@ -1462,7 +1460,7 @@ async function fetchViajes(isLoadMore = false) {
 
     try {
         const textoBuscar = document.getElementById('input-buscar-viaje')?.value || '';
-        const estadoFiltro = currentTab === 'gestionar' ? 'activos' : (document.getElementById('select-estado-viaje')?.value || 'finalizado');
+        const estadoFiltro = currentTab === 'gestionar' ? 'activos' : 'finalizado';
         const fechaSalidaFiltro = document.getElementById('input-fecha-salida')?.value || '';
         const fechaLlegadaFiltro = document.getElementById('input-fecha-llegada')?.value || '';
 
