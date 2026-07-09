@@ -1,6 +1,14 @@
 let debounceTimerDeudas;
+let dtDeudas = null;
 
 function init_deudas_cobrar() {
+    // init_ se reejecuta cada vez que se reingresa al módulo, pero el script
+    // solo se carga una vez por sesión SPA: sin este reseteo, dtDeudas sigue
+    // apuntando a la instancia de DataTables de la <table> anterior (ya
+    // destruida al salir del módulo), y renderTablaDeudas actualiza una
+    // tabla fantasma en vez de inicializar la nueva que se acaba de inyectar.
+    dtDeudas = null;
+
     cargarDeudas();
 
     const inputBuscar = document.getElementById('inputBuscarDeuda');
@@ -41,6 +49,12 @@ function init_deudas_cobrar() {
                 const estado = btnVerPagos.dataset.estado;
                 abrirHistorial(idCarga, flete, saldo, estado);
             }
+            
+            const btnVerDetalles = e.target.closest('.btn-ver-detalles');
+            if (btnVerDetalles) {
+                const idCarga = btnVerDetalles.dataset.id;
+                abrirDetallesCarga(idCarga);
+            }
         });
     }
 
@@ -48,6 +62,7 @@ function init_deudas_cobrar() {
     cargarCuentasBancarias();
     inicializarModalCobro();
     inicializarModalHistorial();
+    inicializarModalDetalles();
 }
 
 let cuentasBancariasCache = [];
@@ -356,17 +371,8 @@ async function cargarDeudas() {
     
     if (!tbody) return;
 
-    const search = inputBuscar ? inputBuscar.value.trim() : '';
-    const filtroEstado = selectFiltro ? selectFiltro.value : 'activas';
-
-    tbody.innerHTML = `
-        <tr>
-            <td colspan="9" style="text-align: center; padding: 40px; color: var(--text-muted);">
-                <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
-                <p style="margin:0;">Cargando deudas...</p>
-            </td>
-        </tr>
-    `;
+    const search = '';
+    const filtroEstado = 'todos';
 
     try {
         const response = await fetch(`/api/deudas?search=${encodeURIComponent(search)}&filtroEstado=${encodeURIComponent(filtroEstado)}`, {
@@ -385,139 +391,169 @@ async function cargarDeudas() {
         }
     } catch (error) {
         console.error('Error cargarDeudas:', error);
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="9" style="text-align: center; padding: 40px; color: #dc2626;">
-                    <i class="fas fa-exclamation-circle" style="font-size: 24px; margin-bottom: 12px;"></i>
-                    <p style="margin:0;">Error: ${error.message}</p>
-                </td>
-            </tr>
-        `;
     }
 }
 
 function renderTablaDeudas(deudas) {
-    const tbody = document.getElementById('tbody-deudas');
-    if (!tbody) return;
-
-    if (!deudas || deudas.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="9" style="text-align: center; padding: 40px; color: var(--text-muted);">
-                    <i class="fas fa-search" style="font-size: 24px; margin-bottom: 12px; color: #cbd5e1;"></i>
-                    <p style="margin:0;">No se encontraron deudas para los filtros aplicados.</p>
-                </td>
-            </tr>
-        `;
+    if (dtDeudas) {
+        dtDeudas.clear().rows.add(deudas).draw();
         return;
     }
 
-    let html = '';
-
-    deudas.forEach(d => {
-        // Formatear fechas
-        const fLlegada = d.fecha_llegada ? new Date(d.fecha_llegada).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-';
-        
-        // Lógica de Mora (> 15 días y no completado)
-        let bgRow = 'white';
-        let onMouseOverBg = '#f8fafc';
-        let onMouseOutBg = 'white';
-        let moraHTML = '';
-
-        if (d.fecha_llegada && (d.estado_cobro === 'Pendiente' || d.estado_cobro === 'Parcial')) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const dateLlegada = new Date(d.fecha_llegada);
-            dateLlegada.setHours(0, 0, 0, 0);
-            
-            const diffTime = today.getTime() - dateLlegada.getTime();
-            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-            
-            if (diffDays > 15) {
-                bgRow = '#fef2f2'; // Fondo pastel rojizo
-                onMouseOutBg = '#fef2f2';
-                onMouseOverBg = '#fee2e2'; // Hover ligeramente más oscuro
-                moraHTML = `<div style="margin-top: 6px;"><span style="background: #fecaca; color: #b91c1c; padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;"><i class="fas fa-exclamation-triangle"></i> Hace ${diffDays} días</span></div>`;
-            }
-        }
-        
-        // Deudor y Remitente format
-        const deudor = d.cliente_nombre || 'Desconocido';
-        const remitente = d.remitente_nombre || 'Desconocido';
-        
-        // Saldo pendiente calculado desde BD
-        const fleteTotal = Number(d.flete_total) || 0;
-        const saldoPendiente = Number(d.saldo_pendiente) || 0; 
-
-        // Badge de Estado Cobro
-        let badgeCobro = '';
-        if (d.estado_cobro === 'Pendiente') {
-            badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #fee2e2; color: #dc2626;">PENDIENTE</span>`;
-        } else if (d.estado_cobro === 'Parcial') {
-            badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #e0f2fe; color: #0369a1;">PARCIAL</span>`;
-        } else if (d.estado_cobro === 'Completado') {
-            badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #dcfce7; color: #16a34a;">COMPLETADO</span>`;
-        } else if (d.estado_cobro === 'Anulado') {
-            badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #fee2e2; color: #dc2626;">ANULADO</span>`;
-        } else {
-            badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #f1f5f9; color: #64748b;">${d.estado_cobro}</span>`;
-        }
-
-        // Estado Entrega
-        let badgeEntregaColor = '#f1f5f9';
-        let badgeEntregaText = '#64748b';
-        if (d.estado_entrega === 'Entregado') {
-            badgeEntregaColor = '#dcfce7';
-            badgeEntregaText = '#16a34a';
-        } else if (d.estado_entrega === 'En Ruta' || d.estado_entrega === 'En ruta') {
-            badgeEntregaColor = '#e0f2fe';
-            badgeEntregaText = 'var(--brand-blue)';
-        } else if (d.estado_entrega === 'Entregado Parcialmente') {
-            badgeEntregaColor = '#fef3c7';
-            badgeEntregaText = '#d97706';
-        } else if (d.estado_entrega === 'Rechazado Total') {
-            badgeEntregaColor = '#fee2e2';
-            badgeEntregaText = '#dc2626';
-        }
-        
-        const badgeEntrega = `<div style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: ${badgeEntregaColor}; color: ${badgeEntregaText};">${d.estado_entrega || '-'}</div>`;
-
-        // Lógica para mostrar/ocultar botón de cobro
-        let btnCobrarHTML = '';
-        if (d.estado_cobro !== 'Completado' && d.estado_cobro !== 'Anulado') {
-            btnCobrarHTML = `
-                <button class="btn-cobrar" data-id="${d.id_carga}" data-flete="${fleteTotal}" data-saldo="${saldoPendiente}" title="Registrar Cobro" style="background: #16a34a; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
-                    <i class="fas fa-hand-holding-usd"></i>
-                </button>
-            `;
-        }
-
-        html += `
-            <tr class="tabla-tr" style="transition: background-color 0.2s; background-color: ${bgRow};" onmouseover="this.style.backgroundColor='${onMouseOverBg}'" onmouseout="this.style.backgroundColor='${onMouseOutBg}'">
-                <td class="tabla-td" style="font-size: 12px; vertical-align: top; padding-top: 12px;">
-                    <div style="font-weight: 600; color: var(--text-primary);">Carga #${d.id_carga}</div>
-                    <div style="margin-top: 6px;"><span style="background: #f1f5f9; padding: 3px 6px; border-radius: 4px; font-size: 10px; color: var(--text-secondary); font-weight: 600;">Viaje #${d.id_viaje}</span></div>
-                </td>
-                <td class="tabla-td" style="font-size: 12px; vertical-align: top; padding-top: 12px;">${fLlegada}${moraHTML}</td>
-                <td class="tabla-td" style="font-size: 11px; font-weight: 500; color: var(--text-secondary); max-width: 200px; white-space: normal; line-height: 1.4; vertical-align: top; padding-top: 12px;">${remitente}</td>
-                <td class="tabla-td" style="font-size: 11px; font-weight: 500; color: var(--text-secondary); max-width: 200px; white-space: normal; line-height: 1.4; vertical-align: top; padding-top: 12px;">${deudor}</td>
-                <td class="tabla-td" style="vertical-align: top; padding-top: 12px;">${badgeEntrega}</td>
-                <td class="tabla-td" style="font-weight: 600; color: var(--text-primary); font-size: 12px; vertical-align: top; padding-top: 12px;">S/ ${fleteTotal.toFixed(2)}</td>
-                <td class="tabla-td" style="font-weight: 700; color: ${saldoPendiente > 0 ? '#dc2626' : '#16a34a'}; font-size: 12px; vertical-align: top; padding-top: 12px;">S/ ${saldoPendiente.toFixed(2)}</td>
-                <td class="tabla-td" style="vertical-align: top; padding-top: 12px;">${badgeCobro}</td>
-                <td class="tabla-td" style="vertical-align: top; padding-top: 12px;">
-                    <div style="display: flex; gap: 8px;">
-                        ${btnCobrarHTML}
-                        <button class="btn-ver-pagos" data-id="${d.id_carga}" data-flete="${fleteTotal}" data-saldo="${saldoPendiente}" data-estado="${d.estado_cobro}" title="Historial de Pagos" style="background: #eab308; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+    dtDeudas = window.$('#tabla-deudas-cobrar').DataTable({
+        data: deudas,
+        pageLength: 15,
+        lengthMenu: [10, 15, 25, 50, 100],
+        language: {
+            url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
+        },
+        order: [[0, 'desc']], // Ordenar por id por defecto
+        columns: [
+            {
+                data: 'id_carga',
+                type: 'num',
+                render: function (data, type, row) {
+                    if (type === 'sort' || type === 'type') {
+                        return Number(data);
+                    }
+                    return `
+                        <div style="font-weight: 800; color: var(--brand-blue); font-size: 13px;">Carga #${row.id_carga}</div>
+                        <div style="font-size: 10px; color: var(--text-muted); font-weight: 600; background: #f1f5f9; display: inline-block; padding: 2px 6px; border-radius: 4px; margin-top: 2px;">Viaje #${row.id_viaje}</div>
+                    `;
+                }
+            },
+            {
+                data: 'fecha_llegada',
+                render: function (data, type, row) {
+                    let fLlegada = data ? new Date(data).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-';
+                    let moraHTML = '';
+                    if (data && (row.estado_cobro === 'Pendiente' || row.estado_cobro === 'Parcial')) {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const dateLlegada = new Date(data);
+                        dateLlegada.setHours(0, 0, 0, 0);
+                        
+                        const diffTime = today.getTime() - dateLlegada.getTime();
+                        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                        
+                        if (diffDays > 15) {
+                            moraHTML = `<div style="margin-top: 6px;"><span style="background: #fecaca; color: #b91c1c; padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;"><i class="fas fa-exclamation-triangle"></i> Hace ${diffDays} días</span></div>`;
+                        }
+                    }
+                    return `<span style="font-weight: 600; color: var(--text-secondary); font-size: 12px;">${fLlegada}</span>${moraHTML}`;
+                }
+            },
+            {
+                data: 'remitente_nombre',
+                render: function(data, type, row) {
+                    return `<span style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">${data || 'Desconocido'}</span>`;
+                }
+            },
+            {
+                data: 'cliente_nombre',
+                render: function(data, type, row) {
+                    return `<span style="font-size: 12px; font-weight: 700; color: var(--text-primary); text-transform: uppercase;">${data || 'Desconocido'}</span>`;
+                }
+            },
+            {
+                data: 'estado_entrega',
+                render: function(data, type, row) {
+                    let badgeEntregaColor = '#f1f5f9';
+                    let badgeEntregaText = '#64748b';
+                    if (data === 'Entregado') {
+                        badgeEntregaColor = '#dcfce7';
+                        badgeEntregaText = '#16a34a';
+                    } else if (data === 'En Ruta' || data === 'En ruta') {
+                        badgeEntregaColor = '#e0f2fe';
+                        badgeEntregaText = 'var(--brand-blue)';
+                    } else if (data === 'Entregado Parcialmente') {
+                        badgeEntregaColor = '#fef3c7';
+                        badgeEntregaText = '#d97706';
+                    } else if (data === 'Rechazado Total') {
+                        badgeEntregaColor = '#fee2e2';
+                        badgeEntregaText = '#dc2626';
+                    }
+                    return `<div style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: ${badgeEntregaColor}; color: ${badgeEntregaText};">${data || '-'}</div>`;
+                }
+            },
+            {
+                data: 'flete_total',
+                render: function(data, type, row) {
+                    return `<span style="font-weight: 600; color: var(--text-primary); font-size: 12px;">S/ ${Number(data || 0).toFixed(2)}</span>`;
+                }
+            },
+            {
+                data: 'saldo_pendiente',
+                render: function(data, type, row) {
+                    const saldo = Number(data || 0);
+                    const color = saldo > 0 ? '#dc2626' : '#16a34a';
+                    return `<span style="font-weight: 700; color: ${color}; font-size: 12px;">S/ ${saldo.toFixed(2)}</span>`;
+                }
+            },
+            {
+                data: 'estado_cobro',
+                render: function(data, type, row) {
+                    let badgeCobro = '';
+                    if (data === 'Pendiente') {
+                        badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #fee2e2; color: #dc2626;">PENDIENTE</span>`;
+                    } else if (data === 'Parcial') {
+                        badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #e0f2fe; color: #0369a1;">PARCIAL</span>`;
+                    } else if (data === 'Completado') {
+                        badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #dcfce7; color: #16a34a;">COMPLETADO</span>`;
+                    } else if (data === 'Anulado') {
+                        badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #fee2e2; color: #dc2626;">ANULADO</span>`;
+                    } else {
+                        badgeCobro = `<span style="display:inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #f1f5f9; color: #64748b;">${data}</span>`;
+                    }
+                    return badgeCobro;
+                }
+            },
+            {
+                data: null,
+                orderable: false,
+                render: function(data, type, row) {
+                    const saldo = Number(row.saldo_pendiente || 0);
+                    const flete = Number(row.flete_total || 0);
+                    let btnCobrarHTML = '';
+                    
+                    if (row.estado_cobro !== 'Completado' && row.estado_cobro !== 'Anulado') {
+                        btnCobrarHTML = `
+                            <button class="btn-cobrar" data-id="${row.id_carga}" data-flete="${flete}" data-saldo="${saldo}" title="Registrar Cobro" style="background: #16a34a; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                                <i class="fas fa-hand-holding-usd"></i>
+                            </button>
+                        `;
+                    }
+                    const btnVerPagos = `
+                        <button class="btn-ver-pagos" data-id="${row.id_carga}" data-flete="${flete}" data-saldo="${saldo}" data-estado="${row.estado_cobro}" title="Historial de Pagos" style="background: #eab308; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
                             <i class="fas fa-file-invoice-dollar"></i>
                         </button>
-                    </div>
-                </td>
-            </tr>
-        `;
+                    `;
+                    
+                    const btnVerDetalles = `
+                        <button class="btn-ver-detalles" data-id="${row.id_carga}" title="Ver Detalles de Carga" style="background: #0284c7; color: white; border: none; width: 32px; height: 32px; border-radius: 6px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    `;
+                    
+                    return `<div style="display: flex; gap: 8px;">${btnVerDetalles}${btnCobrarHTML}${btnVerPagos}</div>`;
+                }
+            }
+        ],
+        createdRow: function(row, data, dataIndex) {
+            if (data.fecha_llegada && (data.estado_cobro === 'Pendiente' || data.estado_cobro === 'Parcial')) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const dateLlegada = new Date(data.fecha_llegada);
+                dateLlegada.setHours(0, 0, 0, 0);
+                const diffTime = today.getTime() - dateLlegada.getTime();
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays > 15) {
+                    window.$(row).css('background-color', '#fef2f2');
+                }
+            }
+        }
     });
-
-    tbody.innerHTML = html;
 }
 
 // ----------------------------------------------------
@@ -895,4 +931,135 @@ function verVoucher(url) {
             popup: 'swal2-dark-popup'
         }
     });
+}
+
+// ----------------------------------------------------
+// FUNCIONALIDAD DETALLES DE CARGA
+// ----------------------------------------------------
+function inicializarModalDetalles() {
+    const modal = document.getElementById('modalDetallesCarga');
+    const btnCerrar1 = document.getElementById('btnCerrarDetalles');
+    const btnCerrar2 = document.getElementById('btnCerrarDetallesFooter');
+    
+    if(!modal) return;
+
+    const cerrarModal = () => { modal.style.display = 'none'; };
+    
+    btnCerrar1.replaceWith(btnCerrar1.cloneNode(true));
+    btnCerrar2.replaceWith(btnCerrar2.cloneNode(true));
+    
+    document.getElementById('btnCerrarDetalles').addEventListener('click', cerrarModal);
+    document.getElementById('btnCerrarDetallesFooter').addEventListener('click', cerrarModal);
+}
+
+async function abrirDetallesCarga(idCarga) {
+    const modal = document.getElementById('modalDetallesCarga');
+    if (!modal) return;
+
+    document.getElementById('modalDetallesBadge').textContent = 'Carga ' + idCarga;
+    
+    let contenedor = document.getElementById('detallesCargaLista');
+    if (!contenedor) return;
+
+    // Loader
+    contenedor.innerHTML = `
+        <div style="text-align: center; color: #94a3b8; padding: 40px 0;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
+            <p>Cargando detalles...</p>
+        </div>
+    `;
+    modal.style.display = 'flex';
+
+    try {
+        const response = await fetch(`/api/deudas/${idCarga}/detalles`, {
+            headers: { 'x-user-profile': localStorage.getItem('user_id') || 1 }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            const detalles = data.data;
+
+            if (detalles.length === 0) {
+                contenedor.innerHTML = `
+                    <div style="text-align: center; color: #94a3b8; padding: 40px 0; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px;">
+                        <i class="fas fa-box-open" style="font-size: 32px; margin-bottom: 12px; color: #cbd5e1;"></i>
+                        <h3 style="margin: 0; font-size: 16px; color: #475569; margin-bottom: 4px;">Sin detalles</h3>
+                        <p style="margin: 0; font-size: 13px;">No se encontraron productos para esta carga.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let htmlDetalles = '<div style="display: grid; gap: 16px;">';
+            let sumaCobrar = 0;
+            detalles.forEach(d => {
+                let badgeEstado = '';
+                let estiloSubtotal = '';
+                let colorSubtotal = '#0284c7';
+                
+                if (d.estado_operativo === 'Normal' || d.estado_operativo === 'Entregado') {
+                    badgeEstado = `<span style="background: #dcfce7; color: #16a34a; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700;">${d.estado_operativo}</span>`;
+                    if (d.estado_operativo === 'Entregado') {
+                        sumaCobrar += Number(d.flete_subtotal);
+                    }
+                } else if (d.estado_operativo === 'Rechazado' || d.estado_operativo === 'Siniestrado') {
+                    badgeEstado = `<span style="background: #fee2e2; color: #dc2626; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700;">${d.estado_operativo}</span>`;
+                    if (d.estado_operativo === 'Rechazado') {
+                        estiloSubtotal = 'text-decoration: line-through; opacity: 0.6;';
+                        colorSubtotal = '#94a3b8';
+                    }
+                } else {
+                    badgeEstado = `<span style="background: #fef3c7; color: #d97706; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700;">${d.estado_operativo}</span>`;
+                }
+
+                htmlDetalles += `
+                    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px;">
+                            <div>
+                                <h4 style="margin: 0; font-size: 15px; color: #1e293b;">${d.producto_nombre}</h4>
+                                <span style="font-size: 12px; color: #64748b; font-weight: 600;">Marca: ${d.marca_visual || 'N/A'}</span>
+                            </div>
+                            <div>
+                                ${badgeEstado}
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px;">
+                            <div>
+                                <span style="display: block; font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">Cantidad</span>
+                                <span style="font-size: 14px; color: #334155; font-weight: 700;">${d.cantidad} sacos</span>
+                            </div>
+                            <div>
+                                <span style="display: block; font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">Peso Unitario</span>
+                                <span style="font-size: 14px; color: #334155; font-weight: 700;">${Number(d.peso_unitario).toFixed(2)} Kg</span>
+                            </div>
+                            <div>
+                                <span style="display: block; font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">Peso Total</span>
+                                <span style="font-size: 14px; color: #334155; font-weight: 700;">${Number(d.peso_total).toFixed(2)} Kg</span>
+                            </div>
+                            <div>
+                                <span style="display: block; font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">Tarifa</span>
+                                <span style="font-size: 14px; color: #334155; font-weight: 700;">S/ ${Number(d.tarifa).toFixed(2)}</span>
+                            </div>
+                            <div style="background: #f8fafc; padding: 8px; border-radius: 8px;">
+                                <span style="display: block; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;">Subtotal</span>
+                                <span style="font-size: 15px; color: ${colorSubtotal}; font-weight: 800; ${estiloSubtotal}">S/ ${Number(d.flete_subtotal).toFixed(2)}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            htmlDetalles += '</div>';
+            contenedor.innerHTML = htmlDetalles;
+            
+            const spanSumaCobrar = document.getElementById('sumaTotalCobrar');
+            if (spanSumaCobrar) {
+                spanSumaCobrar.textContent = 'S/ ' + sumaCobrar.toFixed(2);
+            }
+        } else {
+            contenedor.innerHTML = `<div style="color: #ef4444; padding: 20px; text-align: center;">Error: ${data.message}</div>`;
+        }
+    } catch (error) {
+        console.error("Error al obtener detalles:", error);
+        contenedor.innerHTML = `<div style="color: #ef4444; padding: 20px; text-align: center;">Error de conexión al obtener detalles.</div>`;
+    }
 }

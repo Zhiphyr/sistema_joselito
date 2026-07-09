@@ -1535,6 +1535,10 @@ const cerrarViaje = async (req, res) => {
         if (estado === 'Finalizado') {
             return res.status(400).json({ success: false, message: 'El viaje ya se encuentra finalizado.' });
         }
+        
+        if (estado !== 'Descargado' && estado !== 'Incidencia') {
+            return res.status(400).json({ success: false, message: 'Solo se pueden finalizar viajes cuyo estado sea Descargado o Incidencia.' });
+        }
 
         const sqlUpdate = `
             UPDATE Viaje 

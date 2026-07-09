@@ -180,12 +180,13 @@ const obtenerHistorialPagos = async (req, res) => {
                 p.ruta_comprobante,
                 p.observacion,
                 p.estado,
-                c.entidad_financiera,
+                e.nombre AS entidad_financiera,
                 c.tipo_cuenta,
                 c.nro_cuenta,
                 c.titular
             FROM pago_carga p
             LEFT JOIN cuenta_bancaria c ON p.id_cuenta = c.id_cuenta
+            LEFT JOIN entidad_financiera e ON c.id_entidad = e.id_entidad
             WHERE p.id_carga = ? AND p.estado IN (0, 1)
             ORDER BY p.fecha_pago DESC
         `;
@@ -302,11 +303,39 @@ const obtenerResumenDiario = async (req, res) => {
     }
 };
 
+const obtenerDetallesCarga = async (req, res) => {
+    try {
+        const { id_carga } = req.params;
+        const query = `
+            SELECT 
+                d.id_detalle,
+                d.id_carga,
+                d.marca_visual,
+                d.cantidad_sacos AS cantidad,
+                d.peso_unitario,
+                d.peso_total,
+                d.precio_peso AS tarifa,
+                d.flete_subtotal,
+                d.estado_operativo,
+                p.nombre AS producto_nombre
+            FROM Detalle_Carga d
+            JOIN Productos p ON d.id_producto = p.id_producto
+            WHERE d.id_carga = ? AND d.estado = 1
+        `;
+        const [rows] = await db.query(query, [id_carga]);
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error("Error en obtenerDetallesCarga:", error);
+        res.status(500).json({ success: false, message: 'Error al obtener los detalles de la carga' });
+    }
+};
+
 module.exports = {
     obtenerDeudas,
     obtenerCuentasBancarias,
     registrarCobro,
     obtenerHistorialPagos,
     anularPago,
-    obtenerResumenDiario
+    obtenerResumenDiario,
+    obtenerDetallesCarga
 };

@@ -1665,7 +1665,7 @@ function renderizarTarjetasVerticales(viajes, isLoadMore = false) {
         }
 
         // Botones de Acción Modulares
-        let btnIncidenciaClase = "btn-menu-incidencia";
+        let btnIncidenciaClase = "btn-incidencia";
         let btnIncidenciaEstilo = "background: #f1f5f9; color: #475569;";
         let btnIncidenciaTexto = "Ver Incidencias";
         
@@ -1763,10 +1763,10 @@ function renderizarTarjetasVerticales(viajes, isLoadMore = false) {
                     
                     <!-- Fila 2: Reportar/Incidencias y Finalizar -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                        <button class="${btnIncidenciaClase}" data-id="${viaje.id_viaje}" data-tipo-alerta="general" style="${btnIncidenciaEstilo} font-weight: 600; border: ${btnIncidenciaClase.includes('btn-pulsing-red') ? 'none' : '1px solid #cbd5e1'}; padding: 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: center; align-items: center;">
+                        <button class="${btnIncidenciaClase}" data-id="${viaje.id_viaje}" data-tipo-alerta="${btnIncidenciaClase.includes('btn-pulsing') ? 'general' : 'ver'}" style="${btnIncidenciaEstilo} font-weight: 600; border: ${btnIncidenciaClase.includes('btn-pulsing-red') ? 'none' : '1px solid #cbd5e1'}; padding: 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: center; align-items: center;">
                             ${btnIncidenciaTexto}
                         </button>
-                        <button class="btn-viaje" onclick="finalizarViaje(${viaje.id_viaje})" style="background-color: #e2e8f0; color: #334155; font-weight: 600; border: none; padding: 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                        <button class="btn-viaje" onclick="finalizarViaje(${viaje.id_viaje})" style="background-color: #e2e8f0; color: #334155; font-weight: 600; border: none; padding: 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s; ${!(esDescargado || esIncidencia) ? 'opacity: 0.5; cursor: not-allowed;' : 'hover:background: #cbd5e1;'}" ${!(esDescargado || esIncidencia) ? 'disabled' : ''} title="${!(esDescargado || esIncidencia) ? 'Solo los viajes Descargados o en Incidencia se pueden finalizar' : 'Finalizar viaje'}">
                             Finalizar Viaje
                         </button>
                     </div>
