@@ -96,19 +96,28 @@ const registrarCobro = async (req, res) => {
         const id_usuario = req.headers['x-user-profile'] || 1; // ID de quien cobra
         const ruta_comprobante = req.file ? req.file.path : null;
 
-        const idCuentaParseado = canal_pago === 'Efectivo' ? null : (id_cuenta || null);
+        let idCuentaFinal = null;
+        let idBilleteraFinal = null;
+
+        if (canal_pago === 'Billetera Digital') {
+            idBilleteraFinal = id_cuenta || null; // El frontend manda el ID en id_cuenta
+        } else if (canal_pago !== 'Efectivo') {
+            idCuentaFinal = id_cuenta || null;
+        }
+
         const montoNum = Number(monto_pagado);
 
         // Insertar en pago_carga
         const insertQuery = `
             INSERT INTO pago_carga 
-            (id_carga, id_cuenta, monto_pagado, tipo_pago, nro_operacion, ruta_comprobante, observacion, id_usuario, fecha_pago)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id_carga, id_cuenta, id_billetera, monto_pagado, tipo_pago, nro_operacion, ruta_comprobante, observacion, id_usuario, fecha_pago)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         
         await connection.query(insertQuery, [
             id_carga,
-            idCuentaParseado,
+            idCuentaFinal,
+            idBilleteraFinal,
             montoNum,
             canal_pago,
             nro_operacion || null,
@@ -180,13 +189,15 @@ const obtenerHistorialPagos = async (req, res) => {
                 p.ruta_comprobante,
                 p.observacion,
                 p.estado,
-                e.nombre AS entidad_financiera,
+                COALESCE(e.nombre, pb.nombre) AS entidad_financiera,
                 c.tipo_cuenta,
-                c.nro_cuenta,
-                c.titular
+                COALESCE(c.nro_cuenta, b.numero_celular) AS nro_cuenta,
+                COALESCE(c.titular, b.titular) AS titular
             FROM pago_carga p
             LEFT JOIN cuenta_bancaria c ON p.id_cuenta = c.id_cuenta
             LEFT JOIN entidad_financiera e ON c.id_entidad = e.id_entidad
+            LEFT JOIN billetera_digital b ON p.id_billetera = b.id_billetera
+            LEFT JOIN proveedor_billetera pb ON b.id_proveedor = pb.id_proveedor
             WHERE p.id_carga = ? AND p.estado IN (0, 1)
             ORDER BY p.fecha_pago DESC
         `;
