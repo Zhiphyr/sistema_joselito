@@ -52,32 +52,76 @@
     </div>
 </div>
 <style>
+    /* Estilos modernos para los controles del DataTable */
+    #tabla-deudas-cobrar_wrapper {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    /* Contenedor superior para los controles (Filtro, Mostrar, Buscar) */
+    .dt-top-controls {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+        background: #f8fafc;
+        padding: 16px 20px;
+        border-radius: 12px;
+        border: 1px solid var(--border-light);
+    }
+
+    /* Agrupador izquierdo (Estado + Length) */
+    .dt-left-controls {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        flex-wrap: wrap;
+    }
+
+    /* Estilos específicos para inputs y selects del datatable */
     #tabla-deudas-cobrar_wrapper .dataTables_length,
     #tabla-deudas-cobrar_wrapper .dataTables_filter {
-        margin-bottom: 24px !important;
+        margin: 0 !important;
+        float: none !important;
+        text-align: left !important;
+    }
+
+    #tabla-deudas-cobrar_wrapper .dataTables_length label,
+    #tabla-deudas-cobrar_wrapper .dataTables_filter label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        font-weight: 600;
+        color: var(--text-secondary);
+        font-size: 13px;
+    }
+
+    #tabla-deudas-cobrar_wrapper .dataTables_length select,
+    #tabla-deudas-cobrar_wrapper .dataTables_filter input {
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 13px;
+        outline: none;
+        transition: all 0.2s;
+        background: white;
+    }
+
+    #tabla-deudas-cobrar_wrapper .dataTables_filter input {
+        width: 250px;
+    }
+
+    #tabla-deudas-cobrar_wrapper .dataTables_length select:focus,
+    #tabla-deudas-cobrar_wrapper .dataTables_filter input:focus {
+        border-color: var(--brand-blue);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
 </style>
 <div class="welcome-card sin-padding">
     <div style="padding: 24px; width: 100%; box-sizing: border-box;">
-    <!-- Filtros ocultos a favor del buscador de DataTables -->
-    <div class="tabla-toolbar" style="display: none; gap: 16px; align-items: center; flex-wrap: wrap;">
-        <div style="flex: 1; display: flex; align-items: center; gap: 12px; min-width: 250px;">
-            <label for="inputBuscarDeuda" style="margin: 0; font-weight: 600; color: var(--text-secondary);">Buscar:</label>
-            <input type="text" id="inputBuscarDeuda" class="form-control" placeholder="N° Carga, Viaje o Nombre del Deudor..." style="flex: 1;">
-        </div>
-        
-        <div style="display: flex; align-items: center; gap: 12px;">
-            <label for="selectFiltroDeuda" style="margin: 0; font-weight: 600; color: var(--text-secondary);">
-                <i class="fas fa-filter" style="margin-right: 4px; color: var(--text-muted);"></i> Filtro:
-            </label>
-            <select id="selectFiltroDeuda" class="form-control" style="width: auto;">
-                <option value="activas" selected>Deudas Activas (Pendientes/Parciales)</option>
-                <option value="completadas">Cobros Completados</option>
-                <option value="todos">Todos los Estados</option>
-            </select>
-        </div>
-    </div>
-
     <div class="tabla-scroll">
         <table class="tabla-modulo" id="tabla-deudas-cobrar" style="width: 100%;">
             <thead>

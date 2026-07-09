@@ -141,7 +141,11 @@ function agregarNuevoPagoCobro() {
             </div>
             <div>
                 <label style="font-size: 11px; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">Evidencia (Opcional)</label>
-                <input type="file" class="form-control input-evidencia-cobro" accept="image/*" style="font-size: 12px;">
+                <label style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; border: 2px dashed #cbd5e1; padding: 12px; border-radius: 8px; background: #f8fafc; color: #64748b; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center; box-sizing: border-box;" onmouseover="this.style.borderColor='#3b82f6'; this.style.color='#3b82f6'" onmouseout="this.style.borderColor='#cbd5e1'; this.style.color='#64748b'">
+                    <i class="fas fa-cloud-upload-alt" style="font-size: 16px;"></i>
+                    <span class="file-name-text">Subir comprobante o captura</span>
+                    <input type="file" class="input-evidencia-cobro" accept="image/*" style="display: none;" onchange="this.previousElementSibling.textContent = this.files.length > 0 ? this.files[0].name : 'Subir comprobante o captura';">
+                </label>
             </div>
         </div>
     `;
@@ -302,16 +306,96 @@ function inicializarModalCobro() {
         });
     }
 
-    document.getElementById('formCobro').addEventListener('submit', (e) => {
+    document.getElementById('formCobro').addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        Swal.fire({
-            icon: 'info',
-            title: 'En Desarrollo',
-            text: 'La funcionalidad para guardar cobros mixtos está temporalmente deshabilitada para ajustar el registro de movimientos.',
-            timer: 4000,
-            showConfirmButton: true
+        const btnGuardar = modal.querySelector('.btn-guardar');
+        if (btnGuardar.disabled) return;
+
+        const originalText = btnGuardar.innerHTML;
+        btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+        btnGuardar.disabled = true;
+
+        const formData = new FormData();
+        formData.append('id_carga', document.getElementById('cobro_id_carga').value);
+        formData.append('observacion', document.getElementById('cobro_observacion').value);
+
+        const pagos = [];
+        const bloques = document.querySelectorAll('.bloque-pago-cobro');
+        
+        bloques.forEach((bloque, index) => {
+            const monto = bloque.querySelector('.input-monto-cobro').value;
+            const canal = bloque.querySelector('.select-canal-cobro').value;
+            const fecha = bloque.querySelector('.input-fecha-cobro').value;
+            const cuentaBilletera = bloque.querySelector('.select-cuenta-cobro').value;
+            const operacion = bloque.querySelector('.input-operacion-cobro').value;
+            const evidenciaInput = bloque.querySelector('.input-evidencia-cobro');
+
+            let id_cuenta = null;
+            let id_billetera = null;
+
+            if (canal === 'Billetera Digital') {
+                id_billetera = cuentaBilletera;
+            } else if (canal !== 'Efectivo') {
+                id_cuenta = cuentaBilletera;
+            }
+
+            pagos.push({
+                monto_pagado: monto,
+                tipo_pago: canal,
+                fecha_pago: fecha,
+                id_cuenta: id_cuenta,
+                id_billetera: id_billetera,
+                nro_operacion: operacion,
+                index_evidencia: null
+            });
+
+            if (evidenciaInput && evidenciaInput.files && evidenciaInput.files.length > 0) {
+                formData.append(`evidencia_${index}`, evidenciaInput.files[0]);
+                pagos[pagos.length - 1].index_evidencia = index;
+            }
         });
+
+        formData.append('pagos', JSON.stringify(pagos));
+
+        try {
+            const response = await fetch('/api/deudas/cobrar', {
+                method: 'POST',
+                headers: {
+                    'x-user-profile': localStorage.getItem('user_id') || 1
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                cerrarModal();
+                cargarDeudas(); // Refrescar la tabla
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Pago(s) Registrado(s)',
+                    text: 'El cobro se ha procesado exitosamente.',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error al procesar',
+                    text: data.message || 'No se pudo registrar el pago.'
+                });
+            }
+        } catch (error) {
+            console.error('Error al guardar cobro:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de conexión',
+                text: 'Hubo un problema de red al intentar guardar el cobro.'
+            });
+        } finally {
+            btnGuardar.innerHTML = originalText;
+            btnGuardar.disabled = false;
+        }
     });
 }
 
@@ -427,6 +511,7 @@ function renderTablaDeudas(deudas) {
 
     dtDeudas = window.$('#tabla-deudas-cobrar').DataTable({
         data: deudas,
+        dom: '<"dt-top-controls"<"dt-left-controls"l>f>rt<"bottom-controls"ip>',
         pageLength: 15,
         lengthMenu: [10, 15, 25, 50, 100],
         language: {
@@ -577,6 +662,39 @@ function renderTablaDeudas(deudas) {
                     window.$(row).css('background-color', '#fef2f2');
                 }
             }
+        },
+        initComplete: function() {
+            const api = this.api();
+            
+            // Crear el contenedor del filtro
+            const filterContainer = document.createElement('div');
+            filterContainer.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-right: 16px;';
+            filterContainer.innerHTML = `
+                <label style="margin: 0; font-weight: 600; color: var(--text-secondary); font-size: 13px;">
+                    <i class="fas fa-filter" style="color: var(--text-muted); margin-right: 4px;"></i> Estado:
+                </label>
+                <select class="form-control" style="width: auto; padding: 6px 12px; font-size: 13px; border-radius: 8px; border: 1px solid var(--border-light); outline: none; background: white; cursor: pointer;">
+                    <option value="">Todos</option>
+                    <option value="Pendiente">Pendiente</option>
+                    <option value="Parcial">Parcial</option>
+                    <option value="Completado">Completado</option>
+                    <option value="Anulado">Anulado</option>
+                </select>
+            `;
+            
+            // Insertarlo al inicio de dt-left-controls
+            const leftControls = document.querySelector('#tabla-deudas-cobrar_wrapper .dt-left-controls');
+            if (leftControls) {
+                leftControls.insertBefore(filterContainer, leftControls.firstChild);
+            }
+            
+            // Escuchar cambios para filtrar la columna 7 (Estado Cobro)
+            const select = filterContainer.querySelector('select');
+            select.addEventListener('change', function() {
+                const val = window.$.fn.dataTable.util.escapeRegex(this.value);
+                // Busca en la columna 7. true = regex, false = smart search
+                api.column(7).search(val ? val : '', true, false).draw();
+            });
         }
     });
 }

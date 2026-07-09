@@ -92,47 +92,81 @@ const registrarCobro = async (req, res) => {
 
         const {
             id_carga,
-            monto_pagado,
-            canal_pago, // Efectivo, Transferencia, Deposito, Billetera Digital
-            id_cuenta,
-            nro_operacion,
-            fecha_pago,
-            observacion
+            observacion,
+            pagos: pagosJSON
         } = req.body;
 
+        const pagos = JSON.parse(pagosJSON);
         const id_usuario = req.headers['x-user-profile'] || 1; // ID de quien cobra
-        const ruta_comprobante = req.file ? req.file.path : null;
 
-        let idCuentaFinal = null;
-        let idBilleteraFinal = null;
+        // Obtener cuenta de sistema (Caja Física Principal)
+        const [cajaFisicaRows] = await connection.query('SELECT id_cuenta FROM cuenta_bancaria WHERE es_sistema = 1 AND tipo_cuenta = "Efectivo" LIMIT 1');
+        const idCajaFisica = cajaFisicaRows.length > 0 ? cajaFisicaRows[0].id_cuenta : null;
 
-        if (canal_pago === 'Billetera Digital') {
-            idBilleteraFinal = id_cuenta || null; // El frontend manda el ID en id_cuenta
-        } else if (canal_pago !== 'Efectivo') {
-            idCuentaFinal = id_cuenta || null;
-        }
-
-        const montoNum = Number(monto_pagado);
-
-        // Insertar en pago_carga
-        const insertQuery = `
+        const insertPagoQuery = `
             INSERT INTO pago_carga 
             (id_carga, id_cuenta, id_billetera, monto_pagado, tipo_pago, nro_operacion, ruta_comprobante, observacion, id_usuario, fecha_pago)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
-        
-        await connection.query(insertQuery, [
-            id_carga,
-            idCuentaFinal,
-            idBilleteraFinal,
-            montoNum,
-            canal_pago,
-            nro_operacion || null,
-            ruta_comprobante,
-            observacion || null,
-            id_usuario,
-            fecha_pago || new Date()
-        ]);
+
+        const insertMovimientoQuery = `
+            INSERT INTO movimiento_caja 
+            (tipo_movimiento, concepto, monto, metodo_pago, id_cuenta_origen, id_billetera_origen, id_cuenta_destino, id_billetera_destino, modulo_origen, id_registro_origen, numero_operacion, id_usuario)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        for (const pago of pagos) {
+            let ruta_comprobante = null;
+
+            // Vincular evidencia si existe para este pago
+            if (pago.index_evidencia !== null && req.files) {
+                const fieldName = `evidencia_${pago.index_evidencia}`;
+                const fileInfo = req.files.find(f => f.fieldname === fieldName);
+                if (fileInfo) {
+                    ruta_comprobante = fileInfo.path;
+                }
+            }
+
+            const montoNum = Number(pago.monto_pagado);
+
+            // Determinar la cuenta de destino (si es efectivo, usamos la caja física)
+            let id_cuenta_destino = pago.id_cuenta || null;
+            if (pago.tipo_pago === 'Efectivo') {
+                id_cuenta_destino = idCajaFisica;
+            }
+
+            // 1. Insertar en pago_carga
+            const [pagoResult] = await connection.query(insertPagoQuery, [
+                id_carga,
+                id_cuenta_destino, // Se asigna la cuenta (incluyendo Caja Física para efectivo)
+                pago.id_billetera || null,
+                montoNum,
+                pago.tipo_pago,
+                pago.nro_operacion || null,
+                ruta_comprobante,
+                observacion || null,
+                id_usuario,
+                pago.fecha_pago || new Date()
+            ]);
+
+            const idPagoInsertado = pagoResult.insertId;
+
+            // 2. Insertar en movimiento_caja
+            await connection.query(insertMovimientoQuery, [
+                'INGRESO',
+                `Cobro de Carga #${id_carga}`,
+                montoNum,
+                pago.tipo_pago,
+                null, // id_cuenta_origen
+                null, // id_billetera_origen
+                id_cuenta_destino, // id_cuenta_destino
+                pago.id_billetera || null, // id_billetera_destino
+                'COBRO_FLETE', // Valor ENUM correcto en vez de COBRO_CARGA
+                idPagoInsertado,
+                pago.nro_operacion || null,
+                id_usuario // Requerido por la tabla
+            ]);
+        }
 
         // Recalcular saldo pendiente
         const saldoQuery = `
@@ -149,7 +183,8 @@ const registrarCobro = async (req, res) => {
             const saldo_pendiente = flete_total - total_pagado;
             
             let nuevoEstado = 'Parcial';
-            if (saldo_pendiente <= 0) {
+            // Validamos con un margen pequeño para evitar problemas de precisión flotante
+            if (saldo_pendiente <= 0.01) {
                 nuevoEstado = 'Completado';
             }
 
@@ -158,21 +193,24 @@ const registrarCobro = async (req, res) => {
         }
 
         await connection.commit();
-        res.json({ success: true, message: 'Cobro registrado exitosamente' });
+        res.json({ success: true, message: 'Cobros registrados exitosamente' });
 
     } catch (error) {
         await connection.rollback();
         console.error("Error en registrarCobro:", error);
         
         // --- PREVENCIÓN DE ARCHIVOS HUÉRFANOS ---
-        // Si falló la BD pero la imagen sí se subió a Cloudinary, la eliminamos.
-        if (req.file && req.file.filename) {
-            try {
-                // req.file.filename contiene el public_id completo asignado por multer-storage-cloudinary
-                await cloudinary.uploader.destroy(req.file.filename);
-                console.log(`[Reversión Exitosa] Archivo huérfano eliminado de Cloudinary: ${req.file.filename}`);
-            } catch (cloudErr) {
-                console.error("No se pudo eliminar el archivo huérfano de Cloudinary:", cloudErr);
+        // Si falló la BD pero las imágenes se subieron, las eliminamos.
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                if (file.filename) {
+                    try {
+                        await cloudinary.uploader.destroy(file.filename);
+                        console.log(`[Reversión Exitosa] Archivo huérfano eliminado de Cloudinary: ${file.filename}`);
+                    } catch (cloudErr) {
+                        console.error("No se pudo eliminar el archivo huérfano de Cloudinary:", cloudErr);
+                    }
+                }
             }
         }
         
@@ -260,6 +298,9 @@ const anularPago = async (req, res) => {
         // 4. Marcar pago como anulado
         await connection.query('UPDATE pago_carga SET estado = 0 WHERE id_pago = ?', [id_pago]);
 
+        // 4.1. Anular el movimiento de caja asociado
+        await connection.query("UPDATE movimiento_caja SET estado = 0 WHERE modulo_origen = 'COBRO_FLETE' AND id_registro_origen = ?", [id_pago]);
+
         // 5. Recalcular saldo pendiente
         const saldoQuery = `
             SELECT 
@@ -306,12 +347,15 @@ const obtenerResumenDiario = async (req, res) => {
     try {
         const query = `
             SELECT 
-                IFNULL(SUM(monto_pagado), 0) AS total_recaudado,
-                IFNULL(SUM(CASE WHEN tipo_pago = 'Efectivo' THEN monto_pagado ELSE 0 END), 0) AS total_efectivo,
-                IFNULL(SUM(CASE WHEN tipo_pago = 'Billetera Digital' THEN monto_pagado ELSE 0 END), 0) AS total_billetera,
-                IFNULL(SUM(CASE WHEN tipo_pago IN ('Transferencia', 'Deposito') THEN monto_pagado ELSE 0 END), 0) AS total_bancos
-            FROM pago_carga
-            WHERE DATE(fecha_pago) = CURDATE() AND estado = 1
+                IFNULL(SUM(monto), 0) AS total_recaudado,
+                IFNULL(SUM(CASE WHEN metodo_pago = 'Efectivo' THEN monto ELSE 0 END), 0) AS total_efectivo,
+                IFNULL(SUM(CASE WHEN metodo_pago = 'Billetera Digital' THEN monto ELSE 0 END), 0) AS total_billetera,
+                IFNULL(SUM(CASE WHEN metodo_pago IN ('Transferencia', 'Depósito', 'Deposito') THEN monto ELSE 0 END), 0) AS total_bancos
+            FROM movimiento_caja
+            WHERE DATE(fecha_movimiento) = CURDATE() 
+              AND estado = 1 
+              AND modulo_origen = 'COBRO_FLETE'
+              AND tipo_movimiento = 'INGRESO'
         `;
         const [rows] = await db.query(query);
         res.json({ success: true, data: rows[0] });
