@@ -1,4 +1,5 @@
 let historialViajesTodos = [];
+let dtHistorial = null;
 
 // Fusiona los viajes recién obtenidos con la caché existente por id_viaje,
 // en vez de reemplazarla. Las pestañas Gestionar/Historial comparten esta
@@ -23,7 +24,25 @@ let loadedRecords = 0;
  */
 async function init_historial_viajes() {
     console.log("Vista Historial de Viajes cargada");
-    
+
+    // Cada llamada a init_ implica HTML nuevo (nueva <table>), pero este script
+    // solo se ejecuta una vez por sesión SPA, así que dtHistorial sobrevive
+    // entre visitas apuntando a una instancia ya destruida/desmontada. Sin
+    // este reseteo, el guard de la pestaña Historial no vuelve a pedir datos
+    // y renderizarTablaHistorialViajes intenta actualizar una tabla fantasma.
+    dtHistorial = null;
+
+    // El HTML recién inyectado siempre muestra la pestaña Gestionar activa
+    // por defecto, pero currentTab (y las páginas) quedaban con el valor de
+    // la última pestaña usada en la visita anterior. El fetch automático de
+    // más abajo usaba ese currentTab desactualizado y renderizaba en el
+    // contenedor equivocado, dejando la pestaña visible (Gestionar) vacía.
+    currentTab = 'gestionar';
+    currentPage = 1;
+    currentPageGestionar = 1;
+    currentPageHistorial = 1;
+    loadedRecords = 0;
+
     // Configurar listeners de filtrado
     const inputBuscar = document.getElementById('input-buscar-viaje');
     const inputFechaSalida = document.getElementById('input-fecha-salida');
@@ -67,10 +86,10 @@ async function init_historial_viajes() {
             
             contenedorHistorial.style.display = 'flex';
             contenedorGestionar.style.display = 'none';
-            filtrosHistorial.style.display = 'flex';
+            filtrosHistorial.style.display = 'none';
             
             currentPage = currentPageHistorial;
-            if (document.getElementById('contenedor-tarjetas-viajes').children.length === 0) resetAndFetch();
+            if (!dtHistorial) resetAndFetch();
         });
     }
 
@@ -94,41 +113,48 @@ async function init_historial_viajes() {
     const btnCargarMas = document.getElementById(currentTab === 'gestionar' ? 'btn-cargar-mas-gestionar' : 'btn-cargar-mas-viajes');
     if (btnCargarMas) {
         btnCargarMas.addEventListener('click', () => {
-            currentPage++;
-            fetchViajes(true);
+            if (currentTab === 'gestionar') {
+                currentPage++;
+                fetchViajes(true);
+            }
         });
     }
     
-    // Delegación de eventos para los botones de las tarjetas
-    const contenedor = document.getElementById(currentTab === 'gestionar' ? 'grid-viajes-gestionar' : 'contenedor-tarjetas-viajes');
-    if (contenedor) {
-        contenedor.addEventListener('click', (e) => {
-            if (e.target.classList.contains('btn-ver-detalles')) {
-                const idViaje = e.target.getAttribute('data-id');
-                abrirModalDetallesViaje(idViaje);
-            }
-            if (e.target.classList.contains('btn-ver-cargas')) {
-                const idViaje = e.target.getAttribute('data-id');
-                abrirModalCargasViaje(idViaje);
-            }
-            if (e.target.classList.contains('btn-incidencia') || e.target.closest('.btn-incidencia')) {
-                const btn = e.target.classList.contains('btn-incidencia') ? e.target : e.target.closest('.btn-incidencia');
-                const idViaje = btn.getAttribute('data-id');
-                const tipoAlerta = btn.getAttribute('data-tipo-alerta');
-                abrirModalIncidencias(idViaje, tipoAlerta);
-            }
-            if (e.target.classList.contains('btn-menu-incidencia') || e.target.closest('.btn-menu-incidencia')) {
-                const btn = e.target.classList.contains('btn-menu-incidencia') ? e.target : e.target.closest('.btn-menu-incidencia');
-                const idViaje = btn.getAttribute('data-id');
-                abrirMenuIncidencias(idViaje);
-            }
-            if (e.target.classList.contains('btn-ver-adelantos') || e.target.closest('.btn-ver-adelantos')) {
-                const btn = e.target.classList.contains('btn-ver-adelantos') ? e.target : e.target.closest('.btn-ver-adelantos');
-                const idViaje = btn.getAttribute('data-id');
-                abrirModalAdelantos(idViaje);
-            }
-        });
-    }
+    // Delegación de eventos para los botones de las tarjetas y tabla
+    const contenedoresEventos = ['grid-viajes-gestionar', 'tabla-historial-viajes'];
+    contenedoresEventos.forEach(id => {
+        const contenedor = document.getElementById(id);
+        if (contenedor) {
+            contenedor.addEventListener('click', (e) => {
+                if (e.target.classList.contains('btn-ver-detalles') || e.target.closest('.btn-ver-detalles')) {
+                    const btn = e.target.classList.contains('btn-ver-detalles') ? e.target : e.target.closest('.btn-ver-detalles');
+                    const idViaje = btn.getAttribute('data-id');
+                    abrirModalDetallesViaje(idViaje);
+                }
+                if (e.target.classList.contains('btn-ver-cargas') || e.target.closest('.btn-ver-cargas')) {
+                    const btn = e.target.classList.contains('btn-ver-cargas') ? e.target : e.target.closest('.btn-ver-cargas');
+                    const idViaje = btn.getAttribute('data-id');
+                    abrirModalCargasViaje(idViaje);
+                }
+                if (e.target.classList.contains('btn-incidencia') || e.target.closest('.btn-incidencia')) {
+                    const btn = e.target.classList.contains('btn-incidencia') ? e.target : e.target.closest('.btn-incidencia');
+                    const idViaje = btn.getAttribute('data-id');
+                    const tipoAlerta = btn.getAttribute('data-tipo-alerta');
+                    abrirModalIncidencias(idViaje, tipoAlerta);
+                }
+                if (e.target.classList.contains('btn-menu-incidencia') || e.target.closest('.btn-menu-incidencia')) {
+                    const btn = e.target.classList.contains('btn-menu-incidencia') ? e.target : e.target.closest('.btn-menu-incidencia');
+                    const idViaje = btn.getAttribute('data-id');
+                    abrirMenuIncidencias(idViaje);
+                }
+                if (e.target.classList.contains('btn-ver-adelantos') || e.target.closest('.btn-ver-adelantos')) {
+                    const btn = e.target.classList.contains('btn-ver-adelantos') ? e.target : e.target.closest('.btn-ver-adelantos');
+                    const idViaje = btn.getAttribute('data-id');
+                    abrirModalAdelantos(idViaje);
+                }
+            });
+        }
+    });
 
     // Eventos para cerrar los modales
     document.getElementById('btn-cerrar-modal-x')?.addEventListener('click', cerrarModalDetallesViaje);
@@ -1464,14 +1490,18 @@ async function fetchViajes(isLoadMore = false) {
         const fechaSalidaFiltro = document.getElementById('input-fecha-salida')?.value || '';
         const fechaLlegadaFiltro = document.getElementById('input-fecha-llegada')?.value || '';
 
+        // En historial, DataTable manejará la búsqueda local
         const params = new URLSearchParams({
             page: currentPage,
-            limit: LIMIT
+            limit: currentTab === 'historial' ? 100000 : LIMIT
         });
-        if (textoBuscar) params.append('search', textoBuscar);
+        
+        if (currentTab === 'gestionar') {
+            if (textoBuscar) params.append('search', textoBuscar);
+            if (fechaSalidaFiltro) params.append('fechaSalida', fechaSalidaFiltro);
+            if (fechaLlegadaFiltro) params.append('fechaLlegada', fechaLlegadaFiltro);
+        }
         if (estadoFiltro !== 'todos') params.append('estado', estadoFiltro);
-        if (fechaSalidaFiltro) params.append('fechaSalida', fechaSalidaFiltro);
-        if (fechaLlegadaFiltro) params.append('fechaLlegada', fechaLlegadaFiltro);
 
         const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
         const response = await fetch(`/api/viajes?${params.toString()}`, {
@@ -1482,7 +1512,7 @@ async function fetchViajes(isLoadMore = false) {
         
         const res = await response.json();
         
-        if (!isLoadMore) {
+        if (!isLoadMore && currentTab === 'gestionar') {
             contenedor.innerHTML = '';
         }
 
@@ -1494,15 +1524,20 @@ async function fetchViajes(isLoadMore = false) {
 
             loadedRecords += viajes.length;
 
-            if (currentTab === 'gestionar') renderizarTarjetasVerticales(viajes, isLoadMore); else renderizarTarjetasViaje(viajes, isLoadMore);
-
-            if (btnCargarMas) {
-                if (loadedRecords >= totalRecords || viajes.length === 0) {
-                    btnCargarMas.style.display = 'none';
-                } else {
-                    btnCargarMas.style.display = 'inline-block';
+            if (currentTab === 'gestionar') {
+                renderizarTarjetasVerticales(viajes, isLoadMore);
+                if (btnCargarMas) {
+                    if (loadedRecords >= totalRecords || viajes.length === 0) {
+                        btnCargarMas.style.display = 'none';
+                    } else {
+                        btnCargarMas.style.display = 'inline-block';
+                    }
                 }
+            } else {
+                renderizarTablaHistorialViajes(viajes);
+                if (btnCargarMas) btnCargarMas.style.display = 'none';
             }
+
         } else {
             contenedor.innerHTML = '<p style="padding: 20px; color: #dc2626;"><i class="fas fa-exclamation-triangle"></i> Error al cargar los viajes.</p>';
             if (btnCargarMas) btnCargarMas.style.display = 'none';
@@ -1744,10 +1779,12 @@ function renderizarTarjetasVerticales(viajes, isLoadMore = false) {
     contenedor.insertAdjacentHTML('beforeend', html);
 }
 
-function renderizarTarjetasViaje(viajes, isLoadMore = false) {
-    const contenedor = document.getElementById('contenedor-tarjetas-viajes');
-    if (!contenedor) return;
-    
+function renderizarTablaHistorialViajes(viajes) {
+    if (dtHistorial) {
+        dtHistorial.clear().rows.add(viajes).draw();
+        return;
+    }
+
     if (!document.getElementById('style-pulsing-red')) {
         document.head.insertAdjacentHTML('beforeend', `
             <style id="style-pulsing-red">
@@ -1756,177 +1793,168 @@ function renderizarTarjetasViaje(viajes, isLoadMore = false) {
                     70% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
                     100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
                 }
-                .badge-pulsing-red {
-                    animation: pulse-red 2s infinite;
-                }
-                .btn-pulsing-red {
-                    animation: pulse-red 2s infinite;
-                    background: #dc2626 !important;
-                    color: white !important;
-                    border: none !important;
-                    font-weight: 700 !important;
-                }
-                .btn-pulsing-red:hover {
-                    background: #b91c1c !important;
-                }
+                .badge-pulsing-red { animation: pulse-red 2s infinite; }
                 @keyframes pulse-orange {
                     0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.6); }
                     70% { box-shadow: 0 0 0 8px rgba(249, 115, 22, 0); }
                     100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
                 }
-                .badge-pulsing-orange {
-                    animation: pulse-orange 2s infinite;
-                }
-                .btn-pulsing-orange {
-                    animation: pulse-orange 2s infinite;
-                    background: #f97316 !important;
-                    color: white !important;
-                    border: none !important;
-                    font-weight: 700 !important;
-                }
-                .btn-pulsing-orange:hover {
-                    background: #ea580c !important;
-                }
+                .badge-pulsing-orange { animation: pulse-orange 2s infinite; }
             </style>
         `);
     }
 
-    if (!isLoadMore) {
-        contenedor.innerHTML = '';
-    }
-    
-    if (viajes.length === 0 && !isLoadMore) {
-        contenedor.innerHTML = '<p style="padding: 20px; color: var(--text-muted);">No se encontraron viajes con esos filtros.</p>';
-        return;
-    }
-    
-    viajes.forEach(viaje => {
-        let colorEstado, bgEstado;
-        let esSiniestroFinalizado = false;
-        
-        if (viaje.estado_operativo === 'En Ruta') { colorEstado = 'var(--brand-blue)'; bgEstado = '#e0f2fe'; }
-        else if (viaje.estado_operativo === 'Llegó a Destino') { colorEstado = '#16a34a'; bgEstado = '#dcfce7'; }
-        else if (viaje.estado_operativo === 'Descargado') { colorEstado = '#8b5cf6'; bgEstado = '#ede9fe'; }
-        else if (viaje.estado_operativo === 'Finalizado') { 
-            if (!viaje.fecha_llegada) {
-                esSiniestroFinalizado = true;
-                colorEstado = '#dc2626'; 
-                bgEstado = '#fee2e2'; 
-            } else {
-                colorEstado = '#475569'; 
-                bgEstado = '#f1f5f9'; 
+    dtHistorial = window.$('#tabla-historial-viajes').DataTable({
+        data: viajes,
+        pageLength: 15,
+        lengthMenu: [10, 15, 25, 50, 100],
+        order: [[0, 'desc']], // Ordenar por ID Viaje descendente
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
+        },
+        columns: [
+            {
+                data: 'id_viaje',
+                type: 'num',
+                width: '60px',
+                render: function (data, type, row) {
+                    return `<span style="font-weight: 800; color: var(--brand-blue);">#${data}</span>`;
+                }
+            },
+            {
+                data: null,
+                render: function (data, type, row) {
+                    let transbordo = '';
+                    if (row.id_viaje_origen) {
+                        transbordo = `<br><span style="background: #ffedd5; color: #c2410c; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; margin-top: 4px;" title="Transbordo del viaje #${row.id_viaje_origen}"><i class="fas fa-exchange-alt"></i> Transb. #${row.id_viaje_origen}</span>`;
+                    }
+                    return `<span style="font-size: 12px; font-weight: 600; color: var(--text-primary);"><i class="fas fa-map-marker-alt" style="color: #cbd5e1;"></i> ${row.ciudad_origen || '-'} - ${row.ciudad_destino || '-'}</span>${transbordo}`;
+                }
+            },
+            {
+                data: 'vehiculo',
+                render: function (data, type, row) {
+                    return `
+                        <div style="display: flex; flex-direction: column;">
+                            <span style="font-size: 13px; font-weight: 700; color: var(--text-primary);"><i class="fas fa-truck" style="color: #94a3b8; font-size: 11px;"></i> ${data || '-'}</span>
+                            <span style="font-size: 11px; color: var(--text-secondary);">${row.vehiculo_nombre || ''}</span>
+                        </div>
+                    `;
+                }
+            },
+            {
+                data: 'peso_total_kg',
+                render: function (data, type, row) {
+                    let pesoKg = Number(data) || 0;
+                    return `<span style="font-weight: 700;">${(pesoKg / 1000).toFixed(2)} Ton</span><br><span style="font-size: 11px; color: var(--text-muted);">${pesoKg.toFixed(2)} KG</span>`;
+                }
+            },
+            {
+                data: null,
+                render: function (data, type, row) {
+                    let fechaLlegada = '';
+                    let esSiniestroFinalizado = (row.estado_operativo === 'Finalizado' && row.fecha_llegada === null);
+                    if ((row.estado_operativo === 'Llegó a Destino' || row.estado_operativo === 'Descargado' || row.estado_operativo === 'Finalizado') && row.fecha_llegada) {
+                        fechaLlegada = formatFechaCompleta(row.fecha_llegada);
+                    } else {
+                        fechaLlegada = `<span style="color: #dc2626; font-weight: 600;">${esSiniestroFinalizado ? 'No llegó a destino' : row.estado_operativo}</span>`;
+                    }
+                    
+                    return `
+                        <div style="font-size: 11px; display: flex; flex-direction: column; gap: 4px;">
+                            <span title="Salida"><i class="far fa-calendar-alt" style="color: var(--text-muted);"></i> <span style="font-weight: 500;">${formatFechaCompleta(row.fecha_salida)}</span></span>
+                            <span title="Llegada"><i class="far fa-calendar-check" style="color: var(--text-muted);"></i> ${fechaLlegada}</span>
+                        </div>
+                    `;
+                }
+            },
+            {
+                data: 'estado_operativo',
+                render: function (data, type, row) {
+                    let colorEstado, bgEstado;
+                    let esSiniestroFinalizado = false;
+                    
+                    if (data === 'En Ruta') { colorEstado = 'var(--brand-blue)'; bgEstado = '#e0f2fe'; }
+                    else if (data === 'Llegó a Destino') { colorEstado = '#16a34a'; bgEstado = '#dcfce7'; }
+                    else if (data === 'Descargado') { colorEstado = '#8b5cf6'; bgEstado = '#ede9fe'; }
+                    else if (data === 'Finalizado') { 
+                        if (!row.fecha_llegada) {
+                            esSiniestroFinalizado = true;
+                            colorEstado = '#dc2626'; 
+                            bgEstado = '#fee2e2'; 
+                        } else {
+                            colorEstado = '#475569'; 
+                            bgEstado = '#f1f5f9'; 
+                        }
+                    }
+                    else { colorEstado = '#dc2626'; bgEstado = '#fee2e2'; }
+
+                    let colorPago, bgPago;
+                    if (row.estado_pagos === 'Liquidado') { colorPago = '#16a34a'; bgPago = '#dcfce7'; }
+                    else if (row.estado_pagos === 'Anulado') { colorPago = '#dc2626'; bgPago = '#fee2e2'; }
+                    else { colorPago = '#d97706'; bgPago = '#fef3c7'; }
+                    
+                    let extraAlert = '';
+                    if (row.productos_siniestrados_sin_justificar > 0) {
+                        extraAlert = `<span class="badge-pulsing-red" style="background: #dc2626; color: white; padding: 3px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;" title="${row.productos_siniestrados_sin_justificar} productos siniestrados sin justificar"><i class="fas fa-exclamation-triangle"></i> Reporte Siniestro</span>`;
+                    } else if (row.estado_operativo === 'Incidencia' && !row.tiene_incidencia_general) {
+                        extraAlert = `<span class="badge-pulsing-red" style="background: #dc2626; color: white; padding: 3px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-exclamation-circle"></i> Requiere Reporte</span>`;
+                    } else if ((row.estado_operativo === 'Llegó a Destino' || row.estado_operativo === 'Descargado' || row.estado_operativo === 'Finalizado') && row.productos_rechazados_sin_justificar > 0) {
+                        extraAlert = `<span class="badge-pulsing-orange" style="background: #f97316; color: white; padding: 3px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;" title="${row.productos_rechazados_sin_justificar} productos rechazados sin justificar"><i class="fas fa-exclamation-triangle"></i> Reporte Rechazo</span>`;
+                    }
+
+                    return `
+                        <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                            <span style="background: ${bgEstado}; color: ${colorEstado}; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; white-space: nowrap;"><i class="fas fa-truck-moving"></i> ${esSiniestroFinalizado ? 'Siniestro' : data}</span>
+                            <span style="background: ${bgPago}; color: ${colorPago}; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; white-space: nowrap;"><i class="fas fa-money-bill-wave"></i> ${row.estado_pagos || 'Pendiente'}</span>
+                            ${extraAlert}
+                        </div>
+                    `;
+                }
+            },
+            {
+                data: null,
+                orderable: false,
+                render: function (data, type, row) {
+                    let hasSiniestro = row.productos_siniestrados_sin_justificar > 0 || (row.estado_operativo === 'Incidencia' && !row.tiene_incidencia_general);
+                    let hasRechazo = (row.estado_operativo === 'Llegó a Destino' || row.estado_operativo === 'Descargado' || row.estado_operativo === 'Finalizado') && row.productos_rechazados_sin_justificar > 0;
+                    
+                    let btnIncidenciaClase = 'btn-incidencia';
+                    let btnIncidenciaIcon = 'fa-exclamation-circle';
+                    let btnIncidenciaTitle = 'Ver Incidencias';
+                    let isPulsing = false;
+                    
+                    if (hasSiniestro || hasRechazo) {
+                        btnIncidenciaClase = 'btn-menu-incidencia';
+                        btnIncidenciaIcon = 'fa-exclamation-triangle';
+                        btnIncidenciaTitle = 'Reportar';
+                        isPulsing = true;
+                    }
+                    
+                    return `
+                        <div style="display: flex; gap: 6px; justify-content: center;">
+                            <button class="btn-ver-detalles" data-id="${row.id_viaje}" style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid #bae6fd; background: #e0f2fe; color: #0284c7; cursor: pointer; transition: all 0.2s;" title="Ver Detalles">
+                                <i class="fas fa-info-circle" style="pointer-events: none;"></i>
+                            </button>
+                            <button class="btn-ver-cargas" data-id="${row.id_viaje}" style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid #e2e8f0; background: #f1f5f9; color: #475569; cursor: pointer; transition: all 0.2s;" title="Ver Cargas">
+                                <i class="fas fa-box" style="pointer-events: none;"></i>
+                            </button>
+                            <button class="btn-ver-adelantos" data-id="${row.id_viaje}" style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid #fde68a; background: #fffbeb; color: #d97706; cursor: pointer; transition: all 0.2s;" title="Ver Adelantos">
+                                <i class="fas fa-hand-holding-usd" style="pointer-events: none;"></i>
+                            </button>
+                            <button class="${btnIncidenciaClase} ${isPulsing ? (hasSiniestro ? 'btn-pulsing-red' : 'btn-pulsing-orange') : ''}" data-id="${row.id_viaje}" data-tipo-alerta="ver" style="width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid ${isPulsing ? 'transparent' : '#fecaca'}; background: ${isPulsing ? '' : '#fef2f2'}; color: ${isPulsing ? '' : '#dc2626'}; cursor: pointer; transition: all 0.2s;" title="${btnIncidenciaTitle}">
+                                <i class="fas ${btnIncidenciaIcon}" style="pointer-events: none;"></i>
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+        ],
+        createdRow: function(row, data, dataIndex) {
+            if (data.estado_operativo === 'Finalizado' && !data.fecha_llegada) {
+                window.$(row).css('border-left', '4px solid #dc2626');
             }
         }
-        else { colorEstado = '#dc2626'; bgEstado = '#fee2e2'; } // Incidencia
-
-        let colorPago, bgPago;
-        if (viaje.estado_pagos === 'Liquidado') { colorPago = '#16a34a'; bgPago = '#dcfce7'; }
-        else if (viaje.estado_pagos === 'Anulado') { colorPago = '#dc2626'; bgPago = '#fee2e2'; }
-        else { colorPago = '#d97706'; bgPago = '#fef3c7'; } // Pendiente o default
-
-        const tarjetaHtml = `
-            <div class="card-viaje" style="background: #ffffff; border: 1px solid var(--border-light); ${esSiniestroFinalizado ? 'border-left: 4px solid #dc2626;' : ''} border-radius: var(--radius-lg); padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: flex; gap: 24px;">
-                <div style="display: flex; flex-direction: column; justify-content: space-between; width: 240px; flex-shrink: 0;">
-                    <div style="display: flex; gap: 16px;">
-                        <div style="width: 48px; height: 48px; border-radius: 12px; background: #e0f2fe; color: var(--brand-blue); display: flex; justify-content: center; align-items: center; font-size: 20px; flex-shrink: 0;">
-                            <i class="fas fa-truck"></i>
-                        </div>
-                        <div style="display: flex; flex-direction: column; align-items: flex-start;">
-                            <h3 style="margin: 0 0 4px 0; font-size: 16px; color: var(--text-primary); font-weight: 700;">
-                                Viaje #${viaje.id_viaje}
-                                <i class="fa-solid fa-circle-info" style="cursor: pointer; margin-left: 8px; color: var(--brand-blue); font-size: 14px;" title="Ver detalles" onclick="abrirModalDetallesViaje(${viaje.id_viaje})"></i>
-                            </h3>
-                            <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">${viaje.ciudad_origen || 'Origen'} - ${viaje.ciudad_destino || 'Destino'}</p>
-                        </div>
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px; align-items: flex-start;">
-                        <div style="display: flex; gap: 8px; margin-bottom: 4px;">
-                            <span style="background: ${bgEstado}; color: ${colorEstado}; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-truck-moving"></i> ${esSiniestroFinalizado ? 'Finalizado (Siniestro)' : viaje.estado_operativo}</span>
-                            <span style="background: ${bgPago}; color: ${colorPago}; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-money-bill-wave"></i> ${viaje.estado_pagos || 'Pendiente'}</span>
-                        </div>
-                        ${viaje.productos_siniestrados_sin_justificar > 0
-                            ? `<span class="badge-pulsing-red" style="background: #dc2626; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-exclamation-triangle"></i> Reporte: (${viaje.productos_siniestrados_sin_justificar} Producto${viaje.productos_siniestrados_sin_justificar > 1 ? 's' : ''} Siniestrado${viaje.productos_siniestrados_sin_justificar > 1 ? 's' : ''})</span>`
-                            : ''}
-                        ${viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_general 
-                            ? `<span class="badge-pulsing-red" style="background: #dc2626; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-exclamation-circle"></i> Siniestro: Requiere Reporte</span>` 
-                            : ''}
-                        ${(viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Descargado' || viaje.estado_operativo === 'Finalizado') && viaje.productos_rechazados_sin_justificar > 0
-                            ? `<span class="badge-pulsing-orange" style="background: #f97316; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-exclamation-triangle"></i> Reporte: (${viaje.productos_rechazados_sin_justificar} Producto${viaje.productos_rechazados_sin_justificar > 1 ? 's' : ''} Rechazado${viaje.productos_rechazados_sin_justificar > 1 ? 's' : ''})</span>`
-                            : ''}
-                        ${viaje.id_viaje_origen 
-                            ? `<span style="background: #ffedd5; color: #c2410c; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; display: inline-block;">TRANSBORDO DEL VIAJE #${viaje.id_viaje_origen}</span>` 
-                            : ''}
-                    </div>
-                </div>
-
-                <div style="flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; border-left: 1px solid var(--border-light); padding-left: 24px; align-content: center;">
-                    <div>
-                        <p style="margin: 0 0 4px 0; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
-                            <i class="fas fa-truck-moving"></i> Vehículo
-                        </p>
-                        <p style="margin: 0; font-size: 14px; color: var(--text-primary); font-weight: 500;">${viaje.vehiculo || '-'}</p>
-                    </div>
-                    <div>
-                        <p style="margin: 0 0 4px 0; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
-                            <i class="far fa-user"></i> Chofer
-                        </p>
-                        <p style="margin: 0; font-size: 14px; color: var(--text-primary); font-weight: 500;">${viaje.chofer || '-'}</p>
-                    </div>
-                    <div>
-                        <p style="margin: 0 0 4px 0; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
-                            <i class="far fa-calendar-alt"></i> Fecha Salida
-                        </p>
-                        <p style="margin: 0; font-size: 14px; color: var(--text-primary); font-weight: 500;">${formatFechaCompleta(viaje.fecha_salida)}</p>
-                    </div>
-
-                    <div>
-                        <p style="margin: 0 0 4px 0; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Cargas</p>
-                        <p style="margin: 0; font-size: 16px; color: var(--text-primary); font-weight: 700;">${viaje.total_cargas}</p>
-                    </div>
-                    <div>
-                        <p style="margin: 0 0 4px 0; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Peso KG</p>
-                        <p style="margin: 0; font-size: 16px; color: var(--text-primary); font-weight: 700;">
-                            ${Number(viaje.peso_total_kg).toFixed(2)} 
-                            <span style="font-size: 13px; color: var(--text-secondary); font-weight: 500;">(${(Number(viaje.peso_total_kg) / 1000).toFixed(2)} Ton)</span>
-                        </p>
-                    </div>
-                    <div>
-                        <p style="margin: 0 0 4px 0; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
-                            <i class="far fa-calendar-check"></i> Fecha Llegada
-                        </p>
-                        <p style="margin: 0; font-size: 14px; color: var(--text-primary); font-weight: 500;">
-                            ${(viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Descargado' || viaje.estado_operativo === 'Finalizado') && viaje.fecha_llegada ? formatFechaCompleta(viaje.fecha_llegada) : `<span style="color: ${colorEstado}; font-weight: 600;">${esSiniestroFinalizado ? 'No llegó a destino' : viaje.estado_operativo}</span>`}
-                        </p>
-                    </div>
-                </div>
-
-                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 140px; border-left: 1px solid var(--border-light); padding-left: 24px;">
-                    <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: auto;">
-                        <button class="btn-viaje btn-ver-cargas" data-id="${viaje.id_viaje}">Ver cargas</button>
-                        <button class="btn-viaje btn-ver-adelantos" data-id="${viaje.id_viaje}">Ver adelantos</button>
-                        ${(() => {
-                            let btnHtml = '';
-                            const hasSiniestro = viaje.productos_siniestrados_sin_justificar > 0 || (viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_general);
-                            const hasRechazo = (viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Descargado' || viaje.estado_operativo === 'Finalizado') && viaje.productos_rechazados_sin_justificar > 0;
-                            
-                            if (hasSiniestro || hasRechazo) {
-                                const btnClass = hasSiniestro ? 'btn-pulsing-red' : 'btn-pulsing-orange';
-                                btnHtml += `<button class="btn-viaje btn-menu-incidencia ${btnClass}" data-id="${viaje.id_viaje}"><i class="fas fa-exclamation-triangle"></i>Reportar</button>`;
-                            } else {
-                                btnHtml += `<button class="btn-viaje btn-incidencia" data-id="${viaje.id_viaje}" data-tipo-alerta="ver" ${viaje.estado_operativo === 'Incidencia' ? 'style="color: #dc2626; background: #fee2e2;"' : ''}>Ver incidencias</button>`;
-                            }
-
-                            if (viaje.estado_operativo === 'Descargado' || viaje.estado_operativo === 'Incidencia') {
-                                btnHtml += `<button class="btn-viaje" style="background-color: #f1f5f9; color: #475569; font-weight: 600; border: none; padding: 8px; border-radius: 6px; cursor: pointer;" onclick="finalizarViaje(${viaje.id_viaje})">Finalizar Viaje</button>`;
-                            }
-                            return btnHtml;
-                        })()}
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        contenedor.insertAdjacentHTML('beforeend', tarjetaHtml);
     });
 }
 

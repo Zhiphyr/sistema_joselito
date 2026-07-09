@@ -11,20 +11,8 @@
     </div>
 
     <!-- Buscador y Filtros (Solo visible en Historial) -->
-    <div id="filtros-historial" style="display: none; gap: 16px; align-items: center; flex-wrap: wrap;">
-        <div style="flex: 1; min-width: 250px; position: relative;">
-            <i class="fas fa-search" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
-            <input type="text" id="input-buscar-viaje" class="form-control" placeholder="Buscar viaje por ID, placa o chofer..." style="padding-left: 44px; border-radius: var(--radius-md); box-shadow: 0 1px 2px rgba(0,0,0,0.05); height: 42px;">
-        </div>
-        <div style="display: flex; align-items: center; gap: 12px;">
-            <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Salida:</span>
-            <input type="date" id="input-fecha-salida" class="form-control" style="height: 42px; border-radius: var(--radius-md); box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-        </div>
-        <div style="display: flex; align-items: center; gap: 12px;">
-            <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Llegada:</span>
-            <input type="date" id="input-fecha-llegada" class="form-control" style="height: 42px; border-radius: var(--radius-md); box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-        </div>
-    </div>
+    <!-- Filtros ocultos a favor del buscador de DataTables -->
+    <div id="filtros-historial" style="display: none;"></div>
 
     <!-- Tab 1: Gestionar -->
     <div id="contenedor-gestionar" style="display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding-right: 8px;">
@@ -40,15 +28,30 @@
         </div>
     </div>
 
-    <!-- Tab 2: Historial (Lista Horizontal) -->
+    <!-- Tab 2: Historial (Lista Horizontal / DataTables) -->
     <div id="contenedor-historial" style="display: none; flex-direction: column; gap: 16px; overflow-y: auto; padding-right: 8px; flex: 1;">
-        <!-- Contenedor de Tarjetas de Viaje -->
-        <div id="contenedor-tarjetas-viajes" style="display: flex; flex-direction: column; gap: 16px;">
-            <!-- Aquí se renderizarán dinámicamente las tarjetas de viaje (horizontales) -->
+        <!-- Contenedor oculto por compatibilidad -->
+        <div id="contenedor-tarjetas-viajes" style="display: none;"></div>
+        
+        <div style="background: white; border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+            <table id="tabla-historial-viajes" class="table table-striped table-hover" style="width:100%; font-size: 13px;">
+                <thead>
+                    <tr>
+                        <th style="font-weight: 700; color: var(--text-muted); text-transform: uppercase; font-size: 11px;">ID Viaje</th>
+                        <th style="font-weight: 700; color: var(--text-muted); text-transform: uppercase; font-size: 11px;">Ruta</th>
+                        <th style="font-weight: 700; color: var(--text-muted); text-transform: uppercase; font-size: 11px;">Vehículo</th>
+                        <th style="font-weight: 700; color: var(--text-muted); text-transform: uppercase; font-size: 11px;">Peso Total</th>
+                        <th style="font-weight: 700; color: var(--text-muted); text-transform: uppercase; font-size: 11px;">Fechas</th>
+                        <th style="font-weight: 700; color: var(--text-muted); text-transform: uppercase; font-size: 11px;">Estado</th>
+                        <th style="font-weight: 700; color: var(--text-muted); text-transform: uppercase; font-size: 11px; text-align: center;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
         </div>
         
-        <!-- Botón Cargar Más para Historial -->
-        <div style="text-align: center; margin-top: 16px;">
+        <!-- Botón Cargar Más para Historial (Oculto) -->
+        <div style="text-align: center; margin-top: 16px; display: none;">
             <button id="btn-cargar-mas-viajes" style="display: none; padding: 10px 24px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--text-secondary); cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: all 0.2s ease;">
                 <i class="fas fa-chevron-down" style="margin-right: 8px;"></i> Cargar más historial
             </button>
