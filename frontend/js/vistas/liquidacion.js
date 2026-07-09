@@ -169,7 +169,7 @@ function renderListaPendientes(query = '') {
                     <div style="display: flex; align-items: center; gap: 8px;">
                         ${liq.bloquear_liquidacion ? `
                         <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-                            <button class="btn-liquidar" disabled title="Liquidación bloqueada: Existen cargas rechazadas pendientes de justificar." style="padding: 8px 16px; border-radius: 6px; border: none; background: #94a3b8; color: white; font-weight: 600; font-size: 13px; cursor: not-allowed; display: flex; align-items: center; gap: 8px;">
+                            <button class="btn-liquidar" disabled title="Liquidación bloqueada: Existen cargas rechazadas o siniestradas pendientes de justificar." style="padding: 8px 16px; border-radius: 6px; border: none; background: #94a3b8; color: white; font-weight: 600; font-size: 13px; cursor: not-allowed; display: flex; align-items: center; gap: 8px;">
                                 <i class="fas fa-lock"></i> Liquidar
                             </button>
                             <span style="font-size: 10px; color: #ef4444; font-weight: 600;">Reportar incidencias</span>

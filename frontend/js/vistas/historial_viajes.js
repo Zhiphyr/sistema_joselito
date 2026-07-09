@@ -205,9 +205,27 @@ async function init_historial_viajes() {
 }
 
 window.finalizarViaje = async function(idViaje) {
+    const viaje = historialViajesTodos.find(v => v.id_viaje === idViaje);
+    if (!viaje) return;
+
+    const tieneSiniestrados = viaje.productos_siniestrados_sin_justificar > 0;
+    const tieneRechazados = viaje.productos_rechazados_sin_justificar > 0;
+    const faltaReporteGeneral = viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_general;
+
+    if (tieneSiniestrados || tieneRechazados || faltaReporteGeneral) {
+        Swal.fire({
+            icon: 'error',
+            title: 'No se puede finalizar',
+            text: 'Aún tiene incidencias por registrar. Por favor, registre estas incidencias (alertas pendientes) antes de finalizar el viaje.',
+            confirmButtonColor: '#3085d6',
+            confirmButtonText: 'Entendido'
+        });
+        return;
+    }
+
     const confirm = await Swal.fire({
         title: '¿Finalizar Viaje?',
-        text: 'Al finalizar este viaje, se cerrará la auditoría y ya no podrás registrar nuevas incidencias ni adelantos. ¿Estás seguro?',
+        text: 'Ya no se podrán registrar más incidencias ni adelantos. Ten en cuenta esto antes de cerrar el viaje y que pase al módulo de liquidación. ¿Estás seguro?',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#3085d6',
@@ -246,11 +264,20 @@ function abrirModalDetallesViaje(idStr) {
 
     // Estado
     const divEstado = document.getElementById('modal-detalle-estado');
-    let colorEstado, bgEstado;
-    if (viaje.estado_operativo === 'En Ruta') { colorEstado = 'var(--brand-blue)'; bgEstado = '#e0f2fe'; }
-    else if (viaje.estado_operativo === 'Llegó a Destino') { colorEstado = '#16a34a'; bgEstado = '#dcfce7'; }
-    else if (viaje.estado_operativo === 'Finalizado') { colorEstado = '#475569'; bgEstado = '#f1f5f9'; }
-    else { colorEstado = '#dc2626'; bgEstado = '#fee2e2'; } // Incidencia
+    const esSiniestroFinalizado = (viaje.estado_operativo === 'Finalizado' && viaje.fecha_llegada === null);
+    
+    let colorEstado, bgEstado, textoEstado, iconoEstado;
+    if (esSiniestroFinalizado) {
+        colorEstado = '#dc2626'; bgEstado = '#fee2e2'; textoEstado = 'Finalizado (Siniestro)'; iconoEstado = 'fa-truck';
+    } else if (viaje.estado_operativo === 'En Ruta') { 
+        colorEstado = 'var(--brand-blue)'; bgEstado = '#e0f2fe'; textoEstado = 'En Ruta'; iconoEstado = 'fa-truck-moving';
+    } else if (viaje.estado_operativo === 'Llegó a Destino') { 
+        colorEstado = '#16a34a'; bgEstado = '#dcfce7'; textoEstado = 'Llegó a Destino'; iconoEstado = 'fa-truck-moving';
+    } else if (viaje.estado_operativo === 'Finalizado') { 
+        colorEstado = '#475569'; bgEstado = '#f1f5f9'; textoEstado = 'Finalizado'; iconoEstado = 'fa-truck-moving';
+    } else { 
+        colorEstado = '#dc2626'; bgEstado = '#fee2e2'; textoEstado = viaje.estado_operativo; iconoEstado = 'fa-truck-moving';
+    } // Incidencia
 
     let colorPago, bgPago;
     if (viaje.estado_pagos === 'Liquidado') { colorPago = '#16a34a'; bgPago = '#dcfce7'; }
@@ -258,14 +285,16 @@ function abrirModalDetallesViaje(idStr) {
     else { colorPago = '#d97706'; bgPago = '#fef3c7'; } // Pendiente o default
 
     divEstado.innerHTML = `
-        <span style="background: ${bgEstado}; color: ${colorEstado}; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-truck-moving"></i> ${viaje.estado_operativo}</span>
+        <span style="background: ${bgEstado}; color: ${colorEstado}; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas ${iconoEstado}"></i> ${textoEstado}</span>
         <span style="background: ${bgPago}; color: ${colorPago}; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-money-bill-wave"></i> ${viaje.estado_pagos || 'Pendiente'}</span>
     `;
 
     // Fechas
     document.getElementById('modal-detalle-fecha-salida').textContent = formatFechaCompleta(viaje.fecha_salida);
     const elemLlegada = document.getElementById('modal-detalle-fecha-llegada');
-    if ((viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.fecha_llegada) {
+    if (esSiniestroFinalizado) {
+        elemLlegada.innerHTML = `<span style="color: #dc2626; font-weight: 700;">No llegó a destino</span>`;
+    } else if ((viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.fecha_llegada) {
         elemLlegada.textContent = formatFechaCompleta(viaje.fecha_llegada);
     } else if (viaje.estado_operativo === 'En Ruta') {
         elemLlegada.textContent = 'En Ruta';
@@ -515,7 +544,7 @@ function abrirMenuIncidencias(idStr) {
     if (viaje.productos_siniestrados_sin_justificar > 0) {
         htmlBotones += `<button class="swal2-confirm swal2-styled" style="width: 100%; margin: 2px 0; background-color: #ff8484ff; border: 2px solid #dc2626; border-radius: 10px; color: white; font-weight: 700; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); box-shadow: inset 5px 5px 10px rgba(0, 0, 0, 0.3); display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="Swal.close(); abrirModalIncidencias(${idViaje}, 'siniestrados');"><i class="fa-solid fa-box"></i>Productos Siniestrados</button>`;
     }
-    if ((viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Finalizado') && viaje.productos_rechazados_sin_justificar > 0) {
+    if ((viaje.estado_operativo === 'Llegó a Destino' || viaje.estado_operativo === 'Descargado' || viaje.estado_operativo === 'Finalizado') && viaje.productos_rechazados_sin_justificar > 0) {
         htmlBotones += `<button class="swal2-confirm swal2-styled" style="width: 100%; margin: 2px 0; background-color: #ffa86aff; border: 2px solid #f97316; border-radius: 10px; color: white; font-weight: 700; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); box-shadow: inset 5px 5px 10px rgba(0, 0, 0, 0.3); display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="Swal.close(); abrirModalIncidencias(${idViaje}, 'rechazados');"><i class="fa-solid fa-box-open"></i>Productos Rechazados</button>`;
     }
     if (viaje.estado_operativo === 'Incidencia' && !viaje.tiene_incidencia_general) {
@@ -711,7 +740,7 @@ async function abrirModalIncidencias(idStr, tipoAlerta = null) {
                         </div>
 
                         <div style="padding: 12px 16px; border-top: 1px solid #f1f5f9; background: #fafafa; font-size: 11px; color: var(--text-muted); display: flex; justify-content: flex-end; align-items: center; gap: 6px;">
-                            <i class="fas fa-user-edit"></i> Registrado por <strong>${inc.usuario_registro}</strong>
+                            <i class="fas fa-user-edit"></i> Registrado por <strong>${inc.usuario_registro || 'Sistema'}</strong>
                         </div>
                     </div>
                 `;
@@ -1697,58 +1726,80 @@ async function abrirModalAdelantos(idStr) {
                     btnNuevo.onclick = () => mostrarFormularioNuevoAdelanto(idViaje);
                 }
                 
-                // Mostrar lista en formato de tabla
-                let listaHtml = `
-                    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; width: 100%;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                                <tr>
-                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Monto</th>
-                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Método de Entrega</th>
-                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Nro Operación</th>
-                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Evidencia</th>
-                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; width: 200px;">Motivo</th>
-                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Fecha de Registro</th>
-                                    <th style="padding: 12px 16px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Registrado Por</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                `;
+                // Mostrar lista en formato de tarjetas
+                let listaHtml = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; width: 100%;">';
                 
                 adelantosList.forEach(a => {
                     const fechaObj = new Date(a.fecha_adelanto);
                     const fechaStr = fechaObj.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
                     const horaStr = fechaObj.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
 
+                    let badgesHTML = `<span style="background: #dcfce7; color: #15803d; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-money-bill-wave"></i> Adelanto a Chofer</span>`;
+
+                    // Info operation
+                    let opHTML = '';
+                    if (a.metodo_entrega !== 'Efectivo') {
+                        opHTML = `
+                            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-top: 16px;">
+                                <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fas fa-university"></i> Datos de Operación
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <span style="font-size: 12px; color: var(--text-secondary);">Método:</span>
+                                    <span style="font-size: 13px; color: var(--text-primary); font-weight: 600;">${a.metodo_entrega || '-'}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <span style="font-size: 12px; color: var(--text-secondary);">Nro Operación:</span>
+                                    <span style="font-size: 13px; color: var(--text-primary); font-weight: 600;">${a.numero_operacion || '-'}</span>
+                                </div>
+                                ${a.evidencia_url ? `
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0;">
+                                    <span style="font-size: 12px; color: var(--text-secondary);">Evidencia:</span>
+                                    <a href="${a.evidencia_url}" target="_blank" style="color: var(--brand-blue); text-decoration: none; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-file-image"></i> Ver Archivo</a>
+                                </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    } else {
+                        opHTML = `
+                            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-top: 16px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-size: 12px; color: var(--text-secondary);">Método:</span>
+                                    <span style="font-size: 13px; color: var(--text-primary); font-weight: 600;"><i class="fas fa-money-bill-alt" style="color: #16a34a;"></i> Efectivo</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+
                     listaHtml += `
-                                <tr style="border-bottom: 1px solid #f1f5f9;">
-                                    <td style="padding: 12px 16px; font-size: 14px; font-weight: 700; color: #16a34a; white-space: nowrap;">S/ ${Number(a.monto).toFixed(2)}</td>
-                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-primary);">${a.metodo_entrega || '-'}</td>
-                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-primary);">${a.numero_operacion || '-'}</td>
-                                    <td style="padding: 12px 16px; font-size: 13px; text-align: center;">
-                                        ${a.evidencia_url ? `<a href="${a.evidencia_url}" target="_blank" style="color: var(--brand-blue); text-decoration: none;" title="Ver evidencia"><i class="fas fa-file-image fa-lg"></i></a>` : '-'}
-                                    </td>
-                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-secondary); max-width: 200px;" title="${a.motivo_referencial ? a.motivo_referencial.replace(/"/g, '&quot;') : ''}">
-                                        <div style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; white-space: normal;">
-                                            ${a.motivo_referencial || '-'}
-                                        </div>
-                                    </td>
-                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-primary); white-space: nowrap;">
-                                        <div style="display: flex; flex-direction: column;">
-                                            <span>${fechaStr}</span>
-                                            <span style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${horaStr}</span>
-                                        </div>
-                                    </td>
-                                    <td style="padding: 12px 16px; font-size: 13px; color: var(--text-secondary);">${a.usuario_creador || 'Desconocido'}</td>
-                                </tr>
+                        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden; display: flex; flex-direction: column; transition: all 0.3s ease; cursor: default;" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 12px 20px -8px rgba(0,0,0,0.15)'; this.style.borderColor='#cbd5e1';" onmouseout="this.style.transform='none'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.02)'; this.style.borderColor='#e2e8f0';">
+                            <div style="padding: 16px; border-bottom: 1px solid #f1f5f9; background: #f8fafc; display: flex; flex-direction: column; gap: 12px;">
+                                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                    ${badgesHTML}
+                                </div>
+                                <h4 style="margin: 0; font-size: 20px; font-weight: 800; color: #16a34a; display: flex; justify-content: space-between; align-items: center;">
+                                    S/ ${Number(a.monto).toFixed(2)}
+                                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                                        <span style="font-size: 12px; font-weight: 500; color: var(--text-muted);"><i class="far fa-calendar-alt"></i> ${fechaStr}</span>
+                                        <span style="font-size: 10px; font-weight: 500; color: var(--text-muted);">${horaStr}</span>
+                                    </div>
+                                </h4>
+                            </div>
+                            
+                            <div style="padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 0;">
+                                <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; font-size: 13px; color: var(--text-secondary); line-height: 1.6; font-style: italic; max-height: 100px; overflow-y: auto; border-left: 3px solid #cbd5e1;">
+                                    "${a.motivo_referencial || 'Sin motivo especificado'}"
+                                </div>
+                                ${opHTML}
+                            </div>
+                            <div style="padding: 12px 16px; background: #f8fafc; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end; align-items: center; font-size: 11px; color: #94a3b8;">
+                                <span style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-user-edit"></i> Registrado por <strong style="color: var(--text-secondary);">${a.usuario_creador || 'Sistema'}</strong></span>
+                            </div>
+                        </div>
                     `;
                 });
                 
-                listaHtml += `
-                            </tbody>
-                        </table>
-                    </div>
-                `;
+                listaHtml += `</div>`;
                 modalBody.innerHTML = listaHtml;
             }
         } else {

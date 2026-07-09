@@ -898,7 +898,7 @@ const obtenerIncidenciasViaje = async (req, res) => {
                 i.id_incidencia, i.tipo_incidencia, i.descripcion_detallada,
                 i.valor_total_perdida, i.gastos_adicionales, i.adelanto_recuperar, i.monto_asumido_empresa, i.monto_descuento_chofer,
                 i.fecha_creacion,
-                u.usuario as usuario_registro
+                u.nombre as usuario_registro
             FROM Incidencia_Viaje i
             JOIN Usuarios u ON i.id_usuario = u.id_usuario
             WHERE i.id_viaje = ? AND i.estado = 1
@@ -1187,12 +1187,12 @@ const obtenerLiquidacionesPendientes = async (req, res) => {
                       AND iv.estado_cobro_penalidad IN ('Pendiente', 'Cobrado Parcial')
                 ) AS penalidades,
 
-                -- Bandera para bloquear liquidación si existen detalles rechazados sin justificar
+                -- Bandera para bloquear liquidación si existen detalles rechazados o siniestrados sin justificar
                 (
                     SELECT COUNT(*) > 0 
                     FROM detalle_carga dc 
                     JOIN carga cg ON dc.id_carga = cg.id_carga 
-                    WHERE cg.id_viaje = v.id_viaje AND dc.estado_operativo = 'Rechazado' AND dc.incidencia_justificada = 1 AND dc.estado != 2
+                    WHERE cg.id_viaje = v.id_viaje AND dc.estado_operativo IN ('Rechazado', 'Siniestrado') AND dc.incidencia_justificada = 1 AND dc.estado != 2
                 ) AS bloquear_liquidacion
                 
             FROM viaje v
