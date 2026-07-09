@@ -1,5 +1,8 @@
 let historialViajesTodos = [];
+let currentTab = 'gestionar';
 let currentPage = 1;
+let currentPageGestionar = 1;
+let currentPageHistorial = 1;
 const LIMIT = 10;
 let loadedRecords = 0;
 
@@ -16,6 +19,51 @@ async function init_historial_viajes() {
     const inputFechaSalida = document.getElementById('input-fecha-salida');
     const inputFechaLlegada = document.getElementById('input-fecha-llegada');
     
+    
+    const tabGestionar = document.getElementById('tab-gestionar');
+    const tabHistorial = document.getElementById('tab-historial');
+    const contenedorGestionar = document.getElementById('contenedor-gestionar');
+    const contenedorHistorial = document.getElementById('contenedor-historial');
+    const filtrosHistorial = document.getElementById('filtros-historial');
+
+    if (tabGestionar && tabHistorial) {
+        tabGestionar.addEventListener('click', () => {
+            currentTab = 'gestionar';
+            tabGestionar.style.borderBottom = '2px solid var(--brand-blue)';
+            tabGestionar.style.color = 'var(--brand-blue)';
+            tabGestionar.style.fontWeight = '700';
+            
+            tabHistorial.style.borderBottom = '2px solid transparent';
+            tabHistorial.style.color = 'var(--text-muted)';
+            tabHistorial.style.fontWeight = '600';
+            
+            contenedorGestionar.style.display = 'flex';
+            contenedorHistorial.style.display = 'none';
+            filtrosHistorial.style.display = 'none';
+            
+            currentPage = currentPageGestionar;
+            if (document.getElementById('grid-viajes-gestionar').children.length === 0) resetAndFetch();
+        });
+
+        tabHistorial.addEventListener('click', () => {
+            currentTab = 'historial';
+            tabHistorial.style.borderBottom = '2px solid var(--brand-blue)';
+            tabHistorial.style.color = 'var(--brand-blue)';
+            tabHistorial.style.fontWeight = '700';
+            
+            tabGestionar.style.borderBottom = '2px solid transparent';
+            tabGestionar.style.color = 'var(--text-muted)';
+            tabGestionar.style.fontWeight = '600';
+            
+            contenedorHistorial.style.display = 'flex';
+            contenedorGestionar.style.display = 'none';
+            filtrosHistorial.style.display = 'flex';
+            
+            currentPage = currentPageHistorial;
+            if (document.getElementById('contenedor-tarjetas-viajes').children.length === 0) resetAndFetch();
+        });
+    }
+
     const resetAndFetch = () => {
         currentPage = 1;
         loadedRecords = 0;
@@ -34,7 +82,7 @@ async function init_historial_viajes() {
     if (inputFechaLlegada) inputFechaLlegada.addEventListener('change', resetAndFetch);
 
     // Botón Cargar Más
-    const btnCargarMas = document.getElementById('btn-cargar-mas-viajes');
+    const btnCargarMas = document.getElementById(currentTab === 'gestionar' ? 'btn-cargar-mas-gestionar' : 'btn-cargar-mas-viajes');
     if (btnCargarMas) {
         btnCargarMas.addEventListener('click', () => {
             currentPage++;
@@ -43,7 +91,7 @@ async function init_historial_viajes() {
     }
     
     // Delegación de eventos para los botones de las tarjetas
-    const contenedor = document.getElementById('contenedor-tarjetas-viajes');
+    const contenedor = document.getElementById(currentTab === 'gestionar' ? 'grid-viajes-gestionar' : 'contenedor-tarjetas-viajes');
     if (contenedor) {
         contenedor.addEventListener('click', (e) => {
             if (e.target.classList.contains('btn-ver-detalles')) {
@@ -1403,7 +1451,7 @@ async function fetchViajes(isLoadMore = false) {
 
     try {
         const textoBuscar = document.getElementById('input-buscar-viaje')?.value || '';
-        const estadoFiltro = document.getElementById('select-estado-viaje')?.value || 'todos';
+        const estadoFiltro = currentTab === 'gestionar' ? 'activos' : (document.getElementById('select-estado-viaje')?.value || 'finalizado');
         const fechaSalidaFiltro = document.getElementById('input-fecha-salida')?.value || '';
         const fechaLlegadaFiltro = document.getElementById('input-fecha-llegada')?.value || '';
 
@@ -1441,7 +1489,7 @@ async function fetchViajes(isLoadMore = false) {
 
             loadedRecords += viajes.length;
 
-            renderizarTarjetasViaje(viajes, isLoadMore);
+            if (currentTab === 'gestionar') renderizarTarjetasVerticales(viajes, isLoadMore); else renderizarTarjetasViaje(viajes, isLoadMore);
 
             if (btnCargarMas) {
                 if (loadedRecords >= totalRecords || viajes.length === 0) {
@@ -1468,6 +1516,227 @@ function formatFechaCompleta(fechaISO) {
         year: 'numeric', month: '2-digit', day: '2-digit',
         hour: '2-digit', minute: '2-digit'
     }).replace(',', '');
+}
+
+
+function renderizarTarjetasVerticales(viajes, isLoadMore = false) {
+    if (!document.getElementById('style-pulsing-red')) {
+        document.head.insertAdjacentHTML('beforeend', `
+            <style id="style-pulsing-red">
+                @keyframes pulse-red {
+                    0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); }
+                    70% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+                }
+                .badge-pulsing-red {
+                    animation: pulse-red 2s infinite;
+                }
+                .btn-pulsing-red {
+                    animation: pulse-red 2s infinite;
+                    background: #dc2626 !important;
+                    color: white !important;
+                    border: none !important;
+                    font-weight: 700 !important;
+                }
+                .btn-pulsing-red:hover {
+                    background: #b91c1c !important;
+                }
+                @keyframes pulse-orange {
+                    0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.6); }
+                    70% { box-shadow: 0 0 0 8px rgba(249, 115, 22, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
+                }
+                .badge-pulsing-orange {
+                    animation: pulse-orange 2s infinite;
+                }
+                .btn-pulsing-orange {
+                    animation: pulse-orange 2s infinite;
+                    background: #f97316 !important;
+                    color: white !important;
+                    border: none !important;
+                    font-weight: 700 !important;
+                }
+                .btn-pulsing-orange:hover {
+                    background: #ea580c !important;
+                }
+            </style>
+        `);
+    }
+
+    const contenedor = document.getElementById('grid-viajes-gestionar');
+    if (!contenedor) return;
+
+    if (!isLoadMore) contenedor.innerHTML = '';
+
+    if (!viajes || viajes.length === 0) {
+        if (!isLoadMore) {
+            contenedor.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 48px; color: var(--text-muted); background: white; border-radius: 12px; border: 1px dashed var(--border-light);">
+                    <i class="fas fa-tasks fa-3x" style="margin-bottom: 16px; opacity: 0.5;"></i>
+                    <h3 style="margin: 0 0 8px 0; color: var(--text-primary);">No hay viajes activos</h3>
+                    <p style="margin: 0;">Actualmente no hay viajes en gestión.</p>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    let html = '';
+    viajes.forEach(viaje => {
+        const esEnRuta = viaje.estado_operativo === 'En Ruta';
+        const esIncidencia = viaje.estado_operativo === 'Incidencia';
+        const esLlegada = viaje.estado_operativo === 'Llegó a Destino';
+        const esDescargado = viaje.estado_operativo === 'Descargado';
+        const esFinalizado = viaje.estado_operativo === 'Finalizado';
+
+        let badgeColor = '#475569';
+        let badgeBg = '#f1f5f9';
+        if (esEnRuta) { badgeColor = '#2563eb'; badgeBg = '#eff6ff'; }
+        else if (esIncidencia) { badgeColor = '#dc2626'; badgeBg = '#fee2e2'; }
+        else if (esLlegada) { badgeColor = '#16a34a'; badgeBg = '#dcfce7'; }
+        else if (esDescargado) { badgeColor = '#9333ea'; badgeBg = '#f3e8ff'; }
+
+        // Fechas
+        let fechaSalida = viaje.fecha_salida ? formatFechaCompleta(viaje.fecha_salida) : '-';
+        let fechaLlegada = viaje.fecha_llegada ? formatFechaCompleta(viaje.fecha_llegada) : (esEnRuta ? '<span style="color: #2563eb; font-weight: 600;">En Ruta</span>' : '-');
+        if (esIncidencia) fechaLlegada = `<span style="color: #dc2626; font-weight: 600;">${viaje.estado_operativo}</span>`;
+
+        // Alertas
+        let alertasHtml = '';
+        if (viaje.tiene_incidencia_reportada) {
+            alertasHtml += `<div style="margin-top: 8px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: #475569; font-weight: 600;">
+                <i class="fas fa-eye" style="color: #64748b;"></i> TIENE INCIDENCIAS REPORTADAS
+            </div>`;
+        }
+        if (viaje.productos_siniestrados_sin_justificar > 0) {
+            alertasHtml += `<div style="margin-top: 8px; background: #fee2e2; border: 1px solid #fca5a5; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: #b91c1c; font-weight: 700;" class="badge-pulsing-red">
+                <i class="fas fa-exclamation-triangle"></i> REPORTE: (${viaje.productos_siniestrados_sin_justificar} PRODUCTOS SINIESTRADOS)
+            </div>`;
+        }
+        if ((esLlegada || esDescargado || esFinalizado) && viaje.productos_rechazados_sin_justificar > 0) {
+            alertasHtml += `<div style="margin-top: 8px; background: #ffedd5; border: 1px solid #fdba74; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: #c2410c; font-weight: 700;" class="badge-pulsing-orange">
+                <i class="fas fa-exclamation-triangle"></i> REPORTE: (${viaje.productos_rechazados_sin_justificar} PRODUCTOS RECHAZADOS)
+            </div>`;
+        }
+        if (esIncidencia && !viaje.tiene_incidencia_general) {
+            alertasHtml += `<div style="margin-top: 8px; background: #fee2e2; border: 1px solid #fca5a5; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: #b91c1c; font-weight: 700;" class="badge-pulsing-red">
+                <i class="fas fa-exclamation-circle"></i> SINIESTRO: REQUIERE REPORTE
+            </div>`;
+        }
+
+        // Botones de Acción Modulares
+        let btnIncidenciaClase = "btn-menu-incidencia";
+        let btnIncidenciaEstilo = "background: #f1f5f9; color: #475569;";
+        let btnIncidenciaTexto = "Ver Incidencias";
+        
+        if (viaje.productos_siniestrados_sin_justificar > 0) {
+            btnIncidenciaClase = "btn-menu-incidencia btn-pulsing-red";
+            btnIncidenciaEstilo = ""; // Se sobrescribe por la clase
+            btnIncidenciaTexto = "<i class='fas fa-exclamation-triangle' style='margin-right: 4px;'></i> Reportar";
+        } else if (esIncidencia && !viaje.tiene_incidencia_general) {
+            btnIncidenciaClase = "btn-menu-incidencia btn-pulsing-red";
+            btnIncidenciaEstilo = "";
+            btnIncidenciaTexto = "<i class='fas fa-exclamation-triangle' style='margin-right: 4px;'></i> Reportar";
+        } else if ((esLlegada || esDescargado || esFinalizado) && viaje.productos_rechazados_sin_justificar > 0) {
+            btnIncidenciaClase = "btn-menu-incidencia btn-pulsing-orange";
+            btnIncidenciaEstilo = "";
+            btnIncidenciaTexto = "<i class='fas fa-exclamation-triangle' style='margin-right: 4px;'></i> Reportar";
+        }
+
+        html += `
+            <div class="card-recepcion" style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); display: flex; flex-direction: column;">
+                
+                <!-- Header -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <h3 style="margin: 0; font-size: 18px; color: var(--text-primary); font-weight: 800;">Viaje #${viaje.id_viaje}</h3>
+                            <button class="btn-ver-detalles" data-id="${viaje.id_viaje}" style="background: none; border: none; color: var(--brand-blue); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s;" title="Ver detalles completos">
+                                <i class="fas fa-info-circle" style="pointer-events: none; font-size: 16px;"></i>
+                            </button>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 12px; margin-top: 4px; font-weight: 500;">
+                            <i class="fas fa-map-marker-alt" style="color: #cbd5e1;"></i>
+                            <span>${viaje.ciudad_origen || '-'} - ${viaje.ciudad_destino || '-'}</span>
+                        </div>
+                    </div>
+                    <span style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeColor}33; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${badgeColor};"></span>
+                        ${viaje.estado_operativo}
+                    </span>
+                </div>
+                
+                <!-- Detalles Principales -->
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; flex: 1;">
+                    <div style="display: flex; gap: 12px; align-items: flex-start;">
+                        <i class="fas fa-truck" style="color: #94a3b8; margin-top: 2px; width: 16px; text-align: center;"></i>
+                        <div style="display: flex; flex-direction: column;">
+                            <span style="font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Vehículo</span>
+                            <span style="font-size: 13px; color: var(--text-primary); font-weight: 600;">${viaje.vehiculo || '-'}</span>
+                            <span style="font-size: 12px; color: var(--text-secondary);">${viaje.vehiculo_nombre || ''}</span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; align-items: flex-start;">
+                        <i class="far fa-user" style="color: #94a3b8; margin-top: 2px; width: 16px; text-align: center;"></i>
+                        <div style="display: flex; flex-direction: column;">
+                            <span style="font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Chofer</span>
+                            <span style="font-size: 13px; color: var(--text-primary); font-weight: 600;">${viaje.chofer || '-'}</span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div style="display: flex; gap: 8px; align-items: flex-start;">
+                            <i class="far fa-clock" style="color: #94a3b8; margin-top: 2px;"></i>
+                            <div style="display: flex; flex-direction: column;">
+                                <span style="font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Salida</span>
+                                <span style="font-size: 12px; color: var(--text-primary); font-weight: 500;">${fechaSalida}</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: flex-start;">
+                            <i class="far fa-calendar-check" style="color: #94a3b8; margin-top: 2px;"></i>
+                            <div style="display: flex; flex-direction: column;">
+                                <span style="font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Llegada</span>
+                                <span style="font-size: 12px; color: var(--text-primary); font-weight: 500;">${fechaLlegada}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Alertas -->
+                <div style="margin-bottom: 16px;">
+                    ${alertasHtml}
+                </div>
+
+                <!-- Botones de Acción (Recomendación implementada: 2 filas) -->
+                <div style="display: flex; flex-direction: column; gap: 8px; margin-top: auto; border-top: 1px solid var(--border-light); padding-top: 16px;">
+                    
+                    <!-- Fila 1: Cargas y Adelantos -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <button class="btn-ver-cargas" data-id="${viaje.id_viaje}" style="background-color: #f8fafc; color: #334155; font-weight: 600; border: 1px solid #e2e8f0; padding: 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                            Ver Cargas
+                        </button>
+                        <button class="btn-ver-adelantos" data-id="${viaje.id_viaje}" style="background-color: #fffbeb; color: #b45309; font-weight: 600; border: 1px solid #fde68a; padding: 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                            Ver Adelantos
+                        </button>
+                    </div>
+                    
+                    <!-- Fila 2: Reportar/Incidencias y Finalizar -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <button class="${btnIncidenciaClase}" data-id="${viaje.id_viaje}" data-tipo-alerta="general" style="${btnIncidenciaEstilo} font-weight: 600; border: ${btnIncidenciaClase.includes('btn-pulsing-red') ? 'none' : '1px solid #cbd5e1'}; padding: 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: center; align-items: center;">
+                            ${btnIncidenciaTexto}
+                        </button>
+                        <button class="btn-viaje" onclick="finalizarViaje(${viaje.id_viaje})" style="background-color: #e2e8f0; color: #334155; font-weight: 600; border: none; padding: 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                            Finalizar Viaje
+                        </button>
+                    </div>
+                    
+                </div>
+            </div>
+        `;
+    });
+
+    contenedor.insertAdjacentHTML('beforeend', html);
 }
 
 function renderizarTarjetasViaje(viajes, isLoadMore = false) {

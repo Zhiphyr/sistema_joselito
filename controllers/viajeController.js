@@ -161,16 +161,20 @@ const obtenerHistorialViajes = async (req, res) => {
         }
 
         if (estado && estado !== 'todos') {
-            let estadoDB = '';
-            if (estado === 'en_ruta') estadoDB = 'En Ruta';
-            else if (estado === 'llego_destino') estadoDB = 'Llegó a Destino';
-            else if (estado === 'finalizado') estadoDB = 'Finalizado';
-            else if (estado === 'incidencia') estadoDB = 'Incidencia';
-            
-            if (estadoDB) {
-                whereClause += ' AND v.estado_operativo = ?';
-                queryParams.push(estadoDB);
-                countParams.push(estadoDB);
+            if (estado === 'activos') {
+                whereClause += " AND v.estado_operativo IN ('En Ruta', 'Llegó a Destino', 'Descargado', 'Incidencia')";
+            } else {
+                let estadoDB = '';
+                if (estado === 'en_ruta') estadoDB = 'En Ruta';
+                else if (estado === 'llego_destino') estadoDB = 'Llegó a Destino';
+                else if (estado === 'finalizado') estadoDB = 'Finalizado';
+                else if (estado === 'incidencia') estadoDB = 'Incidencia';
+                
+                if (estadoDB) {
+                    whereClause += ' AND v.estado_operativo = ?';
+                    queryParams.push(estadoDB);
+                    countParams.push(estadoDB);
+                }
             }
         }
 
