@@ -66,6 +66,7 @@ function init_deudas_cobrar() {
 }
 
 let cuentasBancariasCache = [];
+let billeterasDigitalesCache = [];
 
 async function cargarCuentasBancarias() {
     try {
@@ -76,10 +77,145 @@ async function cargarCuentasBancarias() {
         });
         const data = await response.json();
         if (data.success) {
-            cuentasBancariasCache = data.data;
+            cuentasBancariasCache = data.data.cuentas || [];
+            billeterasDigitalesCache = data.data.billeteras || [];
         }
     } catch (error) {
         console.error("Error al cargar cuentas bancarias:", error);
+    }
+}
+
+let contadorPagosCobro = 0;
+
+function agregarNuevoPagoCobro() {
+    contadorPagosCobro++;
+    const contenedor = document.getElementById('contenedorListaPagosCobro');
+    const div = document.createElement('div');
+    div.className = 'bloque-pago-cobro';
+    div.style.padding = '16px';
+    div.style.background = '#f8fafc';
+    div.style.border = '1px solid #e2e8f0';
+    div.style.borderRadius = '8px';
+    div.style.position = 'relative';
+
+    const fechaActual = new Date();
+    fechaActual.setMinutes(fechaActual.getMinutes() - fechaActual.getTimezoneOffset());
+    const fechaFormat = fechaActual.toISOString().slice(0, 16);
+
+    div.innerHTML = `
+        <button type="button" class="btn-eliminar-pago-cobro" style="position: absolute; top: 12px; right: 12px; background: none; border: none; color: #ef4444; cursor: pointer; font-size: 16px;">
+            <i class="fas fa-trash-alt"></i>
+        </button>
+        <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+            <div style="flex: 1;">
+                <label style="font-size: 11px; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">Monto</label>
+                <input type="number" class="form-control input-monto-cobro" step="0.01" min="0.01" required style="font-size: 14px; font-weight: 700;">
+            </div>
+            <div style="flex: 1.5;">
+                <label style="font-size: 11px; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">Método</label>
+                <select class="form-control select-canal-cobro" required style="font-size: 13px;">
+                    <option value="Efectivo">Efectivo</option>
+                    <option value="Transferencia">Transferencia</option>
+                    <option value="Deposito">Deposito</option>
+                    <option value="Billetera Digital">Billetera Digital</option>
+                </select>
+            </div>
+            <div style="flex: 1.5;">
+                <label style="font-size: 11px; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">Fecha/Hora</label>
+                <input type="datetime-local" class="form-control input-fecha-cobro" value="${fechaFormat}" required style="font-size: 13px;">
+            </div>
+        </div>
+        
+        <div class="zona-bancaria-cobro" style="display: none; border-top: 1px dashed #cbd5e1; padding-top: 12px; margin-top: 12px;">
+            <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                <div style="flex: 2;">
+                    <label style="font-size: 11px; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">Cuenta / Billetera</label>
+                    <select class="form-control select-cuenta-cobro" style="font-size: 13px;">
+                        <option value="">Seleccione...</option>
+                    </select>
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 11px; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">N° Operación</label>
+                    <input type="text" class="form-control input-operacion-cobro" style="font-size: 13px;" placeholder="Ej. 123456">
+                </div>
+            </div>
+            <div>
+                <label style="font-size: 11px; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">Evidencia (Opcional)</label>
+                <input type="file" class="form-control input-evidencia-cobro" accept="image/*" style="font-size: 12px;">
+            </div>
+        </div>
+    `;
+
+    contenedor.appendChild(div);
+}
+
+function calcularTotalesCobro() {
+    const inputTotal = document.getElementById('cobro_monto_total');
+    if (!inputTotal) return;
+
+    const montoTotal = Number(inputTotal.value) || 0;
+    
+    let sumaPagos = 0;
+    const inputsMonto = document.querySelectorAll('.input-monto-cobro');
+    
+    let hasEmptyOrZero = false;
+    
+    inputsMonto.forEach(input => {
+        const val = Number(input.value) || 0;
+        sumaPagos += val;
+        if (val <= 0) hasEmptyOrZero = true;
+        
+        // Reset styles initially
+        input.style.borderColor = '#cbd5e1';
+        input.style.background = '#ffffff';
+    });
+
+    const faltaPagar = montoTotal - sumaPagos;
+    const badgeFalta = document.getElementById('modalCobroFaltaPagar');
+    const btnAgregar = document.getElementById('btnAgregarPagoCobro');
+    const btnGuardar = document.querySelector('#formCobro .btn-guardar');
+
+    if (!badgeFalta || !btnAgregar || !btnGuardar) return;
+
+    // UI Feedback for exceeding amount
+    if (faltaPagar < 0) {
+        inputsMonto.forEach(input => {
+            input.style.borderColor = '#ef4444';
+            input.style.background = '#fef2f2';
+        });
+        badgeFalta.textContent = `Excedido: S/ ${Math.abs(faltaPagar).toFixed(2)}`;
+        badgeFalta.style.background = '#fef2f2';
+        badgeFalta.style.color = '#ef4444';
+    } else if (faltaPagar === 0 && montoTotal > 0 && sumaPagos > 0) {
+        badgeFalta.textContent = 'Monto Cubierto';
+        badgeFalta.style.background = '#dcfce7';
+        badgeFalta.style.color = '#16a34a';
+    } else {
+        badgeFalta.textContent = `Falta Distribuir: S/ ${faltaPagar.toFixed(2)}`;
+        badgeFalta.style.background = '#fee2e2';
+        badgeFalta.style.color = '#ef4444';
+    }
+
+    // Lógica botón Agregar
+    if (hasEmptyOrZero || sumaPagos >= montoTotal || montoTotal <= 0) {
+        btnAgregar.disabled = true;
+        btnAgregar.style.opacity = '0.5';
+        btnAgregar.style.cursor = 'not-allowed';
+    } else {
+        btnAgregar.disabled = false;
+        btnAgregar.style.opacity = '1';
+        btnAgregar.style.cursor = 'pointer';
+    }
+
+    // Lógica botón Guardar
+    if (sumaPagos === montoTotal && montoTotal > 0 && !hasEmptyOrZero && inputsMonto.length > 0) {
+        btnGuardar.disabled = false;
+        btnGuardar.style.opacity = '1';
+        btnGuardar.style.cursor = 'pointer';
+    } else {
+        btnGuardar.disabled = true;
+        btnGuardar.style.opacity = '0.5';
+        btnGuardar.style.cursor = 'not-allowed';
     }
 }
 
@@ -87,199 +223,95 @@ function inicializarModalCobro() {
     const modal = document.getElementById('modalCobro');
     const btnCerrar = document.getElementById('btnCerrarModalCobro');
     const btnCancelar = document.getElementById('btnCancelarCobro');
-    const selectCanal = document.getElementById('cobro_canal');
-    const zonaBancaria = document.getElementById('zona_bancaria');
-    const selectCuenta = document.getElementById('cobro_cuenta');
+    const inputMontoTotal = document.getElementById('cobro_monto_total');
+    const btnAgregarPagoCobro = document.getElementById('btnAgregarPagoCobro');
+    const contenedorListaPagosCobro = document.getElementById('contenedorListaPagosCobro');
 
     if (!modal) return;
 
-    // Cerrar modal
     const cerrarModal = () => {
         modal.style.display = 'none';
         document.getElementById('formCobro').reset();
-        zonaBancaria.style.display = 'none';
+        if (contenedorListaPagosCobro) contenedorListaPagosCobro.innerHTML = '';
+        contadorPagosCobro = 0;
+        calcularTotalesCobro();
     };
 
     btnCerrar.addEventListener('click', cerrarModal);
     btnCancelar.addEventListener('click', cerrarModal);
 
-    // Cambiar Canal de Pago
-    selectCanal.addEventListener('change', (e) => {
-        const canal = e.target.value;
-        if (canal === 'Efectivo') {
-            zonaBancaria.style.display = 'none';
-            selectCuenta.required = false;
-            document.getElementById('cobro_operacion').required = false;
-        } else {
-            zonaBancaria.style.display = 'block';
-            selectCuenta.required = true;
-            document.getElementById('cobro_operacion').required = true;
-            filtrarCuentas(canal);
-        }
-        // Reset QR al cambiar de canal
-        document.getElementById('zona_qr').style.display = 'none';
-        document.getElementById('zona_qr').innerHTML = '';
-    });
+    if (inputMontoTotal) {
+        inputMontoTotal.addEventListener('input', calcularTotalesCobro);
+    }
 
-    // Cambiar Cuenta Bancaria (Para el QR)
-    selectCuenta.addEventListener('change', (e) => {
-        const idCuenta = Number(e.target.value);
-        const zonaQR = document.getElementById('zona_qr');
-        zonaQR.innerHTML = ''; // Limpiar anterior
-        zonaQR.style.display = 'none';
+    if (btnAgregarPagoCobro) {
+        btnAgregarPagoCobro.addEventListener('click', () => {
+            agregarNuevoPagoCobro();
+            calcularTotalesCobro();
+        });
+    }
 
-        if (!idCuenta) return;
-
-        const cuentaObj = cuentasBancariasCache.find(c => c.id_cuenta === idCuenta);
-        const canal = selectCanal.value;
-
-        if (cuentaObj && cuentaObj.ruta_qr && canal === 'Billetera Digital') {
-            zonaQR.innerHTML = `
-                <div style="margin-top: 10px; margin-bottom: 10px;">
-                    <img src="${cuentaObj.ruta_qr}" alt="Código QR ${cuentaObj.entidad_financiera}" 
-                         style="max-width: 240px; height: auto; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #e2e8f0;">
-                    <p style="margin-top: 8px; font-size: 11px; color: #64748b; font-weight: 600;">Escanea el código para pagar</p>
-                </div>
-            `;
-            zonaQR.style.display = 'block';
-        }
-    });
-
-    // Subir evidencia UI
-    const btnEvidencia = document.getElementById('btnEvidenciaUpload') || document.querySelector('button[onclick="document.getElementById(\'cobro_evidencia\').click()"]');
-    const inputEvidencia = document.getElementById('cobro_evidencia');
-    
-    // Si el botón no tiene ID ni onclick, lo arreglamos seleccionándolo estructuralmente
-    const btnEvidenciaFallback = inputEvidencia.previousElementSibling;
-    btnEvidenciaFallback.addEventListener('click', () => {
-        inputEvidencia.click();
-    });
-
-    inputEvidencia.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            btnEvidenciaFallback.innerHTML = `<i class="fas fa-check-circle"></i> ${file.name}`;
-            btnEvidenciaFallback.style.borderColor = '#10b981';
-            btnEvidenciaFallback.style.color = '#10b981';
-            btnEvidenciaFallback.style.background = '#ecfdf5';
-        }
-    });
-
-    // Validación estricta del Monto Recibido
-    const inputMonto = document.getElementById('cobro_monto');
-    if (inputMonto) {
-        inputMonto.addEventListener('input', (e) => {
-            let val = Number(e.target.value);
-            let maxVal = Number(e.target.max);
-            
-            if (val < 0) {
-                e.target.value = 0;
-            } else if (val > maxVal) {
-                e.target.value = maxVal;
+    if (contenedorListaPagosCobro) {
+        // Delegación de eventos para inputs de monto
+        contenedorListaPagosCobro.addEventListener('input', (e) => {
+            if (e.target.classList.contains('input-monto-cobro')) {
+                calcularTotalesCobro();
             }
         });
 
-        inputMonto.addEventListener('blur', (e) => {
-            let val = Number(e.target.value);
-            if (!isNaN(val)) {
-                e.target.value = val.toFixed(2);
-            } else {
-                e.target.value = '0.00';
+        // Delegación de eventos para botones eliminar
+        contenedorListaPagosCobro.addEventListener('click', (e) => {
+            const btnEliminar = e.target.closest('.btn-eliminar-pago-cobro');
+            if (btnEliminar) {
+                const bloque = btnEliminar.closest('.bloque-pago-cobro');
+                bloque.remove();
+                calcularTotalesCobro();
+            }
+        });
+
+        // Delegación de eventos para select de canal
+        contenedorListaPagosCobro.addEventListener('change', (e) => {
+            if (e.target.classList.contains('select-canal-cobro')) {
+                const bloque = e.target.closest('.bloque-pago-cobro');
+                const canal = e.target.value;
+                const zonaBancaria = bloque.querySelector('.zona-bancaria-cobro');
+                const selectCuenta = bloque.querySelector('.select-cuenta-cobro');
+                const inputOperacion = bloque.querySelector('.input-operacion-cobro');
+                
+                if (canal === 'Efectivo') {
+                    zonaBancaria.style.display = 'none';
+                    selectCuenta.required = false;
+                    inputOperacion.required = false;
+                } else {
+                    zonaBancaria.style.display = 'block';
+                    selectCuenta.required = true;
+                    inputOperacion.required = true;
+                    
+                    selectCuenta.innerHTML = '<option value="">Seleccione...</option>';
+                    if (canal === 'Billetera Digital') {
+                        billeterasDigitalesCache.forEach(b => {
+                            selectCuenta.innerHTML += `<option value="${b.id_billetera}">${b.entidad_financiera} - ${b.numero_celular} (${b.titular})</option>`;
+                        });
+                    } else {
+                        cuentasBancariasCache.forEach(c => {
+                            selectCuenta.innerHTML += `<option value="${c.id_cuenta}">${c.entidad_financiera} - ${c.nro_cuenta} (${c.titular})</option>`;
+                        });
+                    }
+                }
             }
         });
     }
 
-    // Guardar Cobro
-    document.getElementById('formCobro').addEventListener('submit', async (e) => {
+    document.getElementById('formCobro').addEventListener('submit', (e) => {
         e.preventDefault();
-
-        const montoStr = document.getElementById('cobro_monto').value;
-        const montoNum = Number(montoStr);
-
-        if (montoNum <= 0) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Monto Inválido',
-                text: 'El monto a cobrar debe ser mayor a S/ 0.00'
-            });
-            return;
-        }
-
-        const canalPago = document.getElementById('cobro_canal').value;
-        const cuentaSelect = document.getElementById('cobro_cuenta');
-        const operacionInput = document.getElementById('cobro_operacion');
-
-        if (canalPago !== 'Efectivo') {
-            if (!cuentaSelect.value || !operacionInput.value.trim()) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Datos Incompletos',
-                    text: 'Debe seleccionar la Cuenta de Destino e ingresar el Nro. de Operación.'
-                });
-                return;
-            }
-        }
-
-        const btnGuardar = modal.querySelector('.btn-guardar');
-        const originalText = btnGuardar.innerHTML;
-        btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
-        btnGuardar.disabled = true;
-
-        const formData = new FormData();
-        formData.append('id_carga', document.getElementById('cobro_id_carga').value);
-        formData.append('monto_pagado', document.getElementById('cobro_monto').value);
-        formData.append('fecha_pago', document.getElementById('cobro_fecha').value);
-        formData.append('canal_pago', document.getElementById('cobro_canal').value);
         
-        if (selectCanal.value !== 'Efectivo') {
-            formData.append('id_cuenta', document.getElementById('cobro_cuenta').value);
-            formData.append('nro_operacion', document.getElementById('cobro_operacion').value);
-            if (inputEvidencia.files.length > 0) {
-                formData.append('evidencia', inputEvidencia.files[0]);
-            }
-        }
-        
-        formData.append('observacion', document.getElementById('cobro_observacion').value);
-
-        try {
-            const response = await fetch('/api/deudas/cobrar', {
-                method: 'POST',
-                headers: {
-                    'x-user-profile': localStorage.getItem('user_id') || 1
-                },
-                body: formData
-            });
-
-            const data = await response.json();
-            if (data.success) {
-                // Éxito
-                cerrarModal();
-                cargarDeudas(); // Refrescar la tabla
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Pago Registrado',
-                    text: 'El cobro se ha procesado exitosamente.',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-            } else {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error al procesar',
-                    text: data.message || 'No se pudo registrar el pago.'
-                });
-            }
-        } catch (error) {
-            console.error('Error al guardar cobro:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Error de conexión',
-                text: 'Hubo un problema de red al intentar guardar el cobro.'
-            });
-        } finally {
-            btnGuardar.innerHTML = originalText;
-            btnGuardar.disabled = false;
-        }
+        Swal.fire({
+            icon: 'info',
+            title: 'En Desarrollo',
+            text: 'La funcionalidad para guardar cobros mixtos está temporalmente deshabilitada para ajustar el registro de movimientos.',
+            timer: 4000,
+            showConfirmButton: true
+        });
     });
 }
 
@@ -311,33 +343,26 @@ function abrirModalCobro(idCarga, fleteOriginal, saldoPendiente) {
 
     // Pre-llenar Captura
     const saldoFinal = Number(saldoPendiente).toFixed(2);
-    const inputMonto = document.getElementById('cobro_monto');
-    inputMonto.value = saldoFinal;
-    inputMonto.max = saldoFinal; // Guardar el máximo permitido para la validación
+    const inputMontoTotal = document.getElementById('cobro_monto_total');
+    if (inputMontoTotal) {
+        inputMontoTotal.value = saldoFinal;
+    }
     
-    // Pre-llenar Fecha/Hora actual
-    const now = new Date();
-    // Ajuste de zona horaria local para datetime-local
-    const tzOffset = now.getTimezoneOffset() * 60000;
-    const localISOTime = (new Date(now - tzOffset)).toISOString().slice(0, 16);
-    document.getElementById('cobro_fecha').value = localISOTime;
+    const contenedorListaPagosCobro = document.getElementById('contenedorListaPagosCobro');
+    if (contenedorListaPagosCobro) {
+        contenedorListaPagosCobro.innerHTML = '';
+    }
+    contadorPagosCobro = 0;
+    
+    agregarNuevoPagoCobro();
+    const firstMonto = document.querySelector('.input-monto-cobro');
+    if (firstMonto) {
+        firstMonto.value = saldoFinal;
+    }
 
-    // Reset zona bancaria y QR
-    document.getElementById('cobro_canal').value = 'Efectivo';
-    document.getElementById('zona_bancaria').style.display = 'none';
-    document.getElementById('cobro_cuenta').required = false;
-    document.getElementById('cobro_operacion').required = false;
-    document.getElementById('zona_qr').style.display = 'none';
-    document.getElementById('zona_qr').innerHTML = '';
-    
-    // Reset file input UI
-    const inputEvidencia = document.getElementById('cobro_evidencia');
-    inputEvidencia.value = '';
-    const btnEvidenciaFallback = inputEvidencia.previousElementSibling;
-    btnEvidenciaFallback.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Subir foto del voucher';
-    btnEvidenciaFallback.style.borderColor = '#cbd5e1';
-    btnEvidenciaFallback.style.color = '#64748b';
-    btnEvidenciaFallback.style.background = 'white';
+    calcularTotalesCobro();
+    const inputObs = document.getElementById('cobro_observacion');
+    if (inputObs) inputObs.value = '';
 
     modal.style.display = 'flex';
 }

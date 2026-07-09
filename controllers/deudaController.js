@@ -64,14 +64,21 @@ const obtenerDeudas = async (req, res) => {
 
 const obtenerCuentasBancarias = async (req, res) => {
     try {
-        const query = `
+        const queryCuentas = `
             SELECT c.id_cuenta, e.nombre as entidad_financiera, c.tipo_cuenta, c.nro_cuenta, c.titular
             FROM cuenta_bancaria c
             JOIN entidad_financiera e ON c.id_entidad = e.id_entidad
             WHERE c.estado = 1 AND c.es_sistema = 0
         `;
-        const [cuentas] = await db.query(query);
-        res.json({ success: true, data: cuentas });
+        const queryBilleteras = `
+            SELECT b.id_billetera, p.nombre as entidad_financiera, b.numero_celular, b.titular, b.ruta_qr
+            FROM billetera_digital b
+            JOIN proveedor_billetera p ON b.id_proveedor = p.id_proveedor
+            WHERE b.estado = 1
+        `;
+        const [cuentas] = await db.query(queryCuentas);
+        const [billeteras] = await db.query(queryBilleteras);
+        res.json({ success: true, data: { cuentas, billeteras } });
     } catch (error) {
         console.error("Error en obtenerCuentasBancarias:", error);
         res.status(500).json({ success: false, message: 'Error interno del servidor al obtener las cuentas bancarias' });
