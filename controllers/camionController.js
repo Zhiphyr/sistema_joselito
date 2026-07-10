@@ -14,8 +14,8 @@ const registrar = async (req, res) => {
     try {
         const { nombre, placa, tipo_documento, numero_documento, conductor, direccion, telefono } = req.body;
 
-        if (!nombre || !placa || !tipo_documento || !numero_documento || !conductor || !direccion || !telefono) {
-            return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
+        if (!nombre || !placa || !tipo_documento || !numero_documento || !conductor || !telefono) {
+            return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios (excepto dirección)' });
         }
 
         const tipoMin = tipo_documento.toLowerCase();
@@ -26,7 +26,22 @@ const registrar = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El RUC debe tener 11 dígitos' });
         }
 
+        if (nombre.trim().length < 3 || nombre.trim().length > 50) {
+            return res.status(400).json({ success: false, message: 'El nombre/unidad debe tener entre 3 y 50 caracteres' });
+        }
+        if (direccion && direccion.trim().length > 150) {
+            return res.status(400).json({ success: false, message: 'La dirección no puede exceder los 150 caracteres' });
+        }
+        const telfRegex = /^9\d{8}$/;
+        if (!telfRegex.test(telefono.trim())) {
+            return res.status(400).json({ success: false, message: 'El teléfono debe tener 9 dígitos y empezar con 9' });
+        }
+
         const placaNorm = placa.trim().toUpperCase();
+        const placaRegex = /^[A-Z0-9]{3}-\d{3}$/;
+        if (!placaRegex.test(placaNorm)) {
+            return res.status(400).json({ success: false, message: 'El formato de la placa es inválido. (Ej. ABC-123)' });
+        }
 
         const existe = await CamionModel.findByPlaca(placaNorm);
 
@@ -55,7 +70,7 @@ const registrar = async (req, res) => {
             tipo_documento, 
             numero_documento, 
             conductor: conductor.trim(), 
-            direccion: direccion.trim(), 
+            direccion: direccion ? direccion.trim() : null, 
             telefono: telefono.trim() 
         });
         return res.status(201).json({ success: true, message: 'Camión registrado exitosamente', id });
@@ -71,8 +86,8 @@ const actualizar = async (req, res) => {
         const { id } = req.params;
         const { nombre, tipo_documento, numero_documento, conductor, direccion, telefono } = req.body;
 
-        if (!nombre || !tipo_documento || !numero_documento || !conductor || !direccion || !telefono) {
-            return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
+        if (!nombre || !tipo_documento || !numero_documento || !conductor || !telefono) {
+            return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios (excepto dirección)' });
         }
 
         const camion = await CamionModel.obtenerCamionPorId(id);
@@ -80,12 +95,23 @@ const actualizar = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Camión no encontrado' });
         }
 
+        if (nombre.trim().length < 3 || nombre.trim().length > 50) {
+            return res.status(400).json({ success: false, message: 'El nombre/unidad debe tener entre 3 y 50 caracteres' });
+        }
+        if (direccion && direccion.trim().length > 150) {
+            return res.status(400).json({ success: false, message: 'La dirección no puede exceder los 150 caracteres' });
+        }
+        const telfRegex = /^9\d{8}$/;
+        if (!telfRegex.test(telefono.trim())) {
+            return res.status(400).json({ success: false, message: 'El teléfono debe tener 9 dígitos y empezar con 9' });
+        }
+
         await CamionModel.actualizarCamion(id, { 
             nombre: nombre.trim(), 
             tipo_documento, 
             numero_documento, 
             conductor: conductor.trim(), 
-            direccion: direccion.trim(), 
+            direccion: direccion ? direccion.trim() : null, 
             telefono: telefono.trim() 
         });
         return res.status(200).json({ success: true, message: 'Camión actualizado exitosamente' });
