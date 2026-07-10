@@ -3,6 +3,14 @@
 let liquidacionesPendientes = [];
 
 async function init_liquidacion() {
+    // init_ se reejecuta cada vez que se reingresa al módulo, pero el script
+    // solo se carga una vez por sesión SPA: sin este reseteo,
+    // dtHistorialLiquidaciones sigue apuntando a la instancia de DataTables
+    // de la <table> anterior (ya destruida al salir del módulo), y
+    // renderTablaHistorial actualiza una tabla fantasma en vez de
+    // inicializar la nueva que se acaba de inyectar.
+    dtHistorialLiquidaciones = null;
+
     asignarEventosTab();
     asignarEventoBusqueda();
     await cargarCuentasYBilleterasLiq();
@@ -30,7 +38,7 @@ async function cargarLiquidacionesDesdeServidor() {
         
         if (json.success) {
             liquidacionesPendientes = json.data;
-            renderKpis(json.pagadoMes);
+            renderKpis(json.pagadoMes, json.deudaChoferes);
             renderListaPendientes();
         } else {
             console.error('Error al cargar liquidaciones:', json.message);
@@ -40,9 +48,10 @@ async function cargarLiquidacionesDesdeServidor() {
     }
 }
 
-function renderKpis(pagadoMes = 0.00) {
+function renderKpis(pagadoMes = 0.00, deudaChoferes = 0.00) {
     // Calculamos totales desde la data
     let totalPagar = 0;
+    
     liquidacionesPendientes.forEach(liq => {
         totalPagar += liq.neto_pagar;
     });
@@ -51,6 +60,7 @@ function renderKpis(pagadoMes = 0.00) {
 
     const elPendientes = document.getElementById('kpi-pendientes');
     const elTotalPagar = document.getElementById('kpi-total-pagar');
+    const elTotalPenalidades = document.getElementById('kpi-total-penalidades');
     const elPagadoMes = document.getElementById('kpi-pagado-mes');
     const elBadge = document.getElementById('badge-pendientes');
 
@@ -58,6 +68,7 @@ function renderKpis(pagadoMes = 0.00) {
     if (elBadge) elBadge.textContent = countPendientes;
     
     if (elTotalPagar) elTotalPagar.textContent = `S/ ${formatearNumero(totalPagar)}`;
+    if (elTotalPenalidades) elTotalPenalidades.textContent = `S/ ${formatearNumero(deudaChoferes)}`;
     if (elPagadoMes) elPagadoMes.textContent = `S/ ${formatearNumero(pagadoMes)}`;
 }
 
@@ -197,10 +208,19 @@ function asignarEventosTab() {
             const clicked = e.currentTarget;
             clicked.classList.add('active');
             
-            // Simular cambio
+            const contenedorHistorial = document.getElementById('contenedorHistorialLiquidaciones');
+            const listaPendientes = document.getElementById('listaLiquidaciones');
+            const filtrosPendientes = document.getElementById('filtros-pendientes');
+            
             if (clicked.dataset.tab === 'historial') {
+                contenedorHistorial.style.display = 'flex';
+                listaPendientes.style.display = 'none';
+                filtrosPendientes.style.display = 'none';
                 cargarHistorialLiquidacionesDesdeServidor();
             } else {
+                contenedorHistorial.style.display = 'none';
+                listaPendientes.style.display = 'flex';
+                filtrosPendientes.style.display = 'flex';
                 const query = document.getElementById('inputBuscarLiquidacion')?.value || '';
                 renderListaPendientes(query);
             }
@@ -214,29 +234,21 @@ function asignarEventoBusqueda() {
 
     const handleFilterChange = () => {
         const query = inputBuscar?.value.trim() || '';
-        const tabActivo = document.querySelector('.btn-tab-pill.active')?.dataset.tab;
-        
-        if (tabActivo === 'historial') {
-            cargarHistorialLiquidacionesDesdeServidor();
-        } else {
-            renderListaPendientes(query);
-        }
+        renderListaPendientes(query);
     };
 
     inputBuscar?.addEventListener('input', handleFilterChange);
     selectSort?.addEventListener('change', handleFilterChange);
 }
 
+let dtHistorialLiquidaciones = null;
 let historialLiquidacionesGlobal = []; // Para buscar por id
 
 async function cargarHistorialLiquidacionesDesdeServidor() {
-    const listaEl = document.getElementById('listaLiquidaciones');
-    listaEl.innerHTML = `
-        <div style="padding: 40px; text-align: center; color: var(--text-muted);">
-            <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 16px; color: var(--border-light);"></i>
-            <p>Cargando historial...</p>
-        </div>
-    `;
+    const tbody = document.getElementById('tbodyHistorialLiquidaciones');
+    if (!dtHistorialLiquidaciones && tbody) {
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top: 10px;">Cargando historial...</p></td></tr>';
+    }
 
     try {
         const res = await fetch('/api/viajes/liquidaciones/historial');
@@ -246,143 +258,120 @@ async function cargarHistorialLiquidacionesDesdeServidor() {
             historialLiquidacionesGlobal = json.data;
             renderTablaHistorial(json.data);
         } else {
-            listaEl.innerHTML = `<div style="padding: 20px; color: #ef4444; text-align: center;">Error al cargar historial</div>`;
+            console.error('Error al cargar historial:', json.message);
         }
     } catch (error) {
         console.error('Error de red al cargar historial:', error);
-        listaEl.innerHTML = `<div style="padding: 20px; color: #ef4444; text-align: center;">Error de red al cargar historial</div>`;
     }
 }
 
 function renderTablaHistorial(datos) {
-    const listaEl = document.getElementById('listaLiquidaciones');
-    listaEl.innerHTML = ''; // Limpiar
-
-    if (!datos || datos.length === 0) {
-        listaEl.innerHTML = `
-            <div style="padding: 40px; text-align: center; color: var(--text-muted);">
-                <i class="fas fa-history" style="font-size: 32px; margin-bottom: 16px; color: var(--border-light);"></i>
-                <p>No hay historial de liquidaciones para mostrar.</p>
-            </div>
-        `;
+    if (dtHistorialLiquidaciones) {
+        dtHistorialLiquidaciones.clear().rows.add(datos).draw();
         return;
     }
 
-    // Cabecera de la tabla
-    const tablaHtml = `
-        <div style="overflow-x: auto; border: 1px solid var(--border-light); border-radius: 8px;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                <thead>
-                    <tr style="background: #f9fafb; border-bottom: 1px solid var(--border-light); color: var(--text-muted); text-align: left;">
-                        <th style="padding: 12px 16px; font-weight: 600;">Liq. #</th>
-                        <th style="padding: 12px 16px; font-weight: 600;">Chofer</th>
-                        <th style="padding: 12px 16px; font-weight: 600;">Viaje / Ruta</th>
-                        <th style="padding: 12px 16px; font-weight: 600; text-align: center;">Peso (Ton)</th>
-                        <th style="padding: 12px 16px; font-weight: 600; text-align: right;">Bruto</th>
-                        <th style="padding: 12px 16px; font-weight: 600; text-align: right;">Adelanto</th>
-                        <th style="padding: 12px 16px; font-weight: 600; text-align: right;">Penalidades</th>
-                        <th style="padding: 12px 16px; font-weight: 600; text-align: right;">Neto Pagado</th>
-                        <th style="padding: 12px 16px; font-weight: 600;">Fecha</th>
-                        <th style="padding: 12px 16px; font-weight: 600; text-align: center;">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody id="tbodyHistorial">
-                </tbody>
-            </table>
-        </div>
-    `;
-    
-    listaEl.innerHTML = tablaHtml;
-    const tbody = document.getElementById('tbodyHistorial');
-
-    datos.forEach((liq, index) => {
-        const tr = document.createElement('tr');
-        tr.style.borderBottom = '1px solid var(--border-light)';
-        
-        const tienePenalidades = liq.total_penalidades > 0 && liq.detalle_penalidades && liq.detalle_penalidades.length > 0;
-        
-        let penalidadesHtml = `S/ 0.00`;
-        if (tienePenalidades) {
-            penalidadesHtml = `
-                <div style="color: #ef4444; font-weight: 500; display: flex; align-items: center; justify-content: flex-end; gap: 6px; cursor: pointer;" onclick="togglePenalidadesAccordion(${liq.id_liquidacion})">
-                    -S/ ${formatearNumero(liq.total_penalidades)}
-                    <i class="fas fa-chevron-down" id="icon-acc-${liq.id_liquidacion}" style="font-size: 10px; transition: transform 0.2s;"></i>
-                </div>
-            `;
-        }
-
-        const pesoTon = liq.total_peso / 1000;
-
-        tr.innerHTML = `
-            <td style="padding: 16px;">
-                <span style="background: #d1fae5; color: #047857; padding: 4px 8px; border-radius: 12px; font-weight: 600; font-size: 12px;">#${liq.id_liquidacion}</span>
-            </td>
-            <td style="padding: 16px;">
-                <div style="font-weight: 600; color: var(--text-primary);">${liq.chofer_nombre}</div>
-                <div style="font-size: 11px; color: var(--text-muted);">${liq.camion_placa}</div>
-            </td>
-            <td style="padding: 16px;">
-                <div style="font-weight: 500; color: var(--text-primary);">Viaje #${liq.id_viaje}</div>
-                <div style="font-size: 11px; color: var(--text-muted);">${liq.ruta}</div>
-            </td>
-            <td style="padding: 16px; text-align: center;">${formatearNumero(pesoTon)}</td>
-            <td style="padding: 16px; text-align: right; font-weight: 500;">S/ ${formatearNumero(liq.monto_bruto)}</td>
-            <td style="padding: 16px; text-align: right; color: #f59e0b;">-S/ ${formatearNumero(liq.total_adelantos)}</td>
-            <td style="padding: 16px; text-align: right;">${penalidadesHtml}</td>
-            <td style="padding: 16px; text-align: right; font-weight: 700; color: #047857;">S/ ${formatearNumero(liq.monto_neto_pagado)}</td>
-            <td style="padding: 16px; color: var(--text-muted); font-size: 11px;">${liq.fecha}</td>
-            <td style="padding: 16px; text-align: center;">
-                <div style="display: flex; gap: 8px; justify-content: center;">
-                    <button onclick="abrirModalDetalleLiquidacion(${liq.id_liquidacion})" title="Ver Detalle" style="background: #e0f2fe; color: var(--brand-blue); border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button onclick="procesarBoletaPDF(${liq.id_liquidacion})" title="Generar PDF" style="background: #fef2f2; color: #ef4444; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
-                        <i class="fas fa-file-pdf"></i>
-                    </button>
-                </div>
-            </td>
-        `;
-        
-        tbody.appendChild(tr);
-
-        // Si tiene penalidades, crear el row del acordeón oculto
-        if (tienePenalidades) {
-            const trAcc = document.createElement('tr');
-            trAcc.id = `acc-${liq.id_liquidacion}`;
-            trAcc.style.display = 'none';
-            trAcc.style.background = '#fafafa';
-            trAcc.style.borderBottom = '1px solid var(--border-light)';
-            
-            let detalleHtml = liq.detalle_penalidades.map(p => `
-                <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #e5e7eb;">
-                    <span><i class="fas fa-level-up-alt fa-rotate-90" style="color: #9ca3af; margin-right: 8px;"></i> Descuento por: ${p.incidencia}</span>
-                    <span style="color: #ef4444; font-weight: 500;">-S/ ${formatearNumero(p.monto)}</span>
-                </div>
-            `).join('');
-
-            trAcc.innerHTML = `
-                <td colspan="9" style="padding: 0;">
-                    <div style="padding: 12px 32px 12px 64px; border-left: 3px solid #ef4444;">
-                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; text-transform: uppercase;">Desglose de Penalidades</div>
-                        ${detalleHtml}
-                    </div>
-                </td>
-            `;
-            tbody.appendChild(trAcc);
-        }
+    dtHistorialLiquidaciones = window.$('#tabla-historial-liquidaciones').DataTable({
+        data: datos,
+        dom: '<"dt-top-controls"<"dt-left-controls"l>f>rt<"bottom-controls"ip>',
+        pageLength: 15,
+        lengthMenu: [10, 15, 25, 50, 100],
+        order: [[0, 'desc']], // Ordenar por Liq # descendente
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
+        },
+        columns: [
+            {
+                data: 'id_liquidacion',
+                type: 'num',
+                render: function (data, type, row) {
+                    if (type === 'sort' || type === 'type') return Number(data);
+                    return `<span style="background: #d1fae5; color: #047857; padding: 4px 8px; border-radius: 12px; font-weight: 600; font-size: 12px;">#${data}</span>`;
+                }
+            },
+            {
+                data: 'chofer_nombre',
+                render: function (data, type, row) {
+                    return `
+                        <div style="font-weight: 600; color: var(--text-primary);">${data || '-'}</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">${row.camion_placa || ''}</div>
+                    `;
+                }
+            },
+            {
+                data: 'id_viaje',
+                render: function (data, type, row) {
+                    return `
+                        <div style="font-weight: 500; color: var(--text-primary);">Viaje #${data || '-'}</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">${row.ruta || ''}</div>
+                    `;
+                }
+            },
+            {
+                data: 'total_peso',
+                className: 'dt-center',
+                render: function (data) {
+                    const pesoTon = (Number(data) || 0) / 1000;
+                    return formatearNumero(pesoTon);
+                }
+            },
+            {
+                data: 'monto_bruto',
+                className: 'dt-right',
+                render: function (data) {
+                    return `<span style="font-weight: 500;">S/ ${formatearNumero(data)}</span>`;
+                }
+            },
+            {
+                data: 'total_adelantos',
+                className: 'dt-right',
+                render: function (data) {
+                    return `<span style="color: #f59e0b;">-S/ ${formatearNumero(data)}</span>`;
+                }
+            },
+            {
+                data: 'total_penalidades',
+                className: 'dt-right',
+                render: function (data, type, row) {
+                    const tienePenalidades = data > 0 && row.detalle_penalidades && row.detalle_penalidades.length > 0;
+                    if (tienePenalidades) {
+                        return `<span style="color: #ef4444; font-weight: 500;">-S/ ${formatearNumero(data)}</span>`;
+                    }
+                    return 'S/ 0.00';
+                }
+            },
+            {
+                data: 'monto_neto_pagado',
+                className: 'dt-right',
+                render: function (data) {
+                    return `<span style="font-weight: 700; color: #047857;">S/ ${formatearNumero(data)}</span>`;
+                }
+            },
+            {
+                data: 'fecha',
+                render: function (data) {
+                    return `<span style="color: var(--text-muted); font-size: 11px;">${data || '-'}</span>`;
+                }
+            },
+            {
+                data: null,
+                orderable: false,
+                className: 'dt-center',
+                render: function (data, type, row) {
+                    return `
+                        <div style="display: flex; gap: 8px; justify-content: center;">
+                            <button onclick="abrirModalDetalleLiquidacion(${row.id_liquidacion})" title="Ver Detalle" style="background: #e0f2fe; color: var(--brand-blue); border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button onclick="procesarBoletaPDF(${row.id_liquidacion})" title="Generar PDF" style="background: #fef2f2; color: #ef4444; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                                <i class="fas fa-file-pdf"></i>
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+        ]
     });
-}
-
-window.togglePenalidadesAccordion = function(id) {
-    const acc = document.getElementById(`acc-${id}`);
-    const icon = document.getElementById(`icon-acc-${id}`);
-    if (acc.style.display === 'none') {
-        acc.style.display = 'table-row';
-        icon.style.transform = 'rotate(180deg)';
-    } else {
-        acc.style.display = 'none';
-        icon.style.transform = 'rotate(0deg)';
-    }
 }
 
 window.abrirModalDetalleLiquidacion = function(id) {
@@ -444,6 +433,27 @@ window.abrirModalDetalleLiquidacion = function(id) {
     document.getElementById('modalDetalleAdelantos').textContent = `-S/ ${formatearNumero(liq.total_adelantos)}`;
     document.getElementById('modalDetallePenalidades').textContent = `-S/ ${formatearNumero(liq.total_penalidades)}`;
     document.getElementById('modalDetalleNeto').textContent = `S/ ${formatearNumero(liq.monto_neto_pagado)}`;
+
+    // Desglose de penalidades
+    const contenedorPenalidades = document.getElementById('modalDetalleDesglosePenalidades');
+    contenedorPenalidades.innerHTML = '';
+    const tienePenalidades = liq.total_penalidades > 0 && liq.detalle_penalidades && liq.detalle_penalidades.length > 0;
+    
+    if (tienePenalidades) {
+        let detalleHtml = liq.detalle_penalidades.map(p => `
+            <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #fecaca;">
+                <span style="color: var(--text-secondary); font-size: 12px; display: flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-level-up-alt fa-rotate-90" style="color: #fca5a5; font-size: 10px;"></i>
+                    Descuento: ${p.incidencia}
+                </span>
+                <span style="color: #ef4444; font-weight: 500; font-size: 13px;">-S/ ${formatearNumero(p.monto)}</span>
+            </div>
+        `).join('');
+        contenedorPenalidades.innerHTML = `<div style="font-size: 11px; color: #991b1b; font-weight: 700; margin-bottom: 4px; text-transform: uppercase;">Detalle de Cobros</div>${detalleHtml}`;
+        contenedorPenalidades.style.display = 'flex';
+    } else {
+        contenedorPenalidades.style.display = 'none';
+    }
 
     const modal = document.getElementById('modalDetalleLiquidacion');
     modal.style.display = 'flex';

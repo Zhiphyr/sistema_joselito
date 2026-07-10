@@ -1238,16 +1238,29 @@ const obtenerLiquidacionesPendientes = async (req, res) => {
 
         // Calcular pagado este mes
         const sqlPagadoMes = `
-            SELECT COALESCE(SUM(monto_neto_pagado), 0) AS total_pagado_mes 
-            FROM liquidacion_viaje 
-            WHERE MONTH(fecha_liquidacion) = MONTH(CURRENT_DATE()) 
-              AND YEAR(fecha_liquidacion) = YEAR(CURRENT_DATE())
+            SELECT COALESCE(SUM(monto), 0) AS total_pagado_mes
+            FROM movimiento_caja
+            WHERE tipo_movimiento = 'EGRESO'
+              AND modulo_origen = 'LIQUIDACION'
+              AND MONTH(fecha_movimiento) = MONTH(CURRENT_DATE())
+              AND YEAR(fecha_movimiento) = YEAR(CURRENT_DATE())
               AND estado = 1
         `;
         const [rowsPagado] = await db.query(sqlPagadoMes);
         const pagadoMes = rowsPagado[0].total_pagado_mes;
 
-        return res.status(200).json({ success: true, data: liquidaciones, pagadoMes: Number(pagadoMes) });
+        // Calcular deuda global de choferes (Penalidades)
+        const sqlDeudaChoferes = `
+            SELECT COALESCE(SUM(monto_descuento_chofer - monto_cobrado), 0) AS total_deuda 
+            FROM incidencia_viaje 
+            WHERE estado = 1 
+              AND monto_descuento_chofer IS NOT NULL 
+              AND estado_cobro_penalidad IN ('Pendiente', 'Cobrado Parcial')
+        `;
+        const [rowsDeuda] = await db.query(sqlDeudaChoferes);
+        const deudaChoferes = rowsDeuda[0].total_deuda;
+
+        return res.status(200).json({ success: true, data: liquidaciones, pagadoMes: Number(pagadoMes), deudaChoferes: Number(deudaChoferes) });
     } catch (error) {
         console.error('Error al obtener liquidaciones pendientes:', error);
         return res.status(500).json({ success: false, message: 'Error interno del servidor.' });
