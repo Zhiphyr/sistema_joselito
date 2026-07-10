@@ -17,7 +17,12 @@ async function cargarTablaProductos() {
     const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
     const tbody = document.getElementById('tbody-productos');
 
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Cargando productos...</td></tr>';
+    // Destruir instancia anterior si existe para evitar problemas de re-renderizado
+    if ($.fn.DataTable.isDataTable('#tabla-productos')) {
+        $('#tabla-productos').DataTable().destroy();
+    }
+
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">Cargando productos...</td></tr>';
 
     try {
         const response = await fetch('http://localhost:3000/api/productos', {
@@ -31,7 +36,7 @@ async function cargarTablaProductos() {
             window.productosCache = result.data;
 
             if (result.data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color: var(--text-muted);">No se encontraron productos</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color: var(--text-muted);">No se encontraron productos</td></tr>';
                 return;
             }
 
