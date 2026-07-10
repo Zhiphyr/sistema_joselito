@@ -66,6 +66,18 @@ class RutaModel {
         const [result] = await db.query(query, [estado, id_ruta]);
         return result.affectedRows;
     }
+
+    static async tieneViajesActivos(id_ruta) {
+        const query = `
+            SELECT COUNT(*) as activeCount 
+            FROM viaje 
+            WHERE id_ruta = ? 
+            AND estado_operativo IN ('En Ruta', 'Llegó a Destino', 'Descargado', 'Incidencia') 
+            AND estado = 1
+        `;
+        const [rows] = await db.query(query, [id_ruta]);
+        return rows[0].activeCount > 0;
+    }
 }
 
 module.exports = RutaModel;
