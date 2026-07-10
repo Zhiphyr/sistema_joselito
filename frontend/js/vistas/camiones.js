@@ -358,7 +358,11 @@ window.cambiarEstadoCamion = async function (id, estado) {
             Swal.fire({ icon: 'success', title: 'Éxito', text: result.message, timer: 1500, showConfirmButton: false });
             cargarTablaCamiones();
         } else {
-            Swal.fire({ icon: 'error', title: 'Error', text: result.message });
+            if (result.status === 'active_trips') {
+                Swal.fire({ icon: 'warning', title: 'Acción bloqueada', text: result.message });
+            } else {
+                Swal.fire({ icon: 'error', title: 'Error', text: result.message });
+            }
         }
     } catch (error) {
         Swal.fire({ icon: 'error', title: 'Error', text: 'Problema de conexión con el servidor.' });

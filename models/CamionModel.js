@@ -63,6 +63,18 @@ class CamionModel {
         const [result] = await db.query(query, [estado, id_camion]);
         return result.affectedRows;
     }
+
+    static async tieneViajesActivos(id_camion) {
+        const query = `
+            SELECT COUNT(*) as activeCount 
+            FROM viaje 
+            WHERE id_camion = ? 
+            AND estado_operativo IN ('En Ruta', 'Llegó a Destino', 'Descargado') 
+            AND estado = 1
+        `;
+        const [rows] = await db.query(query, [id_camion]);
+        return rows[0].activeCount > 0;
+    }
 }
 
 module.exports = CamionModel;

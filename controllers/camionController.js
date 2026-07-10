@@ -163,6 +163,17 @@ const cambiarEstado = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Camión no encontrado' });
         }
 
+        if (estado === 0 || estado === 2) {
+            const tieneActivos = await CamionModel.tieneViajesActivos(id);
+            if (tieneActivos) {
+                return res.status(400).json({ 
+                    success: false, 
+                    status: 'active_trips',
+                    message: 'No se puede realizar esta acción porque el camión se encuentra en medio de un viaje activo.' 
+                });
+            }
+        }
+
         const afectados = await CamionModel.cambiarEstadoCamion(id, estado);
 
         if (afectados > 0) {
