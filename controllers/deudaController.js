@@ -133,6 +133,12 @@ const registrarCobro = async (req, res) => {
             let id_cuenta_destino = pago.id_cuenta || null;
             if (pago.tipo_pago === 'Efectivo') {
                 id_cuenta_destino = idCajaFisica;
+            } else if (pago.tipo_pago === 'Billetera Digital' && pago.id_billetera) {
+                // Consultar si la billetera tiene una cuenta vinculada
+                const [billRows] = await connection.query('SELECT id_cuenta_vinculada FROM billetera_digital WHERE id_billetera = ?', [pago.id_billetera]);
+                if (billRows.length > 0 && billRows[0].id_cuenta_vinculada) {
+                    id_cuenta_destino = billRows[0].id_cuenta_vinculada;
+                }
             }
 
             // 1. Insertar en pago_carga
