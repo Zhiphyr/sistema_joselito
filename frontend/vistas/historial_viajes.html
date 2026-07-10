@@ -10,9 +10,76 @@
         </button>
     </div>
 
-    <!-- Buscador y Filtros (Solo visible en Historial) -->
-    <!-- Filtros ocultos a favor del buscador de DataTables -->
-    <div id="filtros-historial" style="display: none;"></div>
+    <!-- Estilos para DataTables -->
+    <style>
+        /* Estilos modernos para los controles del DataTable */
+        #tabla-historial-viajes_wrapper {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Contenedor superior para los controles (Filtro, Mostrar, Buscar) */
+        .dt-top-controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+            background: #f8fafc;
+            padding: 16px 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border-light);
+        }
+
+        /* Agrupador izquierdo (Estado + Fechas + Length) */
+        .dt-left-controls {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        /* Estilos específicos para inputs y selects del datatable */
+        #tabla-historial-viajes_wrapper .dataTables_length,
+        #tabla-historial-viajes_wrapper .dataTables_filter {
+            margin: 0 !important;
+            float: none !important;
+            text-align: left !important;
+        }
+
+        #tabla-historial-viajes_wrapper .dataTables_length label,
+        #tabla-historial-viajes_wrapper .dataTables_filter label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        #tabla-historial-viajes_wrapper .dataTables_length select,
+        #tabla-historial-viajes_wrapper .dataTables_filter input {
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 13px;
+            outline: none;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        #tabla-historial-viajes_wrapper .dataTables_filter input {
+            width: 220px;
+        }
+
+        #tabla-historial-viajes_wrapper .dataTables_length select:focus,
+        #tabla-historial-viajes_wrapper .dataTables_filter input:focus {
+            border-color: var(--brand-blue);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+    </style>
 
     <!-- Tab 1: Gestionar -->
     <div id="contenedor-gestionar" style="display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding-right: 8px;">

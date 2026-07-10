@@ -53,7 +53,6 @@ async function init_historial_viajes() {
     const tabHistorial = document.getElementById('tab-historial');
     const contenedorGestionar = document.getElementById('contenedor-gestionar');
     const contenedorHistorial = document.getElementById('contenedor-historial');
-    const filtrosHistorial = document.getElementById('filtros-historial');
 
     if (tabGestionar && tabHistorial) {
         tabGestionar.addEventListener('click', () => {
@@ -68,8 +67,7 @@ async function init_historial_viajes() {
             
             contenedorGestionar.style.display = 'flex';
             contenedorHistorial.style.display = 'none';
-            filtrosHistorial.style.display = 'none';
-            
+
             currentPage = currentPageGestionar;
             if (document.getElementById('grid-viajes-gestionar').children.length === 0) resetAndFetch();
         });
@@ -86,8 +84,7 @@ async function init_historial_viajes() {
             
             contenedorHistorial.style.display = 'flex';
             contenedorGestionar.style.display = 'none';
-            filtrosHistorial.style.display = 'none';
-            
+
             currentPage = currentPageHistorial;
             if (!dtHistorial) resetAndFetch();
         });
@@ -1804,8 +1801,14 @@ function renderizarTablaHistorialViajes(viajes) {
         `);
     }
 
+    // Limpiar busquedas previas de esta tabla si las hubiera para no acumular filtros
+    window.$.fn.dataTable.ext.search = window.$.fn.dataTable.ext.search.filter(
+        fn => fn.name !== 'filtroFechasHistorial'
+    );
+
     dtHistorial = window.$('#tabla-historial-viajes').DataTable({
         data: viajes,
+        dom: '<"dt-top-controls"<"dt-left-controls"l>f>rt<"bottom-controls"ip>',
         pageLength: 15,
         lengthMenu: [10, 15, 25, 50, 100],
         order: [[0, 'desc']], // Ordenar por ID Viaje descendente
@@ -1818,6 +1821,9 @@ function renderizarTablaHistorialViajes(viajes) {
                 type: 'num',
                 width: '60px',
                 render: function (data, type, row) {
+                    if (type === 'sort' || type === 'type') {
+                        return Number(data);
+                    }
                     return `<span style="font-weight: 800; color: var(--brand-blue);">#${data}</span>`;
                 }
             },
@@ -1954,6 +1960,57 @@ function renderizarTablaHistorialViajes(viajes) {
             if (data.estado_operativo === 'Finalizado' && !data.fecha_llegada) {
                 window.$(row).css('border-left', '4px solid #dc2626');
             }
+        },
+        initComplete: function () {
+            const controlesIzquierda = window.$('#tabla-historial-viajes_wrapper .dt-left-controls');
+            
+            // Filtro de Estado de Cobro
+            const selectEstado = window.$('<select class="form-control form-control-sm" style="width: auto; min-width: 150px; font-weight: 600;"><option value="">Todos los cobros</option><option value="Pendiente">Pendiente</option><option value="Liquidado">Liquidado</option><option value="Anulado">Anulado</option></select>');
+            controlesIzquierda.append(selectEstado);
+            
+            selectEstado.on('change', function () {
+                const val = window.$.fn.dataTable.util.escapeRegex(window.$(this).val());
+                dtHistorial.column(5).search(val ? val : '', true, false).draw();
+            });
+            
+            // Filtros de Fechas (Salida)
+            const containerFechas = window.$('<div style="display: flex; gap: 8px; align-items: center;"></div>');
+            const inputDesde = window.$('<input type="date" id="filtro-fecha-desde" class="form-control form-control-sm" title="Fecha Salida Desde">');
+            const inputHasta = window.$('<input type="date" id="filtro-fecha-hasta" class="form-control form-control-sm" title="Fecha Salida Hasta">');
+            
+            containerFechas.append('<span style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">Salida:</span>');
+            containerFechas.append(inputDesde);
+            containerFechas.append('<span style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">-</span>');
+            containerFechas.append(inputHasta);
+            controlesIzquierda.append(containerFechas);
+
+            window.$.fn.dataTable.ext.search.push(function filtroFechasHistorial(settings, data, dataIndex, rowData) {
+                if (settings.nTable.id !== 'tabla-historial-viajes') return true;
+
+                const desdeVal = inputDesde.val();
+                const hastaVal = inputHasta.val();
+                
+                if (!desdeVal && !hastaVal) return true;
+
+                let fechaSalidaOriginal = rowData.fecha_salida;
+                if (!fechaSalidaOriginal) return false;
+
+                let dateSalida = new Date(fechaSalidaOriginal);
+                dateSalida.setMinutes(dateSalida.getMinutes() - dateSalida.getTimezoneOffset());
+                let fechaStr = dateSalida.toISOString().split('T')[0];
+
+                if (desdeVal && hastaVal) {
+                    return fechaStr >= desdeVal && fechaStr <= hastaVal;
+                } else if (desdeVal) {
+                    return fechaStr >= desdeVal;
+                } else if (hastaVal) {
+                    return fechaStr <= hastaVal;
+                }
+                return true;
+            });
+
+            inputDesde.on('change', function() { dtHistorial.draw(); });
+            inputHasta.on('change', function() { dtHistorial.draw(); });
         }
     });
 }
