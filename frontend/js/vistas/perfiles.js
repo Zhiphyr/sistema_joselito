@@ -14,19 +14,44 @@ window.init_perfiles = function () {
     document.getElementById('btnCancelarModal').addEventListener('click', cerrarModalPerfil);
     document.getElementById('formPerfil').addEventListener('submit', guardarPerfil);
 
+    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+    if (sessionData.id_perfil !== 1 && sessionData.id_perfil !== 2) {
+        document.getElementById('btnNuevoPerfil').style.display = 'none';
+    }
+
     // Eventos Modal 2 (Permisos)
     document.getElementById('btnCerrarModalPermisos').addEventListener('click', cerrarModalPermisos);
     document.getElementById('btnCancelarModalPermisos').addEventListener('click', cerrarModalPermisos);
     document.getElementById('formPermisos').addEventListener('submit', guardarPermisos);
-
-    // Buscador en tiempo real
-    document.getElementById('inputBuscarPerfil').addEventListener('keyup', function (e) {
-        const texto = e.target.value.toLowerCase();
-        const filas = document.querySelectorAll('#tbody-perfiles tr');
-        filas.forEach(fila => {
-            fila.style.display = fila.textContent.toLowerCase().includes(texto) ? '' : 'none';
-        });
-    });
+    
+    window.validarBotonGuardarPerfil = function() {
+        const inputNombre = document.getElementById('nombre_perfil');
+        const btnGuardar = document.getElementById('btnGuardarPerfil');
+        const nombreVal = inputNombre.value.trim();
+        const idPerfilActual = document.getElementById('id_perfil').value;
+        
+        let esValido = true;
+        
+        // 1. Longitud
+        if (nombreVal.length < 3 || nombreVal.length > 40) esValido = false;
+        
+        // 2. Formato Regex (Solo letras mayusculas, espacios y guiones)
+        const regex = /^[A-Z\s\-]+$/;
+        if (!regex.test(nombreVal)) esValido = false;
+        
+        // 3. Duplicado
+        const existe = window.perfilesCache.some(p => p.nombre === nombreVal && p.id_perfil.toString() !== idPerfilActual);
+        if (existe) esValido = false;
+        
+        if (esValido) {
+            inputNombre.classList.remove('is-invalid');
+            btnGuardar.disabled = false;
+        } else {
+            if (nombreVal.length > 0) inputNombre.classList.add('is-invalid');
+            else inputNombre.classList.remove('is-invalid');
+            btnGuardar.disabled = true;
+        }
+    };
 };
 
 // -------------------------
@@ -36,6 +61,11 @@ window.init_perfiles = function () {
 async function cargarTablaPerfiles() {
     const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
     const tbody = document.getElementById('tbody-perfiles');
+
+    // Destruir instancia anterior si existe para evitar problemas de re-renderizado
+    if ($.fn.DataTable.isDataTable('#tabla-perfiles')) {
+        $('#tabla-perfiles').DataTable().destroy();
+    }
 
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color: var(--text-muted);"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
 
@@ -71,7 +101,9 @@ async function cargarTablaPerfiles() {
                 const isProtectedAdmin = p.id_perfil === 2 && !isDeveloper;
 
                 let acciones = '';
-                if (isProtectedAdmin) {
+                const noTienePermiso = sessionData.id_perfil !== 1 && sessionData.id_perfil !== 2;
+                
+                if (isProtectedAdmin || noTienePermiso) {
                     acciones = '<span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">Protegido</span>';
                 } else {
                     acciones = `
@@ -102,6 +134,20 @@ async function cargarTablaPerfiles() {
             });
 
             tbody.innerHTML = filasHTML;
+
+            // Inicializar DataTables
+            $('#tabla-perfiles').DataTable({
+                language: {
+                    url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
+                },
+                order: [[0, 'desc']], // Ordenar por ID descendente
+                pageLength: 15,
+                lengthMenu: [[15, 25, 50, -1], [15, 25, 50, "Todos"]],
+                dom: '<"dt-top-controls"<"dt-left-controls"l>f>rt<"bottom-controls"ip>',
+                columnDefs: [
+                    { orderable: false, targets: 4 } // La columna de acciones no es ordenable
+                ]
+            });
         } else {
             tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:24px; color: #ef4444;">Error: ${result.message}</td></tr>`;
         }
@@ -119,6 +165,8 @@ function abrirModalCrearPerfil() {
     document.getElementById('formPerfil').reset();
     document.getElementById('id_perfil').value = '';
     document.getElementById('modalTitle').textContent = 'Nuevo Perfil';
+    document.getElementById('nombre_perfil').classList.remove('is-invalid');
+    typeof validarBotonGuardarPerfil === 'function' && validarBotonGuardarPerfil();
     document.getElementById('modalPerfil').style.display = 'flex';
 }
 
@@ -133,6 +181,9 @@ window.abrirModalEditarPerfil = function (id) {
     document.getElementById('id_perfil').value = data.id_perfil;
     document.getElementById('nombre_perfil').value = data.nombre;
     document.getElementById('descripcion_perfil').value = data.descripcion || '';
+    
+    document.getElementById('nombre_perfil').classList.remove('is-invalid');
+    typeof validarBotonGuardarPerfil === 'function' && validarBotonGuardarPerfil();
 
     document.getElementById('modalTitle').textContent = 'Editar Perfil';
     document.getElementById('modalPerfil').style.display = 'flex';
@@ -144,8 +195,8 @@ async function guardarPerfil(e) {
     const id = document.getElementById('id_perfil').value;
 
     const datos = {
-        nombre: document.getElementById('nombre_perfil').value,
-        descripcion: document.getElementById('descripcion_perfil').value
+        nombre: document.getElementById('nombre_perfil').value.trim(),
+        descripcion: document.getElementById('descripcion_perfil').value.trim()
     };
 
     const method = id ? 'PUT' : 'POST';
@@ -177,22 +228,34 @@ async function guardarPerfil(e) {
 window.cambiarEstadoPerfil = async function (id, estado) {
     const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
 
-    const titulo = estado === 2 ? '¿Eliminar perfil?' : (estado === 1 ? '¿Activar perfil?' : '¿Desactivar perfil?');
-    const texto = estado === 2 ? 'Esta acción es irreversible y fallará si hay usuarios usando este perfil.' : 'Cambiarás la disponibilidad de este perfil.';
+    try {
+        let warningExtra = '';
+        if (estado === 0 || estado === 2) {
+            const countResponse = await fetch(`http://localhost:3000/api/perfiles/${id}/usuarios-count`, {
+                headers: { 'x-user-profile': sessionData.id_perfil }
+            });
+            const countResult = await countResponse.json();
+            
+            if (countResponse.ok && countResult.success && countResult.count > 0) {
+                warningExtra = `<br><br><b style="color:#ef4444;">Este perfil tiene ${countResult.count} usuario(s) activo(s) vinculado(s).</b> Si lo ${estado === 2 ? 'eliminas' : 'desactivas'}, todos estos usuarios también perderán su acceso.`;
+            }
+        }
 
-    const confirm = await Swal.fire({
-        title: titulo,
-        text: texto,
-        icon: estado === 2 ? 'warning' : 'info',
-        showCancelButton: true,
-        confirmButtonColor: estado === 2 ? '#ef4444' : '#0f4c81',
-        cancelButtonColor: '#64748b',
-        confirmButtonText: 'Sí, continuar',
-        cancelButtonText: 'Cancelar'
-    });
+        const titulo = estado === 2 ? '¿Eliminar perfil?' : (estado === 1 ? '¿Activar perfil?' : '¿Desactivar perfil?');
+        const texto = (estado === 2 ? 'Esta acción es irreversible y afectará a los usuarios vinculados.' : 'Cambiarás la disponibilidad de este perfil.') + warningExtra;
 
-    if (confirm.isConfirmed) {
-        try {
+        const confirm = await Swal.fire({
+            title: titulo,
+            html: texto,
+            icon: estado === 2 ? 'warning' : 'info',
+            showCancelButton: true,
+            confirmButtonColor: estado === 2 ? '#ef4444' : '#0f4c81',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Sí, continuar',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (confirm.isConfirmed) {
             const response = await fetch(`http://localhost:3000/api/perfiles/${id}/estado`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json', 'x-user-profile': sessionData.id_perfil },
@@ -204,11 +267,11 @@ window.cambiarEstadoPerfil = async function (id, estado) {
                 Swal.fire({ icon: 'success', title: 'Éxito', text: result.message, timer: 1500, showConfirmButton: false });
                 cargarTablaPerfiles();
             } else {
-                Swal.fire({ icon: 'error', title: 'Acción Denegada', text: result.message });
+                Swal.fire({ icon: 'error', title: 'Error', text: result.message });
             }
-        } catch (error) {
-            Swal.fire({ icon: 'error', title: 'Error', text: 'Problema de conexión con el servidor.' });
         }
+    } catch (error) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'Problema de conexión con el servidor.' });
     }
 };
 

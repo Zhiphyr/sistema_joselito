@@ -10,13 +10,8 @@
 
 <div class="welcome-card sin-padding">
 
-    <div class="tabla-toolbar">
-        <label for="inputBuscarCliente">Buscar:</label>
-        <input type="text" id="inputBuscarCliente" class="form-control" placeholder="Nombre, documento o teléfono...">
-    </div>
-
-    <div class="tabla-scroll">
-        <table class="tabla-modulo">
+    <div class="tabla-scroll" style="margin-top: 15px;">
+        <table id="tabla-clientes" class="tabla-modulo display hover stripe" style="width:100%">
             <thead>
                 <tr>
                     <th class="tabla-th" style="width: 60px;">ID</th>
@@ -24,6 +19,7 @@
                     <th class="tabla-th" style="width: 140px;">N° Documento</th>
                     <th class="tabla-th">Nombre / Razón Social</th>
                     <th class="tabla-th" style="width: 130px;">Teléfono</th>
+                    <th class="tabla-th">Correo</th>
                     <th class="tabla-th" style="width: 120px;">Estado</th>
                     <th class="tabla-th" style="width: 160px;">Acciones</th>
                 </tr>
@@ -72,14 +68,14 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="direccion">Dirección <span class="required">*</span></label>
-                    <input type="text" id="direccion" name="direccion" class="form-control" required
-                        placeholder="Dirección física">
+                    <label for="direccion">Dirección</label>
+                    <input type="text" id="direccion" name="direccion" class="form-control" maxlength="150"
+                        placeholder="Dirección física (Opcional)">
                 </div>
 
                 <div class="form-group">
                     <label for="telefono">Teléfono <span class="required">*</span></label>
-                    <input type="text" id="telefono" name="telefono" class="form-control" required
+                    <input type="text" id="telefono" name="telefono" class="form-control" required maxlength="9"
                         placeholder="N° de contacto">
                 </div>
 
@@ -90,9 +86,86 @@
 
                 <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
                     <button type="button" class="btn-secondary" id="btnCancelarModal">Cancelar</button>
-                    <button type="submit" class="btn-primary" style="width: auto; padding: 10px 24px;">Guardar</button>
+                    <button type="submit" class="btn-primary" id="btnGuardarCliente" style="width: auto; padding: 10px 24px;">Guardar</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+<style>
+    /* Estilos modernos para los controles del DataTable */
+    #tabla-clientes_wrapper {
+        display: flex;
+        flex-direction: column;
+        padding: 24px 24px 0 24px;
+    }
+    
+    .dt-top-controls {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+        background: #f8fafc;
+        padding: 16px 20px;
+        border-radius: 12px;
+        border: 1px solid var(--border-light);
+    }
+
+    .dt-left-controls {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        flex-wrap: wrap;
+    }
+
+    #tabla-clientes_wrapper .dataTables_length,
+    #tabla-clientes_wrapper .dataTables_filter {
+        margin: 0 !important;
+        float: none !important;
+        text-align: left !important;
+    }
+
+    #tabla-clientes_wrapper .dataTables_length label,
+    #tabla-clientes_wrapper .dataTables_filter label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        font-weight: 600;
+        color: var(--text-secondary);
+        font-size: 13px;
+    }
+
+    #tabla-clientes_wrapper .dataTables_length select,
+    #tabla-clientes_wrapper .dataTables_filter input {
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 13px;
+        outline: none;
+        transition: all 0.2s;
+        background: white;
+    }
+
+    #tabla-clientes_wrapper .dataTables_filter input {
+        width: 220px;
+    }
+
+    #tabla-clientes_wrapper .dataTables_length select:focus,
+    #tabla-clientes_wrapper .dataTables_filter input:focus {
+        border-color: var(--brand-blue);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    /* Paginación y info inferior con padding */
+    .bottom-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 24px;
+        border-top: 1px solid var(--border-light);
+        margin-top: auto;
+    }
+</style>

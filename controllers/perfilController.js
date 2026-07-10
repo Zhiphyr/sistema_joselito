@@ -1,4 +1,5 @@
 const PerfilModel = require('../models/PerfilModel');
+const UsuarioModel = require('../models/UsuarioModel');
 
 const listarPerfiles = async (req, res) => {
     try {
@@ -59,6 +60,17 @@ const actualizar = async (req, res) => {
     }
 };
 
+const contarUsuariosAsignados = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const count = await UsuarioModel.contarUsuariosPorPerfil(id);
+        return res.status(200).json({ success: true, count });
+    } catch (error) {
+        console.error('Error al contar usuarios por perfil:', error);
+        return res.status(500).json({ success: false, message: 'Error interno del servidor' });
+    }
+};
+
 const cambiarEstado = async (req, res) => {
     try {
         const { id } = req.params;
@@ -76,10 +88,15 @@ const cambiarEstado = async (req, res) => {
             }
         }
 
+        // Si se va a desactivar o eliminar, desactivamos a los usuarios asociados
+        if (estado === 0 || estado === 2) {
+            await UsuarioModel.desactivarUsuariosPorPerfil(id);
+        }
+
         const afectados = await PerfilModel.cambiarEstadoPerfil(id, estado);
 
         if (afectados > 0) {
-            let mensaje = estado === 2 ? 'Perfil eliminado correctamente' : 'Estado actualizado';
+            let mensaje = estado === 2 ? 'Perfil eliminado correctamente y usuarios vinculados desactivados' : 'Estado actualizado y usuarios vinculados gestionados';
             return res.status(200).json({ success: true, message: mensaje });
         } else {
             return res.status(404).json({ success: false, message: 'Perfil no encontrado' });
@@ -144,6 +161,7 @@ module.exports = {
     listarPerfiles,
     crear,
     actualizar,
+    contarUsuariosAsignados,
     cambiarEstado,
     listarOpciones,
     listarPermisosDePerfil,

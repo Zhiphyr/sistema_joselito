@@ -35,6 +35,17 @@ class UsuarioModel {
         const [rows] = await db.query(query);
         return rows;
     }
+    static async contarUsuariosPorPerfil(id_perfil) {
+        const query = `SELECT COUNT(*) as count FROM usuarios WHERE id_perfil = ? AND estado IN (0, 1)`;
+        const [rows] = await db.query(query, [id_perfil]);
+        return rows[0].count;
+    }
+
+    static async desactivarUsuariosPorPerfil(id_perfil) {
+        const query = `UPDATE usuarios SET estado = 0 WHERE id_perfil = ?`;
+        const [result] = await db.query(query, [id_perfil]);
+        return result.affectedRows;
+    }
 
     static async registrarUsuario(datos) {
         const { id_perfil, nombre, usuario, clave } = datos;
