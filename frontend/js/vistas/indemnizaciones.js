@@ -841,11 +841,14 @@ async function cargarHistorialPagos() {
 
 function renderizarHistorial(pagos) {
     const tbody = document.getElementById('tbodyHistorialPagos');
-    
+
     if (pagos.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #64748b;">No hay pagos registrados.</td></tr>';
         return;
     }
+
+    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+    const puedeAnular = sessionData.id_perfil === 1 || sessionData.id_perfil === 2;
 
     let html = '';
     pagos.forEach(p => {
@@ -895,7 +898,7 @@ function renderizarHistorial(pagos) {
                     <button class="btn-icon text-primary" title="Ver Detalles" onclick="verDetallesPago(${p.id_pago})">
                         <i class="fas fa-eye"></i>
                     </button>
-                    ${p.estado === 1 ? `
+                    ${p.estado === 1 && puedeAnular ? `
                     <button class="btn-icon text-danger" style="color: #64748b;" title="Anular Pago" onclick="confirmarAnularPago(${p.id_pago})" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#64748b'">
                         <i class="fas fa-undo-alt"></i>
                     </button>
@@ -1107,17 +1110,44 @@ function cerrarModalDetallesPago() {
 }
 
 async function confirmarAnularPago(idPago) {
-    const confirmacion = await Swal.fire({
+    const { value: formValues } = await Swal.fire({
         title: '¿Anular este pago?',
-        text: 'Esta acción revertirá los productos dañados a estado pendiente y revertirá los movimientos de caja asociados.',
-        icon: 'warning',
+        html: `
+            <p style="text-align:left; font-size:13px; color:#64748b; margin-bottom:12px;">
+                Esta acción revertirá los productos dañados a estado pendiente y los movimientos de caja asociados.
+            </p>
+            <label style="display:block; text-align:left; font-size:13px; font-weight:600; margin-bottom:4px;">Motivo de la anulación *</label>
+            <textarea id="swal-motivo-anulacion" class="swal2-textarea" style="margin:0 0 12px;"
+                placeholder="Ej: Se registró el pago con el monto incorrecto, se corrige y se vuelve a registrar."></textarea>
+            <label style="display:block; text-align:left; font-size:13px; font-weight:600; margin-bottom:4px;">PIN de autorización *</label>
+            <input type="password" id="swal-pin-anulacion" class="swal2-input" style="margin:0"
+                inputmode="numeric" pattern="[0-9]*" placeholder="PIN numérico">
+        `,
+        focusConfirm: false,
         showCancelButton: true,
         confirmButtonColor: '#ef4444',
         cancelButtonColor: '#64748b',
         confirmButtonText: 'Sí, anular',
-        cancelButtonText: 'Cancelar'
+        cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            const motivo = document.getElementById('swal-motivo-anulacion').value.trim();
+            const pin = document.getElementById('swal-pin-anulacion').value.trim();
+            if (motivo.length < 10) {
+                Swal.showValidationMessage('El motivo debe tener al menos 10 caracteres.');
+                return false;
+            }
+            if (!/^[a-zA-Z0-9À-ÿ\s.,\-¿?¡!:;'"()/#]+$/.test(motivo)) {
+                Swal.showValidationMessage('El motivo tiene caracteres no permitidos.');
+                return false;
+            }
+            if (!/^[0-9]+$/.test(pin)) {
+                Swal.showValidationMessage('Ingrese un PIN numérico válido.');
+                return false;
+            }
+            return { motivo, pin };
+        }
     });
-    if (!confirmacion.isConfirmed) {
+    if (!formValues) {
         return;
     }
 
@@ -1125,7 +1155,12 @@ async function confirmarAnularPago(idPago) {
         const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
         const response = await fetch(`/api/indemnizaciones/anular/${idPago}`, {
             method: 'PUT',
-            headers: { 'x-user-profile': sessionData.id_perfil }
+            headers: {
+                'Content-Type': 'application/json',
+                'x-user-profile': sessionData.id_perfil,
+                'x-user-id': sessionData.id_usuario
+            },
+            body: JSON.stringify(formValues)
         });
         const result = await response.json();
 

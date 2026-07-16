@@ -820,6 +820,9 @@ async function abrirHistorial(idCarga, fleteOriginal, saldoPendiente, estadoActu
     let contenedorPagos = document.getElementById('historialPagosLista');
     if (!contenedorPagos) return;
 
+    const sessionDataHistorial = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+    const puedeAnular = sessionDataHistorial.id_perfil === 1 || sessionDataHistorial.id_perfil === 2;
+
     // Clonar para remover event listeners previos (SPA safe)
     const newContenedor = contenedorPagos.cloneNode(false);
     contenedorPagos.parentNode.replaceChild(newContenedor, contenedorPagos);
@@ -916,7 +919,7 @@ async function abrirHistorial(idCarga, fleteOriginal, saldoPendiente, estadoActu
 
                 // Acciones (Anular / Voucher)
                 let btnAnular = '';
-                if (!isAnulado) {
+                if (!isAnulado && puedeAnular) {
                     btnAnular = `
                         <button class="btn-anular-pago" data-id="${p.id_pago}" data-carga="${idCarga}" style="background: white; border: 1px solid #fecaca; color: #ef4444; padding: 6px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='white'">
                             <i class="fas fa-ban"></i> Anular Pago
@@ -976,27 +979,44 @@ async function abrirHistorial(idCarga, fleteOriginal, saldoPendiente, estadoActu
                     const idPago = btnAnular.dataset.id;
                     const idCargaActual = btnAnular.dataset.carga;
 
-                    const { value: pin } = await Swal.fire({
+                    const { value: formValues } = await Swal.fire({
                         title: 'Autorización Requerida',
-                        text: 'Ingrese su PIN numérico para anular este pago',
-                        input: 'password',
-                        inputAttributes: {
-                            autocapitalize: 'off',
-                            pattern: '[0-9]*',
-                            inputmode: 'numeric'
-                        },
+                        html: `
+                            <p style="text-align:left; font-size:13px; color:#64748b; margin-bottom:12px;">
+                                Esta acción revertirá la deuda de la carga y el movimiento de caja asociado.
+                            </p>
+                            <label style="display:block; text-align:left; font-size:13px; font-weight:600; margin-bottom:4px;">Motivo de la anulación *</label>
+                            <textarea id="swal-motivo-anulacion" class="swal2-textarea" style="margin:0 0 12px;"
+                                placeholder="Ej: Se registró el cobro con el monto incorrecto, se corrige y se vuelve a registrar."></textarea>
+                            <label style="display:block; text-align:left; font-size:13px; font-weight:600; margin-bottom:4px;">PIN de autorización *</label>
+                            <input type="password" id="swal-pin-anulacion" class="swal2-input" style="margin:0"
+                                inputmode="numeric" pattern="[0-9]*" placeholder="PIN numérico">
+                        `,
+                        focusConfirm: false,
                         showCancelButton: true,
                         confirmButtonText: 'Anular Pago',
                         cancelButtonText: 'Cancelar',
                         confirmButtonColor: '#ef4444',
-                        inputValidator: (value) => {
-                            if (!value || isNaN(value) || Number(value) <= 0) {
-                                return 'Debe ingresar un PIN numérico válido';
+                        preConfirm: () => {
+                            const motivo = document.getElementById('swal-motivo-anulacion').value.trim();
+                            const pin = document.getElementById('swal-pin-anulacion').value.trim();
+                            if (motivo.length < 10) {
+                                Swal.showValidationMessage('El motivo debe tener al menos 10 caracteres.');
+                                return false;
                             }
+                            if (!/^[a-zA-Z0-9À-ÿ\s.,\-¿?¡!:;'"()/#]+$/.test(motivo)) {
+                                Swal.showValidationMessage('El motivo tiene caracteres no permitidos.');
+                                return false;
+                            }
+                            if (!/^[0-9]+$/.test(pin)) {
+                                Swal.showValidationMessage('Ingrese un PIN numérico válido.');
+                                return false;
+                            }
+                            return { motivo, pin };
                         }
                     });
 
-                    if (pin) {
+                    if (formValues) {
                         try {
                             // Mostrar loading
                             Swal.fire({
@@ -1008,13 +1028,15 @@ async function abrirHistorial(idCarga, fleteOriginal, saldoPendiente, estadoActu
                                 }
                             });
 
+                            const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
                             const resAnular = await fetch('/api/deudas/anular-pago', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
-                                    'x-user-profile': localStorage.getItem('user_id') || 1
+                                    'x-user-profile': sessionData.id_perfil,
+                                    'x-user-id': sessionData.id_usuario
                                 },
-                                body: JSON.stringify({ id_pago: idPago, pin: pin })
+                                body: JSON.stringify({ id_pago: idPago, pin: formValues.pin, motivo: formValues.motivo })
                             });
 
                             const dataAnular = await resAnular.json();

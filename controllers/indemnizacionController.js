@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { cloudinary } = require('../config/cloudinary');
+const { verificarPinAnulacion, validarMotivoAnulacion } = require('../utils/verificarPinAnulacion');
 
 // Resuelve la cuenta/billetera de origen de una línea de pago, siguiendo la misma
 // convención usada en viajeController.liquidarViaje y deudaController.registrarCobro:
@@ -389,6 +390,20 @@ const verificarNumeroOperacion = async (req, res) => {
 
 const anularPago = async (req, res) => {
     const { id_pago } = req.params;
+    const { motivo, pin } = req.body;
+    const id_usuario = req.headers['x-user-id'];
+
+    if (!id_usuario) {
+        return res.status(401).json({ success: false, message: 'No autorizado: falta información del usuario.' });
+    }
+    if (!validarMotivoAnulacion(motivo)) {
+        return res.status(400).json({ success: false, message: 'El motivo de anulación debe tener entre 10 y 300 caracteres y no contener símbolos no permitidos.' });
+    }
+    const pinValido = await verificarPinAnulacion(pin);
+    if (!pinValido) {
+        return res.status(401).json({ success: false, message: 'PIN de autorización incorrecto.' });
+    }
+
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
@@ -401,7 +416,7 @@ const anularPago = async (req, res) => {
         // Revertir el estado a 'Pendiente'
         for (const det of detalles) {
             await connection.query(`
-                UPDATE incidencia_detalle_carga 
+                UPDATE incidencia_detalle_carga
                 SET estado_pago_cliente = 'Pendiente'
                 WHERE id_incidencia = ? AND id_detalle = ?
             `, [det.id_incidencia, det.id_detalle]);
@@ -415,6 +430,12 @@ const anularPago = async (req, res) => {
             UPDATE movimiento_caja SET estado = 0
             WHERE modulo_origen = 'SINIESTROS' AND id_registro_origen = ?
         `, [id_pago]);
+
+        // Registrar auditoría: quién anuló, cuándo y por qué
+        await connection.query(`
+            INSERT INTO auditoria_anulacion (modulo, id_registro, motivo, id_usuario)
+            VALUES ('SINIESTROS', ?, ?, ?)
+        `, [id_pago, motivo.trim(), id_usuario]);
 
         await connection.commit();
         res.json({ success: true, message: 'Pago anulado correctamente.' });

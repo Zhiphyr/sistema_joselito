@@ -1,6 +1,6 @@
 const db = require('../config/db');
 const { cloudinary } = require('../config/cloudinary');
-const bcrypt = require('bcryptjs');
+const { verificarPinAnulacion, validarMotivoAnulacion } = require('../utils/verificarPinAnulacion');
 
 const obtenerDeudas = async (req, res) => {
     try {
@@ -265,23 +265,21 @@ const obtenerHistorialPagos = async (req, res) => {
 const anularPago = async (req, res) => {
     let connection;
     try {
-        const { id_pago, pin } = req.body;
+        const { id_pago, pin, motivo } = req.body;
+        const id_usuario = req.headers['x-user-id'];
 
         if (!id_pago || !pin) {
             return res.status(400).json({ success: false, message: 'Faltan datos obligatorios' });
         }
-
-        // 1. Obtener PIN de la base de datos
-        const [configRows] = await db.query('SELECT valor FROM configuracion_sistema WHERE parametro = ?', ['PIN_ANULACION_PAGOS']);
-        if (configRows.length === 0) {
-            return res.status(500).json({ success: false, message: 'No se ha configurado el PIN de seguridad' });
+        if (!id_usuario) {
+            return res.status(401).json({ success: false, message: 'No autorizado: falta información del usuario.' });
+        }
+        if (!validarMotivoAnulacion(motivo)) {
+            return res.status(400).json({ success: false, message: 'El motivo de anulación debe tener entre 10 y 300 caracteres y no contener símbolos no permitidos.' });
         }
 
-        const hashedPin = configRows[0].valor;
-
-        // 2. Comparar PIN
-        const isValid = await bcrypt.compare(pin.toString(), hashedPin);
-        if (!isValid) {
+        const pinValido = await verificarPinAnulacion(pin);
+        if (!pinValido) {
             return res.status(401).json({ success: false, message: 'PIN incorrecto' });
         }
 
@@ -336,6 +334,12 @@ const anularPago = async (req, res) => {
 
         // 6. Actualizar Carga (solo estado_cobro, saldo_pendiente se calcula en vuelo siempre)
         await connection.query('UPDATE Carga SET estado_cobro = ? WHERE id_carga = ?', [nuevoEstado, pago.id_carga]);
+
+        // 7. Registrar auditoría: quién anuló, cuándo y por qué
+        await connection.query(`
+            INSERT INTO auditoria_anulacion (modulo, id_registro, motivo, id_usuario)
+            VALUES ('COBRO_FLETE', ?, ?, ?)
+        `, [id_pago, motivo.trim(), id_usuario]);
 
         await connection.commit();
         res.json({ success: true, message: 'Pago anulado correctamente', nuevo_saldo: nuevoSaldo, nuevo_estado: nuevoEstado });
