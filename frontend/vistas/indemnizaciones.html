@@ -29,8 +29,30 @@
 <!-- Tab Historial de Pagos -->
 <div id="content-historial" class="tab-content" style="display: none;">
     <div class="welcome-card sin-padding" style="max-width: 100%;">
-        <div class="tabla-scroll">
-            <table class="tabla-modulo" id="tabla-historial-pagos">
+        
+        <!-- Controles Superiores Custom -->
+        <div style="padding: 24px 24px 0 24px; display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: flex-end;">
+            <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+                <div>
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Desde:</label>
+                    <input type="date" id="filtro-fecha-desde" class="form-control" style="font-size: 13px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-light); height: 38px;">
+                </div>
+                <div>
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Hasta:</label>
+                    <input type="date" id="filtro-fecha-hasta" class="form-control" style="font-size: 13px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-light); height: 38px;">
+                </div>
+                <button onclick="limpiarFiltroFechas()" class="btn-secondary" style="padding: 8px 12px; font-size: 13px; height: 38px;" title="Limpiar Fechas"><i class="fas fa-eraser"></i></button>
+            </div>
+            <!-- Buscador propio (no el que genera DataTables) para no depender de reparentar
+                 su DOM entre pestañas: se conecta a la tabla vía la API .search().draw() -->
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <label style="font-weight: 600; color: var(--text-secondary); font-size: 13px; margin: 0;">Buscar:</label>
+                <input type="text" id="buscador-historial-pagos" placeholder="Buscar cliente, ID, op...">
+            </div>
+        </div>
+
+        <div class="tabla-scroll" style="padding: 0 24px; margin-top: 16px;">
+            <table class="tabla-modulo" id="tabla-historial-pagos" style="font-size: 13px; width: 100%;">
                 <thead>
                     <tr>
                         <th class="tabla-th">ID Pago</th>
@@ -169,19 +191,85 @@
     }
 
     /* ==========================================
-       Badges genéricos de estado
+       Badges Premium para Tabla
        ========================================== */
-    .badge {
-        display: inline-block;
-        padding: 4px 10px;
-        border-radius: 20px;
+    .badge-pill-success {
+        background-color: #dcfce7;
+        color: #166534;
+        padding: 6px 14px;
+        border-radius: 9999px;
         font-size: 11px;
         font-weight: 700;
-        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid #bbf7d0;
     }
-    .badge-success { background: #dcfce7; color: #166534; }
-    .badge-warning { background: #fef3c7; color: #92400e; }
-    .badge-danger  { background: #fee2e2; color: #991b1b; }
+    .badge-pill-danger {
+        background-color: #fee2e2;
+        color: #991b1b;
+        padding: 6px 14px;
+        border-radius: 9999px;
+        font-size: 11px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid #fecaca;
+    }
+    .badge-pill-mixed {
+        background-color: #f8fafc;
+        color: #475569;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        font-size: 10px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid #e2e8f0;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+
+    /* Hover en filas de tabla para legibilidad horizontal */
+    #tabla-historial-pagos tbody tr:hover {
+        background-color: #f8fafc;
+    }
+
+    /* Buscador propio del historial de pagos */
+    #buscador-historial-pagos {
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-size: 13px;
+        outline: none;
+        transition: all 0.2s;
+        background: white;
+        width: 350px;
+        height: 38px;
+    }
+    #buscador-historial-pagos:focus {
+        border-color: var(--brand-blue);
+        box-shadow: 0 0 0 3px rgba(15, 76, 129, 0.1);
+    }
+    
+    .bottom-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 24px;
+        flex-wrap: wrap;
+        gap: 12px;
+        border-top: 1px solid var(--border-light);
+    }
+    .dt-length-bottom select {
+        border: 1px solid var(--border-light);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 13px;
+        outline: none;
+        margin: 0 6px;
+    }
 
     /* ==========================================
        Cards: Viaje > Carga (deudas pendientes)
@@ -305,75 +393,7 @@
     #tabla-historial-pagos_wrapper {
         display: flex;
         flex-direction: column;
-        padding: 24px 24px 0 24px;
-    }
-
-    .dt-top-controls {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: space-between;
-        align-items: center;
-        gap: 16px;
-        margin-bottom: 24px;
-        background: #f8fafc;
-        padding: 16px 20px;
-        border-radius: 12px;
-        border: 1px solid var(--border-light);
-    }
-
-    .dt-left-controls {
-        display: flex;
-        align-items: center;
-        gap: 24px;
-        flex-wrap: wrap;
-    }
-
-    #tabla-historial-pagos_wrapper .dataTables_length,
-    #tabla-historial-pagos_wrapper .dataTables_filter {
-        margin: 0 !important;
-        float: none !important;
-        text-align: left !important;
-    }
-
-    #tabla-historial-pagos_wrapper .dataTables_length label,
-    #tabla-historial-pagos_wrapper .dataTables_filter label {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin: 0;
-        font-weight: 600;
-        color: var(--text-secondary);
-        font-size: 13px;
-    }
-
-    #tabla-historial-pagos_wrapper .dataTables_length select,
-    #tabla-historial-pagos_wrapper .dataTables_filter input {
-        border: 1px solid var(--border-light);
-        border-radius: 8px;
-        padding: 6px 12px;
-        font-size: 13px;
-        outline: none;
-        transition: all 0.2s;
-        background: white;
-    }
-
-    #tabla-historial-pagos_wrapper .dataTables_filter input {
-        width: 220px;
-    }
-
-    #tabla-historial-pagos_wrapper .dataTables_length select:focus,
-    #tabla-historial-pagos_wrapper .dataTables_filter input:focus {
-        border-color: var(--brand-blue);
-        box-shadow: 0 0 0 3px rgba(15, 76, 129, 0.1);
-    }
-
-    .bottom-controls {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 16px 0;
-        flex-wrap: wrap;
-        gap: 12px;
+        padding: 0;
     }
 
     /* Color de acciones en tabla de historial */

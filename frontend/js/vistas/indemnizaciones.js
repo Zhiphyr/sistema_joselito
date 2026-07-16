@@ -850,30 +850,54 @@ function renderizarHistorial(pagos) {
     let html = '';
     pagos.forEach(p => {
         const badgeEstado = p.estado === 1
-            ? '<span class="badge badge-success">Completado</span>'
-            : '<span class="badge badge-danger">Anulado</span>';
+            ? '<span class="badge-pill-success"><i class="fas fa-check-circle"></i> Completado</span>'
+            : '<span class="badge-pill-danger"><i class="fas fa-undo-alt"></i> Anulado</span>';
 
         const metodos = p.metodos_pago || [];
-        const metodoTexto = metodos.length === 1 ? metodos[0].metodo_pago : `Mixto (${metodos.length})`;
-        const numOpTexto = metodos.length === 1 ? (metodos[0].numero_operacion || '-') : '-';
+        let metodoTexto = '';
+        if (metodos.length === 1) {
+            metodoTexto = metodos[0].metodo_pago;
+        } else if (metodos.length > 1) {
+            const metodosNombres = metodos.map(m => m.metodo_pago);
+            const resumen = metodosNombres.slice(0, 2).join(' + ') + (metodos.length > 2 ? ` (+${metodos.length - 2})` : '');
+            metodoTexto = `
+                <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
+                    <span class="badge-pill-mixed">Mixto (${metodos.length})</span>
+                    <span style="font-size: 11px; color: var(--text-muted);">${resumen}</span>
+                </div>
+            `;
+        } else {
+            metodoTexto = '-';
+        }
+
+        const numOpTexto = metodos.length === 1 ? (metodos[0].numero_operacion || '-') : '<span style="color: var(--text-muted); font-size: 12px;">Varios</span>';
+
+        const fechaObj = new Date(p.fecha_pago);
+        const fechaDia = fechaObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+        const fechaHora = fechaObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true });
 
         html += `
             <tr>
                 <td>#PAG-${String(p.id_pago).padStart(5, '0')}</td>
-                <td><strong>${p.cliente_nombre}</strong></td>
-                <td>${new Date(p.fecha_pago).toLocaleString()}</td>
-                <td style="font-weight: bold;">${formatMoneda(p.monto_total)}</td>
+                <td style="text-align: left;"><strong>${p.cliente_nombre}</strong></td>
+                <td data-sort="${fechaObj.getTime()}">
+                    <div style="display: flex; flex-direction: column; align-items: center;">
+                        <span style="font-weight: 500;">${fechaDia}</span>
+                        <span style="font-size: 11px; color: var(--text-muted);">${fechaHora}</span>
+                    </div>
+                </td>
+                <td style="font-weight: 700; color: #1e293b; font-size: 14px;">${formatMoneda(p.monto_total)}</td>
                 <td>${metodoTexto}</td>
                 <td>${numOpTexto}</td>
-                <td>${p.usuario_nombre}</td>
+                <td style="text-align: left;">${p.usuario_nombre}</td>
                 <td>${badgeEstado}</td>
                 <td style="text-align: center;">
                     <button class="btn-icon text-primary" title="Ver Detalles" onclick="verDetallesPago(${p.id_pago})">
                         <i class="fas fa-eye"></i>
                     </button>
                     ${p.estado === 1 ? `
-                    <button class="btn-icon text-danger" title="Anular Pago" onclick="confirmarAnularPago(${p.id_pago})">
-                        <i class="fas fa-ban"></i>
+                    <button class="btn-icon text-danger" style="color: #64748b;" title="Anular Pago" onclick="confirmarAnularPago(${p.id_pago})" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#64748b'">
+                        <i class="fas fa-undo-alt"></i>
                     </button>
                     ` : ''}
                 </td>
@@ -883,79 +907,197 @@ function renderizarHistorial(pagos) {
 
     tbody.innerHTML = html;
 
-    $('#tabla-historial-pagos').DataTable({
-        language: { url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
+    // Configurar filtro de fechas personalizado si no existe
+    if (!$.fn.dataTable.ext.search.includes(filtroRangoFechasPagos)) {
+        $.fn.dataTable.ext.search.push(filtroRangoFechasPagos);
+    }
+
+    // Event listeners para los inputs de fecha
+    $('#filtro-fecha-desde, #filtro-fecha-hasta').off('change').on('change', function() {
+        if ($.fn.DataTable.isDataTable('#tabla-historial-pagos')) {
+            $('#tabla-historial-pagos').DataTable().draw();
+        }
+    });
+
+    const tablaHistorial = $('#tabla-historial-pagos').DataTable({
+        language: {
+            url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
+        },
         order: [[0, 'desc']],
         pageLength: 15,
         lengthMenu: [[15, 25, 50, -1], [15, 25, 50, "Todos"]],
-        dom: '<"dt-top-controls"<"dt-left-controls"l>f>rt<"bottom-controls"ip>',
-        columnDefs: [{ orderable: false, targets: 8 }]
+        dom: 'rt<"bottom-controls"ilp>',
+        columnDefs: [
+            { orderable: false, targets: 8 },
+            { className: "dt-right", targets: 3 }, // Monto a la derecha
+            { className: "dt-center", targets: [0, 2, 4, 5, 7, 8] } // Centrar otros
+        ]
     });
+
+    // Buscador propio (no el `f` de DataTables): así no depende de reparentar DOM entre
+    // pestañas, que es lo que dejaba el buscador roto al volver a esta pestaña.
+    $('#buscador-historial-pagos').off('keyup change').on('keyup change', function() {
+        tablaHistorial.search(this.value).draw();
+    });
+}
+
+function filtroRangoFechasPagos(settings, data, dataIndex) {
+    if (settings.nTable.id !== 'tabla-historial-pagos') return true;
+    
+    const minDateStr = $('#filtro-fecha-desde').val();
+    const maxDateStr = $('#filtro-fecha-hasta').val();
+    
+    if (!minDateStr && !maxDateStr) return true;
+
+    const rowData = historialGlobal[dataIndex];
+    if (!rowData) return true;
+    
+    const rowDate = new Date(rowData.fecha_pago);
+    rowDate.setHours(0,0,0,0);
+    
+    if (minDateStr) {
+        const minDate = new Date(minDateStr + 'T00:00:00');
+        if (rowDate < minDate) return false;
+    }
+    if (maxDateStr) {
+        const maxDate = new Date(maxDateStr + 'T23:59:59');
+        if (rowDate > maxDate) return false;
+    }
+    return true;
+}
+
+function limpiarFiltroFechas() {
+    $('#filtro-fecha-desde').val('');
+    $('#filtro-fecha-hasta').val('');
+    if ($.fn.DataTable.isDataTable('#tabla-historial-pagos')) {
+        $('#tabla-historial-pagos').DataTable().draw();
+    }
 }
 
 function verDetallesPago(idPago) {
     const pago = historialGlobal.find(p => p.id_pago === idPago);
     if (!pago) return;
 
+    const fechaObj = new Date(pago.fecha_pago);
+    const fechaFormat = fechaObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) + ' - ' + fechaObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    let badgeEstado = pago.estado === 1 
+        ? '<span class="badge-pill-success" style="font-size: 13px; padding: 4px 12px;"><i class="fas fa-check-circle"></i> Completado</span>' 
+        : '<span class="badge-pill-danger" style="font-size: 13px; padding: 4px 12px;"><i class="fas fa-undo-alt"></i> Anulado</span>';
+
+    // Generar bloque Observaciones
+    let obsHtml = '';
+    if (!pago.observaciones || pago.observaciones.trim() === '' || pago.observaciones.toLowerCase() === 'ninguna') {
+        obsHtml = `<div style="color: var(--text-muted); font-style: italic; font-size: 13px; margin-top: 12px;"><i class="fas fa-info-circle"></i> Sin observaciones registradas.</div>`;
+    } else {
+        obsHtml = `<div style="background-color: #fffbeb; color: #92400e; border: 1px solid #fde68a; padding: 12px; border-radius: 8px; font-size: 13px; margin-top: 16px;"><i class="fas fa-exclamation-triangle" style="margin-right: 6px;"></i> <strong>Observaciones:</strong> ${pago.observaciones}</div>`;
+    }
+
     let html = `
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
-            <div><strong>Cliente Beneficiario:</strong> ${pago.cliente_nombre}</div>
-            <div><strong>Fecha:</strong> ${new Date(pago.fecha_pago).toLocaleString()}</div>
-            <div><strong>Total Pagado:</strong> ${formatMoneda(pago.monto_total)}</div>
-            <div><strong>Registrado por:</strong> ${pago.usuario_nombre}</div>
-            <div style="grid-column: span 2;"><strong>Observaciones:</strong> ${pago.observaciones || 'Ninguna'}</div>
+        <!-- HEADER VOUCHER -->
+        <div style="background: #f8fafc; border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; margin-bottom: 24px; position: relative;">
+            
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+                <div style="flex: 1; min-width: 200px;">
+                    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 16px;">
+                        <span style="font-weight: 700; color: var(--text-primary); font-size: 16px;">#PAG-${String(pago.id_pago).padStart(5, '0')}</span>
+                        ${badgeEstado}
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div>
+                            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 2px;">Beneficiario</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); line-height: 1.3;">${pago.cliente_nombre}</div>
+                        </div>
+                        <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+                            <div>
+                                <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 2px;">Fecha</div>
+                                <div style="font-size: 14px; color: var(--text-secondary);">${fechaFormat}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 2px;">Registrado por</div>
+                                <div style="font-size: 14px; color: var(--text-secondary);">${pago.usuario_nombre}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="text-align: right; background: white; padding: 12px 16px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                    <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Total Pagado</div>
+                    <div style="font-size: 22px; font-weight: 800; color: #1e293b; letter-spacing: -0.5px;">${formatMoneda(pago.monto_total)}</div>
+                </div>
+            </div>
+            ${obsHtml}
         </div>
-
-        <h4>Métodos de Pago</h4>
-        <table class="tabla-modulo" style="font-size: 13px; margin-bottom: 20px;">
-            <thead>
-                <tr>
-                    <th>Método</th>
-                    <th>Cuenta / Billetera</th>
-                    <th style="text-align: right;">Monto (S/)</th>
-                    <th>N° Operación</th>
-                    <th>Evidencia</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${(pago.metodos_pago || []).map(m => `
-                    <tr>
-                        <td>${m.metodo_pago}</td>
-                        <td>${m.cuenta_titular ? `${m.cuenta_entidad || ''} - ${m.cuenta_titular}` : (m.billetera_titular ? `${m.billetera_proveedor || ''} - ${m.billetera_titular}` : '-')}</td>
-                        <td style="text-align: right; font-weight: bold;">${formatMoneda(m.monto_pagado)}</td>
-                        <td>${m.numero_operacion || '-'}</td>
-                        <td>${m.evidencia_url ? `<a href="${m.evidencia_url}" target="_blank">Ver</a>` : '-'}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-
-        <h4>Productos Pagados</h4>
-        <table class="tabla-modulo" style="font-size: 13px;">
-            <thead>
-                <tr>
-                    <th>Viaje</th>
-                    <th>Producto</th>
-                    <th>Tipo Incidencia</th>
-                    <th style="text-align: right;">Monto Pagado (S/)</th>
-                </tr>
-            </thead>
-            <tbody>
     `;
 
-    pago.detalles.forEach(d => {
+    // MÉTODOS DE PAGO
+    html += `<h4 style="margin-bottom: 16px; color: var(--text-primary); display: flex; align-items: center; gap: 8px;"><i class="fas fa-wallet" style="color: var(--brand-blue);"></i> Métodos de Pago Aplicados</h4>`;
+    html += `<div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px;">`;
+
+    (pago.metodos_pago || []).forEach(m => {
+        let iconHtml = '';
+        if (m.metodo_pago === 'Efectivo') iconHtml = '<i class="fas fa-money-bill-wave" style="color: #10b981;"></i>';
+        else if (m.metodo_pago === 'Transferencia') iconHtml = '<i class="fas fa-university" style="color: #3b82f6;"></i>';
+        else iconHtml = '<i class="fas fa-mobile-alt" style="color: #8b5cf6;"></i>'; // Billetera Digital
+
+        let detalleMedio = m.cuenta_titular ? `${m.cuenta_entidad || ''} - ${m.cuenta_titular}` : (m.billetera_titular ? `${m.billetera_proveedor || ''} - ${m.billetera_titular}` : 'Pago directo en caja');
+        let nOperacionHtml = m.numero_operacion ? `<span style="font-size: 12px; color: var(--text-muted); background: #f1f5f9; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">Op: ${m.numero_operacion}</span>` : '';
+        let evidenciaHtml = m.evidencia_url ? `<a href="${m.evidencia_url}" target="_blank" style="font-size: 12px; color: #3b82f6; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fas fa-paperclip"></i> Ver Comprobante</a>` : '';
+
         html += `
-            <tr>
-                <td>${d.viaje_correlativo}</td>
-                <td>${d.producto_nombre}</td>
-                <td>${d.tipo_incidencia || 'Siniestro'}</td>
-                <td style="text-align: right; font-weight: bold;">${formatMoneda(d.monto_pagado)}</td>
-            </tr>
+            <div style="display: flex; align-items: center; justify-content: space-between; background: white; border: 1px solid var(--border-light); border-radius: 10px; padding: 16px; transition: border-color 0.2s;">
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div style="width: 42px; height: 42px; border-radius: 50%; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                        ${iconHtml}
+                    </div>
+                    <div>
+                        <div style="font-weight: 700; color: var(--text-primary); font-size: 14px; margin-bottom: 2px;">${m.metodo_pago}</div>
+                        <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">${detalleMedio}</div>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            ${nOperacionHtml}
+                            ${evidenciaHtml}
+                        </div>
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Monto Asignado</div>
+                    <div style="font-size: 18px; font-weight: 800; color: #1e293b;">${formatMoneda(m.monto_pagado)}</div>
+                </div>
+            </div>
+        `;
+    });
+    html += `</div>`;
+
+    // DIVIDER
+    html += `<div style="border-bottom: 1px dashed #cbd5e1; margin-bottom: 24px;"></div>`;
+
+    // PRODUCTOS PAGADOS
+    html += `<h4 style="margin-bottom: 16px; color: var(--text-primary); display: flex; align-items: center; gap: 8px;"><i class="fas fa-box-open" style="color: var(--brand-blue);"></i> Productos Cubiertos</h4>`;
+    html += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">`;
+
+    pago.detalles.forEach(d => {
+        let badgeIncidencia = d.tipo_incidencia === 'Accidente' ? '<span class="badge-pill-danger" style="font-size: 10px; padding: 2px 8px;">Accidente</span>' : (d.tipo_incidencia === 'Rechazo' ? '<span class="badge-pill-mixed" style="font-size: 10px; padding: 2px 8px; background: #fff7ed; color: #c2410c; border-color: #ffedd5;">Rechazo</span>' : '<span class="badge-pill-mixed" style="font-size: 10px; padding: 2px 8px;">Siniestro</span>');
+
+        html += `
+            <div style="background: white; border: 1px solid var(--border-light); border-radius: 10px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <div>
+                        <div style="font-size: 12px; font-weight: 700; color: var(--brand-blue); margin-bottom: 2px;">Viaje ${d.viaje_correlativo}</div>
+                        <div style="font-weight: 700; color: var(--text-primary); font-size: 14px; padding-right: 8px;">${d.producto_nombre}</div>
+                    </div>
+                    <div>${badgeIncidencia}</div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid #f1f5f9; padding-top: 12px;">
+                    <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Subtotal Pagado</span>
+                    <span style="font-size: 16px; font-weight: 800; color: #1e293b;">${formatMoneda(d.monto_pagado)}</span>
+                </div>
+            </div>
         `;
     });
 
-    html += `</tbody></table>`;
-    
+    html += `</div>`;
+
     document.getElementById('contenidoDetallesPago').innerHTML = html;
     document.getElementById('modalDetallesPago').style.display = 'flex';
 }
