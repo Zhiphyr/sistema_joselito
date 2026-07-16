@@ -69,6 +69,7 @@ const getDeudasPendientes = async (req, res) => {
         const [deudas] = await db.query(`
             SELECT 
                 v.id_viaje, CONCAT('#', v.id_viaje) as viaje_correlativo, v.fecha_creacion as viaje_fecha,
+                rt.ciudad_origen, rt.ciudad_destino,
                 cg.id_carga, CONCAT('#', cg.id_carga) as carga_correlativo,
                 rem.id_cliente as remitente_id, rem.nombre_razon_social as remitente_nombre,
                 dest.id_cliente as destinatario_id, dest.nombre_razon_social as destinatario_nombre,
@@ -82,6 +83,7 @@ const getDeudasPendientes = async (req, res) => {
             JOIN productos p ON dc.id_producto = p.id_producto
             JOIN carga cg ON dc.id_carga = cg.id_carga
             JOIN viaje v ON cg.id_viaje = v.id_viaje
+            LEFT JOIN rutas rt ON v.id_ruta = rt.id_ruta
             JOIN clientes rem ON cg.id_remitente = rem.id_cliente
             JOIN clientes dest ON cg.id_destinatario = dest.id_cliente
             WHERE idc.estado_pago_cliente = 'Pendiente' AND idc.subtotal_indemnizar > 0
@@ -98,6 +100,8 @@ const getDeudasPendientes = async (req, res) => {
                     id_viaje: row.id_viaje,
                     viaje_correlativo: row.viaje_correlativo,
                     viaje_fecha: row.viaje_fecha,
+                    ruta_origen: row.ciudad_origen,
+                    ruta_destino: row.ciudad_destino,
                     cargas: {}
                 };
             }
@@ -177,8 +181,32 @@ const registrarPago = async (req, res) => {
     }
 
     for (let i = 0; i < pagos.length; i++) {
-        if (pagos[i].metodo_pago !== 'Efectivo' && !pagos[i].numero_operacion) {
-            return res.status(400).json({ success: false, message: `El número de operación es obligatorio para el pago #${i + 1} (${pagos[i].metodo_pago}).` });
+        const p = pagos[i];
+        if (p.metodo_pago === 'Efectivo') continue;
+        if (!p.numero_operacion) {
+            return res.status(400).json({ success: false, message: `El número de operación es obligatorio para el pago #${i + 1} (${p.metodo_pago}).` });
+        }
+        if (!/^\d{6,8}$/.test(p.numero_operacion)) {
+            return res.status(400).json({ success: false, message: `El número de operación del pago #${i + 1} debe tener solo números, entre 6 y 8 dígitos.` });
+        }
+    }
+
+    // El número de operación de un pago no-efectivo debe ser único: ni repetido dentro
+    // del mismo carrito, ni ya usado en un pago de indemnización previo (activo).
+    const numerosOperacion = pagos.filter(p => p.metodo_pago !== 'Efectivo').map(p => p.numero_operacion);
+    const numeroRepetido = numerosOperacion.find((n, i) => numerosOperacion.indexOf(n) !== i);
+    if (numeroRepetido) {
+        return res.status(400).json({ success: false, message: `El número de operación "${numeroRepetido}" está repetido entre los métodos de pago.` });
+    }
+    if (numerosOperacion.length > 0) {
+        const [existentes] = await db.query(`
+            SELECT dpi.numero_operacion
+            FROM detalle_pago_indemnizacion dpi
+            JOIN pago_indemnizacion pi ON dpi.id_pago = pi.id_pago
+            WHERE pi.estado = 1 AND dpi.numero_operacion IN (?)
+        `, [numerosOperacion]);
+        if (existentes.length > 0) {
+            return res.status(400).json({ success: false, message: `El número de operación "${existentes[0].numero_operacion}" ya fue registrado en otro pago.` });
         }
     }
 
@@ -340,6 +368,25 @@ const getHistorialPagos = async (req, res) => {
     }
 };
 
+const verificarNumeroOperacion = async (req, res) => {
+    const { numero_operacion } = req.query;
+    if (!numero_operacion) {
+        return res.status(400).json({ success: false, message: 'Falta el número de operación a verificar.' });
+    }
+    try {
+        const [rows] = await db.query(`
+            SELECT COUNT(*) as total
+            FROM detalle_pago_indemnizacion dpi
+            JOIN pago_indemnizacion pi ON dpi.id_pago = pi.id_pago
+            WHERE dpi.numero_operacion = ? AND pi.estado = 1
+        `, [numero_operacion]);
+        res.json({ success: true, existe: rows[0].total > 0 });
+    } catch (error) {
+        console.error('Error al verificar número de operación:', error);
+        res.status(500).json({ success: false, message: 'Error interno al verificar el número de operación.' });
+    }
+};
+
 const anularPago = async (req, res) => {
     const { id_pago } = req.params;
     const connection = await db.getConnection();
@@ -385,5 +432,6 @@ module.exports = {
     getDeudasPendientes,
     registrarPago,
     getHistorialPagos,
-    anularPago
+    anularPago,
+    verificarNumeroOperacion
 };

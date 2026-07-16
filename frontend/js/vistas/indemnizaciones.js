@@ -79,8 +79,11 @@ function renderizarDeudasPendientes(viajes) {
     let html = '';
     viajes.forEach(viaje => {
         let cargasHtml = '';
+        let totalAdeudadoViaje = 0;
+        let numeroCargasAfectadas = viaje.cargas.length;
 
         viaje.cargas.forEach(carga => {
+            totalAdeudadoViaje += carga.total_deuda_carga;
             let detallesHtml = `
                 <table class="tabla-modulo" style="margin-top: 12px;">
                     <thead>
@@ -146,17 +149,41 @@ function renderizarDeudasPendientes(viajes) {
             `;
         });
 
+        const rutaTexto = (viaje.ruta_origen && viaje.ruta_destino) ? `${viaje.ruta_origen} - ${viaje.ruta_destino}` : 'Sin ruta especificada';
+
         html += `
-            <div class="viaje-card">
-                <div class="viaje-card-header" onclick="toggleDetallesViaje(${viaje.id_viaje})">
-                    <div>
-                        <h3><i class="fas fa-truck" style="color: #64748b; margin-right: 8px;"></i>Viaje ${viaje.viaje_correlativo || '#' + viaje.id_viaje}</h3>
-                        <p>Fecha: ${new Date(viaje.viaje_fecha).toLocaleDateString()}</p>
+            <div class="viaje-card" style="border-left: 4px solid var(--brand-blue);">
+                <div class="viaje-card-header" onclick="toggleDetallesViaje(${viaje.id_viaje})" style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 15px; align-items: center; width: 100%;">
+                    
+                    <!-- Columna Izquierda: Identidad -->
+                    <div style="min-width: 0;">
+                        <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 6px;"><i class="fas fa-truck" style="color: var(--brand-blue); margin-right: 8px;"></i>Viaje ${viaje.viaje_correlativo || '#' + viaje.id_viaje}</h3>
+                        <p style="margin: 0; font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            <i class="far fa-calendar-alt" style="margin-right: 4px;"></i>${new Date(viaje.viaje_fecha).toLocaleDateString()} &nbsp;|&nbsp; 
+                            <i class="fas fa-map-marker-alt" style="margin-right: 4px;"></i>${rutaTexto}
+                        </p>
                     </div>
-                    <i class="fas fa-chevron-down chevron" id="icon-toggle-${viaje.id_viaje}"></i>
+
+                    <!-- Columna Centro: Contexto -->
+                    <div style="text-align: center;">
+                        <span class="badge" style="font-size: 12px; padding: 6px 12px; background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5;">
+                            <i class="fas fa-exclamation-triangle" style="margin-right: 5px;"></i>${numeroCargasAfectadas} Cargas afectadas
+                        </span>
+                    </div>
+
+                    <!-- Columna Derecha: Impacto y Acción -->
+                    <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end;">
+                        <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Total Adeudado</span>
+                        <div style="display: flex; align-items: center; gap: 16px; margin-top: 2px;">
+                            <strong style="color: #ef4444; font-size: 18px;">${formatMoneda(totalAdeudadoViaje)}</strong>
+                            <div style="display: flex; align-items: center; gap: 6px; color: var(--brand-blue); font-size: 13px; font-weight: 600; padding: 4px 8px; background-color: #f0f9ff; border-radius: 6px;">
+                                Revisar <i class="fas fa-chevron-down chevron" id="icon-toggle-${viaje.id_viaje}" style="transition: transform 0.3s ease;"></i>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div id="detalles-viaje-${viaje.id_viaje}" class="viaje-card-body" style="display: none;">
+                <div id="detalles-viaje-${viaje.id_viaje}" class="viaje-card-body" style="display: none; border-top: 1px solid var(--border-light);">
                     ${cargasHtml}
                 </div>
             </div>
@@ -229,6 +256,7 @@ function abrirModalPago(idViaje, idCarga) {
     `;
 
     document.getElementById('pagoMontoTotal').value = total.toFixed(2);
+    document.getElementById('pagoMontoTotalDisplay').textContent = formatMoneda(total);
 
     // Configurar beneficiario
     const selectBeneficiario = document.getElementById('pagoIdCliente');
@@ -256,6 +284,7 @@ function abrirModalPago(idViaje, idCarga) {
         id_billetera: null,
         monto_pagado: total,
         numero_operacion: '',
+        numOpEstado: null,
         evidencia_file: null
     }];
     renderizarCarritoPagosIndem();
@@ -274,19 +303,51 @@ function obtenerMontoTotalIndem() {
     return parseFloat(document.getElementById('pagoMontoTotal').value) || 0;
 }
 
+// Verdadero solo si TODO lo obligatorio del formulario está completo y correcto:
+// beneficiario elegido, al menos una línea de pago, cada línea con sus campos
+// requeridos según su método (cuenta/billetera/N° operación válido y ya verificado
+// contra el historial), montos > 0, y la suma exactamente igual al Monto Total a Pagar.
+function formularioPagoIndemEsValido(diferencia) {
+    const idClienteSeleccionado = !!(document.getElementById('pagoIdCliente') || {}).value;
+    if (!idClienteSeleccionado) return false;
+    if (carritoPagosIndem.length === 0) return false;
+    if (Math.abs(diferencia) > 0.009) return false;
+
+    const numerosVistos = new Set();
+    for (const pago of carritoPagosIndem) {
+        if ((Number(pago.monto_pagado) || 0) <= 0) return false;
+        if (pago.metodo_pago === 'Transferencia' && !pago.id_cuenta) return false;
+        if (pago.metodo_pago === 'Billetera Digital' && !pago.id_billetera) return false;
+
+        if (pago.metodo_pago !== 'Efectivo') {
+            if (!/^\d{6,8}$/.test(pago.numero_operacion || '')) return false;
+            if (numerosVistos.has(pago.numero_operacion)) return false;
+            numerosVistos.add(pago.numero_operacion);
+            if (pago.numOpEstado !== 'valido') return false;
+        }
+    }
+
+    return true;
+}
+
 function actualizarFaltaPagarIndem() {
     const montoTotal = obtenerMontoTotalIndem();
     const sumaPagos = carritoPagosIndem.reduce((acc, p) => acc + (Number(p.monto_pagado) || 0), 0);
-    const falta = Math.round((montoTotal - sumaPagos) * 100) / 100;
+    // diferencia > 0: falta pagar; diferencia < 0: se excedió del monto total
+    const diferencia = Math.round((montoTotal - sumaPagos) * 100) / 100;
 
     const badge = document.getElementById('indemFaltaPagar');
     if (badge) {
-        if (falta <= 0.001) {
+        if (Math.abs(diferencia) <= 0.009) {
             badge.textContent = 'Pago Completo';
             badge.style.color = '#166534';
             badge.style.background = '#dcfce7';
+        } else if (diferencia > 0) {
+            badge.textContent = `Falta Pagar: S/ ${diferencia.toFixed(2)}`;
+            badge.style.color = '#ef4444';
+            badge.style.background = '#fee2e2';
         } else {
-            badge.textContent = `Falta Pagar: S/ ${falta.toFixed(2)}`;
+            badge.textContent = `Excede por: S/ ${Math.abs(diferencia).toFixed(2)}`;
             badge.style.color = '#ef4444';
             badge.style.background = '#fee2e2';
         }
@@ -294,13 +355,36 @@ function actualizarFaltaPagarIndem() {
 
     const btnGuardar = document.getElementById('btnGuardarPago');
     if (btnGuardar) {
-        btnGuardar.disabled = Math.abs(falta) > 0.009 || carritoPagosIndem.length === 0;
+        btnGuardar.disabled = !formularioPagoIndemEsValido(diferencia);
     }
 
     const btnAgregar = document.getElementById('btnAgregarPagoIndem');
     if (btnAgregar) {
-        btnAgregar.style.display = falta <= 0.001 ? 'none' : 'flex';
+        btnAgregar.style.display = diferencia <= 0.009 ? 'none' : 'flex';
     }
+
+    // Por cada línea: calcular en tiempo real cuál es el máximo que podría tener sin que
+    // la suma total exceda el Monto Total a Pagar, y marcar en rojo la que ya lo excede.
+    carritoPagosIndem.forEach((pago, index) => {
+        const montoLinea = Number(pago.monto_pagado) || 0;
+        const sumaOtrasLineas = sumaPagos - montoLinea;
+        const maxLinea = Math.max(0, Math.round((montoTotal - sumaOtrasLineas) * 100) / 100);
+        const excedeLinea = montoLinea > maxLinea + 0.009;
+
+        const input = document.getElementById(`montoInputIndem_${index}`);
+        if (input) {
+            input.style.borderColor = excedeLinea ? '#ef4444' : '';
+            input.style.background = excedeLinea ? '#fff5f5' : '';
+        }
+
+        const hint = document.getElementById(`montoHintIndem_${index}`);
+        if (hint) {
+            hint.classList.toggle('excede', excedeLinea);
+            hint.innerHTML = excedeLinea
+                ? `<i class="fas fa-exclamation-circle"></i> Excede el máximo disponible (S/ ${maxLinea.toFixed(2)})`
+                : `Máximo disponible: S/ ${maxLinea.toFixed(2)}`;
+        }
+    });
 }
 
 function renderizarCarritoPagosIndem() {
@@ -355,7 +439,8 @@ function renderizarCarritoPagosIndem() {
                 </div>
                 <div class="pago-linea-campo">
                     <label>Monto (S/)</label>
-                    <input type="text" inputmode="decimal" value="${pago.monto_pagado || ''}" oninput="validarMontoIndem(${index}, this)" onblur="formatearMontoIndem(${index}, this)" placeholder="0.00" class="form-control">
+                    <input type="text" inputmode="decimal" id="montoInputIndem_${index}" value="${pago.monto_pagado || ''}" oninput="validarMontoIndem(${index}, this)" onblur="formatearMontoIndem(${index}, this)" placeholder="0.00" class="form-control">
+                    <div id="montoHintIndem_${index}" class="pago-monto-hint"></div>
                 </div>
             </div>
 
@@ -377,7 +462,8 @@ function renderizarCarritoPagosIndem() {
 
             <div class="pago-linea-campo" style="display: ${mostrarNumOp ? 'block' : 'none'};">
                 <label>N° Operación *</label>
-                <input type="text" value="${pago.numero_operacion || ''}" oninput="actualizarPagoIndem(${index}, 'numero_operacion', this.value)" placeholder="Ej: 00012345" class="form-control">
+                <input type="text" inputmode="numeric" value="${pago.numero_operacion || ''}" oninput="validarNumeroOperacionIndem(${index}, this)" placeholder="Ej: 00012345" class="form-control">
+                <div id="numOpHintIndem_${index}" class="pago-monto-hint"></div>
             </div>
 
             <div style="display: ${mostrarEvidencia ? 'block' : 'none'};">
@@ -421,6 +507,7 @@ function agregarNuevoPagoIndem() {
         id_billetera: null,
         monto_pagado: restante,
         numero_operacion: '',
+        numOpEstado: null,
         evidencia_file: null
     });
     renderizarCarritoPagosIndem();
@@ -440,6 +527,7 @@ function actualizarPagoIndem(index, campo, valor) {
         carritoPagosIndem[index].id_cuenta = null;
         carritoPagosIndem[index].id_billetera = null;
         carritoPagosIndem[index].numero_operacion = '';
+        carritoPagosIndem[index].numOpEstado = null;
         carritoPagosIndem[index].evidencia_file = null;
         renderizarCarritoPagosIndem();
         return;
@@ -447,15 +535,26 @@ function actualizarPagoIndem(index, campo, valor) {
 
     if (campo === 'monto_pagado') {
         carritoPagosIndem[index].monto_pagado = Number(valor) || 0;
-        actualizarFaltaPagarIndem();
     }
+
+    // También cubre id_cuenta/id_billetera: cambian si la línea cumple sus requisitos
+    actualizarFaltaPagarIndem();
 }
 
 function validarMontoIndem(index, input) {
+    // Solo dígitos y un punto decimal, tope decimal(10,2): 8 enteros + 2 decimales
     let valor = input.value.replace(/[^0-9.]/g, '');
     const partes = valor.split('.');
-    if (partes.length > 2) valor = partes[0] + '.' + partes.slice(1).join('');
-    if (partes.length === 2 && partes[1].length > 2) valor = partes[0] + '.' + partes[1].substring(0, 2);
+    if (partes.length > 2) {
+        valor = partes[0] + '.' + partes.slice(1).join('');
+    }
+    if (partes[0] && partes[0].length > 8) {
+        partes[0] = partes[0].substring(0, 8);
+        valor = partes.length > 1 ? partes[0] + '.' + partes[1] : partes[0];
+    }
+    if (partes.length === 2 && partes[1].length > 2) {
+        valor = partes[0] + '.' + partes[1].substring(0, 2);
+    }
 
     input.value = valor;
     carritoPagosIndem[index].monto_pagado = Number(valor) || 0;
@@ -465,9 +564,77 @@ function validarMontoIndem(index, input) {
 function formatearMontoIndem(index, input) {
     let val = parseFloat(input.value);
     if (isNaN(val) || val < 0) val = 0;
+    if (val > 99999999.99) val = 99999999.99;
     input.value = val.toFixed(2);
     carritoPagosIndem[index].monto_pagado = val;
     actualizarFaltaPagarIndem();
+}
+
+function validarNumeroOperacionIndem(index, input) {
+    const valor = input.value.replace(/[^0-9]/g, '').substring(0, 8);
+    input.value = valor;
+    if (!carritoPagosIndem[index]) return;
+    carritoPagosIndem[index].numero_operacion = valor;
+
+    const hint = document.getElementById(`numOpHintIndem_${index}`);
+
+    if (valor.length === 0) {
+        carritoPagosIndem[index].numOpEstado = null;
+        if (hint) { hint.classList.remove('excede'); hint.textContent = ''; }
+        actualizarFaltaPagarIndem();
+        return;
+    }
+    if (valor.length < 6) {
+        carritoPagosIndem[index].numOpEstado = 'invalido';
+        if (hint) { hint.classList.add('excede'); hint.innerHTML = `<i class="fas fa-exclamation-circle"></i> Debe tener mínimo 6 dígitos (van ${valor.length})`; }
+        actualizarFaltaPagarIndem();
+        return;
+    }
+
+    const duplicadoLocal = carritoPagosIndem.some((p, i) => i !== index && p.metodo_pago !== 'Efectivo' && p.numero_operacion === valor);
+    if (duplicadoLocal) {
+        carritoPagosIndem[index].numOpEstado = 'duplicado';
+        if (hint) { hint.classList.add('excede'); hint.innerHTML = `<i class="fas fa-exclamation-circle"></i> Ya usaste este número en otro método de pago de este formulario.`; }
+        actualizarFaltaPagarIndem();
+        return;
+    }
+
+    carritoPagosIndem[index].numOpEstado = 'verificando';
+    if (hint) { hint.classList.remove('excede'); hint.textContent = 'Verificando...'; }
+    actualizarFaltaPagarIndem();
+
+    clearTimeout(window[`numOpTimerIndem_${index}`]);
+    window[`numOpTimerIndem_${index}`] = setTimeout(() => verificarNumeroOperacionIndem(index, valor), 500);
+}
+
+async function verificarNumeroOperacionIndem(index, valor) {
+    // Si el valor cambió mientras esperábamos la respuesta, no pisar el hint actual
+    if (!carritoPagosIndem[index] || carritoPagosIndem[index].numero_operacion !== valor) return;
+
+    const hint = document.getElementById(`numOpHintIndem_${index}`);
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const response = await fetch(`/api/indemnizaciones/verificar-operacion?numero_operacion=${encodeURIComponent(valor)}`, {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const result = await response.json();
+
+        if (!carritoPagosIndem[index] || carritoPagosIndem[index].numero_operacion !== valor) return;
+
+        if (result.success && result.existe) {
+            carritoPagosIndem[index].numOpEstado = 'duplicado';
+            if (hint) { hint.classList.add('excede'); hint.innerHTML = `<i class="fas fa-exclamation-circle"></i> Este número de operación ya fue registrado en otro pago.`; }
+        } else {
+            carritoPagosIndem[index].numOpEstado = 'valido';
+            if (hint) { hint.classList.remove('excede'); hint.textContent = ''; }
+        }
+    } catch (error) {
+        console.error('Error verificando número de operación:', error);
+        // Ante un error de red no bloqueamos el formulario: procesarPago() revalida al enviar.
+        carritoPagosIndem[index].numOpEstado = 'valido';
+    } finally {
+        actualizarFaltaPagarIndem();
+    }
 }
 
 function validarYSubirEvidenciaIndem(index, files) {
@@ -532,12 +699,9 @@ async function procesarPago() {
         return;
     }
 
+    const numerosVistos = new Set();
     for (let i = 0; i < carritoPagosIndem.length; i++) {
         const p = carritoPagosIndem[i];
-        if (p.metodo_pago !== 'Efectivo' && !p.numero_operacion) {
-            Swal.fire({ icon: 'warning', title: 'Falta N° de Operación', text: `El N° de Operación es obligatorio para el pago #${i + 1} (${p.metodo_pago}).` });
-            return;
-        }
         if (p.metodo_pago === 'Transferencia' && !p.id_cuenta) {
             Swal.fire({ icon: 'warning', title: 'Falta cuenta', text: `Seleccione la cuenta bancaria para el pago #${i + 1}.` });
             return;
@@ -546,12 +710,43 @@ async function procesarPago() {
             Swal.fire({ icon: 'warning', title: 'Falta billetera', text: `Seleccione la billetera digital para el pago #${i + 1}.` });
             return;
         }
+        if (p.metodo_pago === 'Efectivo') continue;
+
+        if (!/^\d{6,8}$/.test(p.numero_operacion || '')) {
+            Swal.fire({ icon: 'warning', title: 'N° de Operación inválido', text: `El pago #${i + 1} (${p.metodo_pago}) debe tener un N° de Operación de solo números, entre 6 y 8 dígitos.` });
+            return;
+        }
+        if (numerosVistos.has(p.numero_operacion)) {
+            Swal.fire({ icon: 'warning', title: 'N° de Operación repetido', text: `El N° de Operación "${p.numero_operacion}" está repetido entre los métodos de pago.` });
+            return;
+        }
+        numerosVistos.add(p.numero_operacion);
     }
 
     const sumaPagos = carritoPagosIndem.reduce((acc, p) => acc + (Number(p.monto_pagado) || 0), 0);
     if (Math.abs(sumaPagos - parseFloat(monto)) >= 0.01) {
         Swal.fire({ icon: 'error', title: 'Montos no coinciden', text: 'La suma de los métodos de pago debe ser igual al Monto Total a Pagar.' });
         return;
+    }
+
+    // Revalidar unicidad contra el historial justo antes de enviar (el hint en vivo puede
+    // haber quedado desactualizado si el usuario escribió y envió muy rápido).
+    const sessionDataCheck = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+    for (let i = 0; i < carritoPagosIndem.length; i++) {
+        const p = carritoPagosIndem[i];
+        if (p.metodo_pago === 'Efectivo') continue;
+        try {
+            const resp = await fetch(`/api/indemnizaciones/verificar-operacion?numero_operacion=${encodeURIComponent(p.numero_operacion)}`, {
+                headers: { 'x-user-profile': sessionDataCheck.id_perfil }
+            });
+            const json = await resp.json();
+            if (json.success && json.existe) {
+                Swal.fire({ icon: 'error', title: 'N° de Operación ya registrado', text: `El N° de Operación "${p.numero_operacion}" del pago #${i + 1} ya fue usado en otro pago.` });
+                return;
+            }
+        } catch (error) {
+            console.error('Error verificando número de operación:', error);
+        }
     }
 
     const detalles = window.detallesParaPagar.map(det => ({
