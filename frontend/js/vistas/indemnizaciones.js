@@ -1,0 +1,815 @@
+// Variables globales para la vista
+let deudasGlobales = [];
+let cargaSeleccionadaPago = null;
+let cuentasIndem = [];
+let billeterasIndem = [];
+let carritoPagosIndem = [];
+
+// Inicialización de la vista
+window.init_indemnizaciones = async function() {
+    await cargarCuentasYBilleterasIndem();
+    await cargarDeudasPendientes();
+}
+
+async function cargarCuentasYBilleterasIndem() {
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const response = await fetch('/api/cuentas-bancarias', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const result = await response.json();
+        if (result.success) {
+            cuentasIndem = result.data.cuentas || [];
+            billeterasIndem = result.data.billeteras || [];
+        }
+    } catch (error) {
+        console.error('Error cargando cuentas y billeteras:', error);
+    }
+}
+
+function cambiarTabIndemnizaciones(tabId) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+        content.style.display = 'none';
+    });
+
+    document.getElementById(`tab-${tabId}`).classList.add('active');
+    document.getElementById(`content-${tabId}`).classList.add('active');
+    document.getElementById(`content-${tabId}`).style.display = 'block';
+
+    if (tabId === 'pendientes') {
+        cargarDeudasPendientes();
+    } else if (tabId === 'historial') {
+        cargarHistorialPagos();
+    }
+}
+
+async function cargarDeudasPendientes() {
+    const contenedor = document.getElementById('contenedorDeudas');
+    contenedor.innerHTML = '<div style="text-align: center; padding: 30px;"><i class="fas fa-spinner fa-spin fa-2x"></i><p>Cargando deudas...</p></div>';
+
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const response = await fetch('/api/indemnizaciones/pendientes', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            deudasGlobales = result.data;
+            renderizarDeudasPendientes(deudasGlobales);
+        } else {
+            contenedor.innerHTML = `<div class="alert-error">${result.message}</div>`;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        contenedor.innerHTML = '<div class="alert-error">Error al cargar las deudas pendientes.</div>';
+    }
+}
+
+function renderizarDeudasPendientes(viajes) {
+    const contenedor = document.getElementById('contenedorDeudas');
+
+    if (viajes.length === 0) {
+        contenedor.innerHTML = '<div style="text-align: center; padding: 30px; color: #64748b;">No hay indemnizaciones pendientes por pagar.</div>';
+        return;
+    }
+
+    let html = '';
+    viajes.forEach(viaje => {
+        let cargasHtml = '';
+
+        viaje.cargas.forEach(carga => {
+            let detallesHtml = `
+                <table class="tabla-modulo" style="margin-top: 12px;">
+                    <thead>
+                        <tr>
+                            <th class="tabla-th" style="width: 40px; text-align: center;">
+                                <input type="checkbox" onchange="toggleSelectAllDetalles(this, ${viaje.id_viaje}, ${carga.id_carga})">
+                            </th>
+                            <th class="tabla-th">Producto</th>
+                            <th class="tabla-th">Siniestro</th>
+                            <th class="tabla-th">Cant/Peso</th>
+                            <th class="tabla-th" style="text-align: right;">S/ Acordado</th>
+                            <th class="tabla-th" style="text-align: right;">Subtotal (S/)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            carga.detalles.forEach(det => {
+                detallesHtml += `
+                    <tr class="tabla-tr">
+                        <td class="tabla-td" style="text-align: center;">
+                            <input type="checkbox" class="chk-detalle-${viaje.id_viaje}-${carga.id_carga}" value='${JSON.stringify(det)}' onchange="calcularTotalPagoCarga(${viaje.id_viaje}, ${carga.id_carga})">
+                        </td>
+                        <td class="tabla-td">${det.producto_nombre}</td>
+                        <td class="tabla-td"><span class="badge ${det.tipo_incidencia === 'Rechazo' ? 'badge-warning' : 'badge-danger'}">${det.tipo_incidencia}</span></td>
+                        <td class="tabla-td">${det.cantidad_sacos > 0 ? det.cantidad_sacos + ' sacos' : det.peso_total + ' kg'}</td>
+                        <td class="tabla-td" style="text-align: right;">${formatMoneda(det.precio_unitario_acordado)}</td>
+                        <td class="tabla-td" style="text-align: right; font-weight: bold;">${formatMoneda(det.subtotal_indemnizar)}</td>
+                    </tr>
+                `;
+            });
+
+            detallesHtml += `</tbody></table>`;
+
+            cargasHtml += `
+                <div class="carga-card">
+                    <div class="carga-card-header">
+                        <div>
+                            <h4>Carga ${carga.carga_correlativo || carga.id_carga}</h4>
+                            <p>
+                                <strong>Remitente:</strong> ${carga.remitente_nombre} <i class="fas fa-arrow-right" style="margin: 0 5px; color:#cbd5e1;"></i>
+                                <strong>Destinatario:</strong> ${carga.destinatario_nombre}
+                            </p>
+                        </div>
+                        <div class="carga-card-total">
+                            <span>Siniestros de Carga</span>
+                            <strong>${formatMoneda(carga.total_deuda_carga)}</strong>
+                        </div>
+                    </div>
+
+                    ${detallesHtml}
+
+                    <div class="carga-card-footer">
+                        <div>
+                            <span class="seleccionado-label">Seleccionado:</span>
+                            <span id="total-seleccionado-${viaje.id_viaje}-${carga.id_carga}" class="seleccionado-monto">S/ 0.00</span>
+                        </div>
+                        <button class="btn-primary" onclick="abrirModalPago(${viaje.id_viaje}, ${carga.id_carga})" id="btn-pagar-${viaje.id_viaje}-${carga.id_carga}" disabled style="padding: 8px 16px; font-size: 13px;">
+                            <i class="fas fa-handshake"></i> Pagar a Cliente
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `
+            <div class="viaje-card">
+                <div class="viaje-card-header" onclick="toggleDetallesViaje(${viaje.id_viaje})">
+                    <div>
+                        <h3><i class="fas fa-truck" style="color: #64748b; margin-right: 8px;"></i>Viaje ${viaje.viaje_correlativo || '#' + viaje.id_viaje}</h3>
+                        <p>Fecha: ${new Date(viaje.viaje_fecha).toLocaleDateString()}</p>
+                    </div>
+                    <i class="fas fa-chevron-down chevron" id="icon-toggle-${viaje.id_viaje}"></i>
+                </div>
+
+                <div id="detalles-viaje-${viaje.id_viaje}" class="viaje-card-body" style="display: none;">
+                    ${cargasHtml}
+                </div>
+            </div>
+        `;
+    });
+
+    contenedor.innerHTML = html;
+}
+
+function toggleDetallesViaje(idViaje) {
+    const div = document.getElementById(`detalles-viaje-${idViaje}`);
+    const icon = document.getElementById(`icon-toggle-${idViaje}`);
+
+    if (div.style.display === 'none') {
+        div.style.display = 'flex';
+        icon.classList.add('rotated');
+    } else {
+        div.style.display = 'none';
+        icon.classList.remove('rotated');
+    }
+}
+
+function toggleSelectAllDetalles(checkbox, idViaje, idCarga) {
+    const checkboxes = document.querySelectorAll(`.chk-detalle-${idViaje}-${idCarga}`);
+    checkboxes.forEach(chk => chk.checked = checkbox.checked);
+    calcularTotalPagoCarga(idViaje, idCarga);
+}
+
+function calcularTotalPagoCarga(idViaje, idCarga) {
+    const checkboxes = document.querySelectorAll(`.chk-detalle-${idViaje}-${idCarga}:checked`);
+    let total = 0;
+    checkboxes.forEach(chk => {
+        const det = JSON.parse(chk.value);
+        total += parseFloat(det.subtotal_indemnizar);
+    });
+
+    document.getElementById(`total-seleccionado-${idViaje}-${idCarga}`).textContent = formatMoneda(total);
+    const btnPagar = document.getElementById(`btn-pagar-${idViaje}-${idCarga}`);
+    btnPagar.disabled = checkboxes.length === 0;
+}
+
+function abrirModalPago(idViaje, idCarga) {
+    const viaje = deudasGlobales.find(v => v.id_viaje === idViaje);
+    if (!viaje) return;
+    const carga = viaje.cargas.find(c => c.id_carga === idCarga);
+    if (!carga) return;
+    
+    cargaSeleccionadaPago = carga;
+
+    const checkboxes = document.querySelectorAll(`.chk-detalle-${idViaje}-${idCarga}:checked`);
+    const detallesAPagar = [];
+    let total = 0;
+
+    checkboxes.forEach(chk => {
+        const det = JSON.parse(chk.value);
+        detallesAPagar.push(det);
+        total += parseFloat(det.subtotal_indemnizar);
+    });
+
+    // Resetear formulario antes de rellenarlo, para no perder los valores que se setean abajo
+    document.getElementById('formPagarIndemnizacion').reset();
+
+    // Llenar info modal
+    document.getElementById('infoClientePago').innerHTML = `
+        <strong>Viaje:</strong> ${viaje.viaje_correlativo || '#' + viaje.id_viaje} &nbsp;|&nbsp; <strong>Carga:</strong> ${carga.carga_correlativo || carga.id_carga}<br>
+        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #cbd5e1;">
+            <p style="margin: 0; font-size: 13px;"><strong>Remitente:</strong> ${carga.remitente_nombre}</p>
+            <p style="margin: 4px 0 0; font-size: 13px;"><strong>Destinatario:</strong> ${carga.destinatario_nombre}</p>
+        </div>
+    `;
+
+    document.getElementById('pagoMontoTotal').value = total.toFixed(2);
+
+    // Configurar beneficiario
+    const selectBeneficiario = document.getElementById('pagoIdCliente');
+    selectBeneficiario.innerHTML = `
+        <option value="">Seleccione...</option>
+        <option value="${carga.remitente_id}">Remitente: ${carga.remitente_nombre}</option>
+        <option value="${carga.destinatario_id}">Destinatario: ${carga.destinatario_nombre}</option>
+    `;
+
+    // Llenar resumen de productos
+    let listaHtml = '<ul style="padding-left: 20px; font-size: 13px;">';
+    detallesAPagar.forEach(det => {
+        listaHtml += `<li>${det.producto_nombre}: <strong>${formatMoneda(det.subtotal_indemnizar)}</strong></li>`;
+    });
+    listaHtml += '</ul>';
+    document.getElementById('listaProductosPagar').innerHTML = listaHtml;
+
+    // Store detalles to send them later easily without recalculating
+    window.detallesParaPagar = detallesAPagar;
+
+    // Reiniciar el carrito de métodos de pago con una primera línea en Efectivo
+    carritoPagosIndem = [{
+        metodo_pago: 'Efectivo',
+        id_cuenta: null,
+        id_billetera: null,
+        monto_pagado: total,
+        numero_operacion: '',
+        evidencia_file: null
+    }];
+    renderizarCarritoPagosIndem();
+
+    document.getElementById('modalPagarIndemnizacion').style.display = 'flex';
+}
+
+function cerrarModalPago() {
+    document.getElementById('modalPagarIndemnizacion').style.display = 'none';
+    cargaSeleccionadaPago = null;
+    window.detallesParaPagar = [];
+    carritoPagosIndem = [];
+}
+
+function obtenerMontoTotalIndem() {
+    return parseFloat(document.getElementById('pagoMontoTotal').value) || 0;
+}
+
+function actualizarFaltaPagarIndem() {
+    const montoTotal = obtenerMontoTotalIndem();
+    const sumaPagos = carritoPagosIndem.reduce((acc, p) => acc + (Number(p.monto_pagado) || 0), 0);
+    const falta = Math.round((montoTotal - sumaPagos) * 100) / 100;
+
+    const badge = document.getElementById('indemFaltaPagar');
+    if (badge) {
+        if (falta <= 0.001) {
+            badge.textContent = 'Pago Completo';
+            badge.style.color = '#166534';
+            badge.style.background = '#dcfce7';
+        } else {
+            badge.textContent = `Falta Pagar: S/ ${falta.toFixed(2)}`;
+            badge.style.color = '#ef4444';
+            badge.style.background = '#fee2e2';
+        }
+    }
+
+    const btnGuardar = document.getElementById('btnGuardarPago');
+    if (btnGuardar) {
+        btnGuardar.disabled = Math.abs(falta) > 0.009 || carritoPagosIndem.length === 0;
+    }
+
+    const btnAgregar = document.getElementById('btnAgregarPagoIndem');
+    if (btnAgregar) {
+        btnAgregar.style.display = falta <= 0.001 ? 'none' : 'flex';
+    }
+}
+
+function renderizarCarritoPagosIndem() {
+    const contenedor = document.getElementById('contenedorListaPagosIndem');
+    if (!contenedor) return;
+    contenedor.innerHTML = '';
+
+    if (carritoPagosIndem.length === 0) {
+        contenedor.innerHTML = `
+            <div style="text-align: center; padding: 16px; color: var(--text-muted); font-size: 13px;">
+                <i class="fas fa-info-circle" style="margin-right: 6px;"></i>
+                Agrega al menos un método de pago
+            </div>`;
+        actualizarFaltaPagarIndem();
+        return;
+    }
+
+    carritoPagosIndem.forEach((pago, index) => {
+        const cuentasFiltradas = cuentasIndem.filter(c => (!c.es_sistema || c.es_sistema === 0) && c.estado === 1);
+        const opcionesCuentas = cuentasFiltradas.map(c =>
+            `<option value="${c.id_cuenta}" ${pago.id_cuenta == c.id_cuenta ? 'selected' : ''}>${c.entidad_financiera} - ${c.tipo_cuenta} (${c.nro_cuenta})</option>`
+        ).join('');
+
+        const billeterasFiltradas = billeterasIndem.filter(b => b.estado === 1);
+        const opcionesBilleteras = billeterasFiltradas.map(b =>
+            `<option value="${b.id_billetera}" ${pago.id_billetera == b.id_billetera ? 'selected' : ''}>${b.tipo_billetera} - ${b.numero_celular} (${b.titular})</option>`
+        ).join('');
+
+        const metodo = pago.metodo_pago || 'Efectivo';
+        const mostrarCuenta = metodo === 'Transferencia';
+        const mostrarBilletera = metodo === 'Billetera Digital';
+        const mostrarNumOp = metodo !== 'Efectivo';
+        const mostrarEvidencia = metodo !== 'Efectivo';
+        const nombreArchivo = pago.evidencia_file ? pago.evidencia_file.name : '';
+
+        const bloque = document.createElement('div');
+        bloque.className = 'pago-linea-indem';
+        bloque.innerHTML = `
+            <button type="button" onclick="eliminarPagoIndem(${index})" class="pago-linea-eliminar" title="Eliminar pago">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+
+            <div class="pago-linea-row">
+                <div class="pago-linea-campo">
+                    <label>Método de Pago</label>
+                    <select onchange="actualizarPagoIndem(${index}, 'metodo_pago', this.value)" class="form-control">
+                        <option value="Efectivo" ${metodo === 'Efectivo' ? 'selected' : ''}>Efectivo</option>
+                        <option value="Transferencia" ${metodo === 'Transferencia' ? 'selected' : ''}>Transferencia</option>
+                        <option value="Depósito" ${metodo === 'Depósito' ? 'selected' : ''}>Depósito</option>
+                        <option value="Billetera Digital" ${metodo === 'Billetera Digital' ? 'selected' : ''}>Billetera Digital</option>
+                    </select>
+                </div>
+                <div class="pago-linea-campo">
+                    <label>Monto (S/)</label>
+                    <input type="text" inputmode="decimal" value="${pago.monto_pagado || ''}" oninput="validarMontoIndem(${index}, this)" onblur="formatearMontoIndem(${index}, this)" placeholder="0.00" class="form-control">
+                </div>
+            </div>
+
+            <div class="pago-linea-campo" style="display: ${mostrarCuenta ? 'block' : 'none'};">
+                <label>Cuenta Bancaria</label>
+                <select onchange="actualizarPagoIndem(${index}, 'id_cuenta', this.value)" class="form-control">
+                    <option value="">Seleccione cuenta...</option>
+                    ${opcionesCuentas}
+                </select>
+            </div>
+
+            <div class="pago-linea-campo" style="display: ${mostrarBilletera ? 'block' : 'none'};">
+                <label>Billetera Digital</label>
+                <select onchange="actualizarPagoIndem(${index}, 'id_billetera', this.value)" class="form-control">
+                    <option value="">Seleccione billetera...</option>
+                    ${opcionesBilleteras}
+                </select>
+            </div>
+
+            <div class="pago-linea-campo" style="display: ${mostrarNumOp ? 'block' : 'none'};">
+                <label>N° Operación *</label>
+                <input type="text" value="${pago.numero_operacion || ''}" oninput="actualizarPagoIndem(${index}, 'numero_operacion', this.value)" placeholder="Ej: 00012345" class="form-control">
+            </div>
+
+            <div style="display: ${mostrarEvidencia ? 'block' : 'none'};">
+                <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">Evidencia (opcional)</label>
+                <div id="dropzone-indem-${index}" onclick="document.getElementById('inputEvidIndem_${index}').click()" class="pago-dropzone"
+                     ondragover="event.preventDefault(); this.classList.add('dragover');"
+                     ondragleave="this.classList.remove('dragover');"
+                     ondrop="event.preventDefault(); this.classList.remove('dragover'); validarYSubirEvidenciaIndem(${index}, event.dataTransfer.files);">
+                    <input type="file" id="inputEvidIndem_${index}" accept="image/png,image/jpeg,image/webp" onchange="validarYSubirEvidenciaIndem(${index}, this.files)" style="display: none;">
+                    <div id="previewEvidIndem_${index}" style="${nombreArchivo ? '' : 'display:none;'} margin-bottom: 8px;"></div>
+                    <div id="placeholderEvidIndem_${index}" style="${nombreArchivo ? 'display:none;' : ''}">
+                        <i class="fas fa-cloud-upload-alt" style="font-size: 20px; color: var(--text-muted); margin-bottom: 6px;"></i>
+                        <p style="margin: 0; font-size: 12px; color: var(--text-muted);">Arrastra o haz clic para subir</p>
+                        <p style="margin: 2px 0 0 0; font-size: 10px; color: var(--text-muted);">PNG, JPG, WEBP · máx 5MB</p>
+                    </div>
+                    <div id="filenameEvidIndem_${index}" style="${nombreArchivo ? '' : 'display:none;'} font-size: 11px; color: var(--text-secondary); margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        <i class="fas fa-image" style="color: #10b981;"></i>
+                        <span>${nombreArchivo}</span>
+                        <button type="button" onclick="event.stopPropagation(); eliminarEvidenciaIndem(${index})" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 12px; padding: 2px;" title="Quitar imagen">
+                            <i class="fas fa-times-circle"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        contenedor.appendChild(bloque);
+    });
+
+    actualizarFaltaPagarIndem();
+}
+
+function agregarNuevoPagoIndem() {
+    const montoTotal = obtenerMontoTotalIndem();
+    const sumaPagos = carritoPagosIndem.reduce((acc, p) => acc + (Number(p.monto_pagado) || 0), 0);
+    const restante = Math.max(0, Math.round((montoTotal - sumaPagos) * 100) / 100);
+
+    carritoPagosIndem.push({
+        metodo_pago: 'Efectivo',
+        id_cuenta: null,
+        id_billetera: null,
+        monto_pagado: restante,
+        numero_operacion: '',
+        evidencia_file: null
+    });
+    renderizarCarritoPagosIndem();
+}
+
+function eliminarPagoIndem(index) {
+    carritoPagosIndem.splice(index, 1);
+    renderizarCarritoPagosIndem();
+}
+
+function actualizarPagoIndem(index, campo, valor) {
+    if (!carritoPagosIndem[index]) return;
+
+    carritoPagosIndem[index][campo] = valor;
+
+    if (campo === 'metodo_pago') {
+        carritoPagosIndem[index].id_cuenta = null;
+        carritoPagosIndem[index].id_billetera = null;
+        carritoPagosIndem[index].numero_operacion = '';
+        carritoPagosIndem[index].evidencia_file = null;
+        renderizarCarritoPagosIndem();
+        return;
+    }
+
+    if (campo === 'monto_pagado') {
+        carritoPagosIndem[index].monto_pagado = Number(valor) || 0;
+        actualizarFaltaPagarIndem();
+    }
+}
+
+function validarMontoIndem(index, input) {
+    let valor = input.value.replace(/[^0-9.]/g, '');
+    const partes = valor.split('.');
+    if (partes.length > 2) valor = partes[0] + '.' + partes.slice(1).join('');
+    if (partes.length === 2 && partes[1].length > 2) valor = partes[0] + '.' + partes[1].substring(0, 2);
+
+    input.value = valor;
+    carritoPagosIndem[index].monto_pagado = Number(valor) || 0;
+    actualizarFaltaPagarIndem();
+}
+
+function formatearMontoIndem(index, input) {
+    let val = parseFloat(input.value);
+    if (isNaN(val) || val < 0) val = 0;
+    input.value = val.toFixed(2);
+    carritoPagosIndem[index].monto_pagado = val;
+    actualizarFaltaPagarIndem();
+}
+
+function validarYSubirEvidenciaIndem(index, files) {
+    if (!files || files.length === 0) return;
+    const file = files[0];
+
+    const tiposPermitidos = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!tiposPermitidos.includes(file.type)) {
+        Swal.fire({ icon: 'warning', title: 'Formato no válido', text: 'Solo se permiten imágenes PNG, JPG o WEBP.' });
+        return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+        Swal.fire({ icon: 'warning', title: 'Archivo muy grande', text: 'La imagen no debe superar los 5MB.' });
+        return;
+    }
+
+    carritoPagosIndem[index].evidencia_file = file;
+
+    const preview = document.getElementById(`previewEvidIndem_${index}`);
+    const placeholder = document.getElementById(`placeholderEvidIndem_${index}`);
+    const filename = document.getElementById(`filenameEvidIndem_${index}`);
+
+    if (preview && placeholder && filename) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            preview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; max-height: 120px; border-radius: 6px; object-fit: contain;">`;
+            preview.style.display = 'block';
+            placeholder.style.display = 'none';
+            filename.style.display = 'flex';
+            filename.querySelector('span').textContent = file.name;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function eliminarEvidenciaIndem(index) {
+    carritoPagosIndem[index].evidencia_file = null;
+    const input = document.getElementById(`inputEvidIndem_${index}`);
+    if (input) input.value = '';
+
+    const preview = document.getElementById(`previewEvidIndem_${index}`);
+    const placeholder = document.getElementById(`placeholderEvidIndem_${index}`);
+    const filename = document.getElementById(`filenameEvidIndem_${index}`);
+
+    if (preview) { preview.innerHTML = ''; preview.style.display = 'none'; }
+    if (placeholder) placeholder.style.display = 'block';
+    if (filename) filename.style.display = 'none';
+}
+
+async function procesarPago() {
+    const idCliente = document.getElementById('pagoIdCliente').value;
+    const observaciones = document.getElementById('pagoObservaciones').value;
+    const monto = document.getElementById('pagoMontoTotal').value;
+
+    if (!idCliente) {
+        Swal.fire({ icon: 'warning', title: 'Falta beneficiario', text: 'Seleccione el beneficiario del pago.' });
+        return;
+    }
+
+    if (carritoPagosIndem.length === 0) {
+        Swal.fire({ icon: 'warning', title: 'Sin pagos', text: 'Debe agregar al menos un método de pago.' });
+        return;
+    }
+
+    for (let i = 0; i < carritoPagosIndem.length; i++) {
+        const p = carritoPagosIndem[i];
+        if (p.metodo_pago !== 'Efectivo' && !p.numero_operacion) {
+            Swal.fire({ icon: 'warning', title: 'Falta N° de Operación', text: `El N° de Operación es obligatorio para el pago #${i + 1} (${p.metodo_pago}).` });
+            return;
+        }
+        if (p.metodo_pago === 'Transferencia' && !p.id_cuenta) {
+            Swal.fire({ icon: 'warning', title: 'Falta cuenta', text: `Seleccione la cuenta bancaria para el pago #${i + 1}.` });
+            return;
+        }
+        if (p.metodo_pago === 'Billetera Digital' && !p.id_billetera) {
+            Swal.fire({ icon: 'warning', title: 'Falta billetera', text: `Seleccione la billetera digital para el pago #${i + 1}.` });
+            return;
+        }
+    }
+
+    const sumaPagos = carritoPagosIndem.reduce((acc, p) => acc + (Number(p.monto_pagado) || 0), 0);
+    if (Math.abs(sumaPagos - parseFloat(monto)) >= 0.01) {
+        Swal.fire({ icon: 'error', title: 'Montos no coinciden', text: 'La suma de los métodos de pago debe ser igual al Monto Total a Pagar.' });
+        return;
+    }
+
+    const detalles = window.detallesParaPagar.map(det => ({
+        id_incidencia: det.id_incidencia,
+        id_detalle: det.id_detalle,
+        monto_pagado: det.subtotal_indemnizar
+    }));
+
+    try {
+        const btn = document.getElementById('btnGuardarPago');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+
+        const formData = new FormData();
+        formData.append('id_cliente', idCliente);
+        formData.append('monto_total', monto);
+        formData.append('observaciones', observaciones);
+        formData.append('detalles', JSON.stringify(detalles));
+
+        const pagosPayload = carritoPagosIndem.map((p, index) => {
+            if (p.evidencia_file) {
+                formData.append('evidencia_' + index, p.evidencia_file);
+            }
+            return {
+                metodo_pago: p.metodo_pago,
+                id_cuenta: p.id_cuenta,
+                id_billetera: p.id_billetera,
+                monto_pagado: p.monto_pagado,
+                numero_operacion: p.numero_operacion
+            };
+        });
+        formData.append('pagos', JSON.stringify(pagosPayload));
+
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const response = await fetch('/api/indemnizaciones/pagar', {
+            method: 'POST',
+            headers: {
+                'x-user-profile': sessionData.id_perfil,
+                'x-user-id': sessionData.id_usuario
+            },
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            Swal.fire({ icon: 'success', title: 'Pago Registrado', text: 'El pago se registró correctamente.' });
+            cerrarModalPago();
+            cargarDeudasPendientes(); // Recargar deudas
+        } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: result.message || 'Error al procesar el pago' });
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        Swal.fire({ icon: 'error', title: 'Error de conexión', text: 'No se pudo procesar el pago. Revisa la consola.' });
+    } finally {
+        const btn = document.getElementById('btnGuardarPago');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Confirmar Pago';
+    }
+}
+
+// Historial
+let historialGlobal = [];
+
+async function cargarHistorialPagos() {
+    const tbody = document.getElementById('tbodyHistorialPagos');
+
+    if ($.fn.DataTable.isDataTable('#tabla-historial-pagos')) {
+        $('#tabla-historial-pagos').DataTable().destroy();
+    }
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Cargando historial...</td></tr>';
+
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const response = await fetch('/api/indemnizaciones/historial', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            historialGlobal = result.data;
+            renderizarHistorial(historialGlobal);
+        } else {
+            tbody.innerHTML = `<tr><td colspan="9" class="alert-error">${result.message}</td></tr>`;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        tbody.innerHTML = '<tr><td colspan="9" class="alert-error">Error al cargar historial.</td></tr>';
+    }
+}
+
+function renderizarHistorial(pagos) {
+    const tbody = document.getElementById('tbodyHistorialPagos');
+    
+    if (pagos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #64748b;">No hay pagos registrados.</td></tr>';
+        return;
+    }
+
+    let html = '';
+    pagos.forEach(p => {
+        const badgeEstado = p.estado === 1
+            ? '<span class="badge badge-success">Completado</span>'
+            : '<span class="badge badge-danger">Anulado</span>';
+
+        const metodos = p.metodos_pago || [];
+        const metodoTexto = metodos.length === 1 ? metodos[0].metodo_pago : `Mixto (${metodos.length})`;
+        const numOpTexto = metodos.length === 1 ? (metodos[0].numero_operacion || '-') : '-';
+
+        html += `
+            <tr>
+                <td>#PAG-${String(p.id_pago).padStart(5, '0')}</td>
+                <td><strong>${p.cliente_nombre}</strong></td>
+                <td>${new Date(p.fecha_pago).toLocaleString()}</td>
+                <td style="font-weight: bold;">${formatMoneda(p.monto_total)}</td>
+                <td>${metodoTexto}</td>
+                <td>${numOpTexto}</td>
+                <td>${p.usuario_nombre}</td>
+                <td>${badgeEstado}</td>
+                <td style="text-align: center;">
+                    <button class="btn-icon text-primary" title="Ver Detalles" onclick="verDetallesPago(${p.id_pago})">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    ${p.estado === 1 ? `
+                    <button class="btn-icon text-danger" title="Anular Pago" onclick="confirmarAnularPago(${p.id_pago})">
+                        <i class="fas fa-ban"></i>
+                    </button>
+                    ` : ''}
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
+
+    $('#tabla-historial-pagos').DataTable({
+        language: { url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
+        order: [[0, 'desc']],
+        pageLength: 15,
+        lengthMenu: [[15, 25, 50, -1], [15, 25, 50, "Todos"]],
+        dom: '<"dt-top-controls"<"dt-left-controls"l>f>rt<"bottom-controls"ip>',
+        columnDefs: [{ orderable: false, targets: 8 }]
+    });
+}
+
+function verDetallesPago(idPago) {
+    const pago = historialGlobal.find(p => p.id_pago === idPago);
+    if (!pago) return;
+
+    let html = `
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+            <div><strong>Cliente Beneficiario:</strong> ${pago.cliente_nombre}</div>
+            <div><strong>Fecha:</strong> ${new Date(pago.fecha_pago).toLocaleString()}</div>
+            <div><strong>Total Pagado:</strong> ${formatMoneda(pago.monto_total)}</div>
+            <div><strong>Registrado por:</strong> ${pago.usuario_nombre}</div>
+            <div style="grid-column: span 2;"><strong>Observaciones:</strong> ${pago.observaciones || 'Ninguna'}</div>
+        </div>
+
+        <h4>Métodos de Pago</h4>
+        <table class="tabla-modulo" style="font-size: 13px; margin-bottom: 20px;">
+            <thead>
+                <tr>
+                    <th>Método</th>
+                    <th>Cuenta / Billetera</th>
+                    <th style="text-align: right;">Monto (S/)</th>
+                    <th>N° Operación</th>
+                    <th>Evidencia</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${(pago.metodos_pago || []).map(m => `
+                    <tr>
+                        <td>${m.metodo_pago}</td>
+                        <td>${m.cuenta_titular ? `${m.cuenta_entidad || ''} - ${m.cuenta_titular}` : (m.billetera_titular ? `${m.billetera_proveedor || ''} - ${m.billetera_titular}` : '-')}</td>
+                        <td style="text-align: right; font-weight: bold;">${formatMoneda(m.monto_pagado)}</td>
+                        <td>${m.numero_operacion || '-'}</td>
+                        <td>${m.evidencia_url ? `<a href="${m.evidencia_url}" target="_blank">Ver</a>` : '-'}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+
+        <h4>Productos Pagados</h4>
+        <table class="tabla-modulo" style="font-size: 13px;">
+            <thead>
+                <tr>
+                    <th>Viaje</th>
+                    <th>Producto</th>
+                    <th>Tipo Incidencia</th>
+                    <th style="text-align: right;">Monto Pagado (S/)</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    pago.detalles.forEach(d => {
+        html += `
+            <tr>
+                <td>${d.viaje_correlativo}</td>
+                <td>${d.producto_nombre}</td>
+                <td>${d.tipo_incidencia || 'Siniestro'}</td>
+                <td style="text-align: right; font-weight: bold;">${formatMoneda(d.monto_pagado)}</td>
+            </tr>
+        `;
+    });
+
+    html += `</tbody></table>`;
+    
+    document.getElementById('contenidoDetallesPago').innerHTML = html;
+    document.getElementById('modalDetallesPago').style.display = 'flex';
+}
+
+function cerrarModalDetallesPago() {
+    document.getElementById('modalDetallesPago').style.display = 'none';
+}
+
+async function confirmarAnularPago(idPago) {
+    const confirmacion = await Swal.fire({
+        title: '¿Anular este pago?',
+        text: 'Esta acción revertirá los productos dañados a estado pendiente y revertirá los movimientos de caja asociados.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Sí, anular',
+        cancelButtonText: 'Cancelar'
+    });
+    if (!confirmacion.isConfirmed) {
+        return;
+    }
+
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const response = await fetch(`/api/indemnizaciones/anular/${idPago}`, {
+            method: 'PUT',
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            Swal.fire({ icon: 'success', title: 'Pago Anulado', text: 'El pago se anuló correctamente.' });
+            cargarHistorialPagos(); // Recargar historial
+        } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: result.message || 'Error al anular pago' });
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        Swal.fire({ icon: 'error', title: 'Error de conexión', text: 'No se pudo anular el pago. Revisa la consola.' });
+    }
+}
+
+// Utilidad
+function formatMoneda(monto) {
+    return 'S/ ' + parseFloat(monto).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Inicializar cuando se cargue el script si estamos en la vista
+if (document.getElementById('contenedorDeudas') && typeof init_indemnizaciones === 'function') {
+    init_indemnizaciones();
+}
