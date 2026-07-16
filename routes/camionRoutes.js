@@ -6,6 +6,7 @@ const { verificarAuth } = require('../middlewares/verificarPermisos');
 router.use(verificarAuth);
 
 router.get('/', camionController.listarCamiones);
+router.get('/disponibles', camionController.listarCamionesDisponibles);
 router.post('/', camionController.registrar);
 router.put('/:id', camionController.actualizar);
 router.put('/:id/reactivar', camionController.reactivar);

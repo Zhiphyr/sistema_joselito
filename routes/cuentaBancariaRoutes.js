@@ -17,6 +17,7 @@ router.put('/billetera/:id', uploadQR.single('regBillQR'), cuentaBancariaControl
 
 // Cambiar estado
 router.put('/cuenta/:id/estado', verificarAuth, cuentaBancariaController.cambiarEstadoCuenta);
+router.post('/cuenta/:id/transferir-e-inactivar', verificarAuth, cuentaBancariaController.transferirYVaciarCuenta);
 router.put('/billetera/:id/estado', verificarAuth, cuentaBancariaController.cambiarEstadoBilletera);
 
 module.exports = router;

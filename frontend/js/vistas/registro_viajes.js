@@ -3,6 +3,8 @@ window.opcionesCamiones = [];
 window.opcionesRutas = [];
 window.opcionesClientes = [];
 window.opcionesProductos = [];
+window.opcionesCuentasBancarias = [];
+window.opcionesBilleterasDigitales = [];
 
 // Estado en memoria de las cargas por cada viaje activo. Formato: { "vista-viaje-1": [ { ...carga1 }, { ...carga2 } ] }
 window.cargasPorViaje = {};
@@ -43,13 +45,13 @@ async function cargarCatalogosViajes() {
     const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
     
     try {
-        // Camiones
-        const resCamiones = await fetch('http://localhost:3000/api/camiones', {
+        // Camiones (solo activos y sin viaje operativo en curso)
+        const resCamiones = await fetch('http://localhost:3000/api/camiones/disponibles', {
             headers: { 'x-user-profile': sessionData.id_perfil }
         });
         const jsonCamiones = await resCamiones.json();
         if (resCamiones.ok && jsonCamiones.success) {
-            window.opcionesCamiones = jsonCamiones.data.filter(c => c.estado === 1);
+            window.opcionesCamiones = jsonCamiones.data;
         }
 
         // Rutas
@@ -79,8 +81,91 @@ async function cargarCatalogosViajes() {
         if (resProductos.ok && jsonProductos.success) {
             window.opcionesProductos = jsonProductos.data.filter(p => p.estado === 1);
         }
+
+        // Cuentas bancarias y billeteras (para resolver el origen del dinero de un adelanto)
+        const resCuentas = await fetch('http://localhost:3000/api/deudas/cuentas-bancarias', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const jsonCuentas = await resCuentas.json();
+        if (resCuentas.ok && jsonCuentas.success) {
+            window.opcionesCuentasBancarias = jsonCuentas.data.cuentas || [];
+            window.opcionesBilleterasDigitales = jsonCuentas.data.billeteras || [];
+        }
     } catch (error) {
         console.error("Error al cargar catálogos para viajes:", error);
+    }
+}
+
+/**
+ * Trae el saldo actual de todas las cuentas/billeteras (caja física, cuentas bancarias
+ * y billeteras independientes) para validar fondos suficientes antes de dar un adelanto.
+ * Se pide fresco cada vez que se necesita (no se cachea) porque el saldo cambia constantemente.
+ */
+async function obtenerResumenCuentasFinanciero() {
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const res = await fetch('/api/dashboard-financiero/cuentas-resumen', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const json = await res.json();
+        return json.success ? json.data : null;
+    } catch (error) {
+        console.error('Error al obtener el saldo de las cuentas:', error);
+        return null;
+    }
+}
+
+/**
+ * Resuelve el saldo disponible del método de pago elegido (Efectivo -> Caja Física;
+ * Billetera Digital -> billetera independiente o, si está vinculada a una cuenta, el saldo
+ * combinado de esa cuenta; Transferencia/Depósito -> la cuenta bancaria seleccionada).
+ */
+function resolverSaldoDisponible(resumenCuentas, metodo, idCuentaSeleccionada, idBilleteraSeleccionada) {
+    if (!resumenCuentas) return 0;
+
+    if (metodo === 'Efectivo') {
+        return resumenCuentas.caja_fisica ? Number(resumenCuentas.caja_fisica.saldo) : 0;
+    }
+
+    if (metodo === 'Billetera Digital') {
+        const cuentaVinculada = resumenCuentas.cuentas_bancarias.find(c =>
+            c.billetera_vinculada && String(c.billetera_vinculada.id_billetera) === String(idBilleteraSeleccionada)
+        );
+        if (cuentaVinculada) return Number(cuentaVinculada.saldo);
+
+        const billeteraIndependiente = resumenCuentas.billeteras_independientes.find(b =>
+            String(b.id_billetera) === String(idBilleteraSeleccionada)
+        );
+        return billeteraIndependiente ? Number(billeteraIndependiente.saldo) : 0;
+    }
+
+    // Transferencia / Depósito
+    const cuenta = resumenCuentas.cuentas_bancarias.find(c => String(c.id_cuenta) === String(idCuentaSeleccionada));
+    return cuenta ? Number(cuenta.saldo) : 0;
+}
+
+/**
+ * Llena el select de Cuenta/Billetera de un adelanto según el canal elegido
+ * (Billetera Digital -> billeteras; Transferencia/Depósito -> cuentas bancarias).
+ */
+function poblarSelectCuentaAdelanto(select, canal) {
+    if (!select) return;
+    select.innerHTML = '<option value="">Seleccione...</option>';
+
+    if (canal === 'Billetera Digital') {
+        window.opcionesBilleterasDigitales.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.id_billetera;
+            opt.textContent = `${b.entidad_financiera} - ${b.numero_celular} (${b.titular})`;
+            select.appendChild(opt);
+        });
+    } else {
+        window.opcionesCuentasBancarias.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id_cuenta;
+            opt.textContent = `${c.entidad_financiera} - ${c.nro_cuenta} (${c.titular})`;
+            select.appendChild(opt);
+        });
     }
 }
 
@@ -288,6 +373,7 @@ function crearNuevaPestaniaViaje(esRestauracion = false) {
     const selectMetodoAdelanto = divContenido.querySelector('.select-metodo-adelanto');
     
     const contCamposExtra = divContenido.querySelector('.cont-campos-extra-adelanto');
+    const selectCuentaAdelanto = divContenido.querySelector('.select-cuenta-adelanto');
     const inputOperacion = divContenido.querySelector('.input-operacion-adelanto');
     const inputEvidencia = divContenido.querySelector('.input-evidencia-adelanto');
     const spanNombreArchivo = divContenido.querySelector('.nombre-archivo-adelanto');
@@ -299,14 +385,20 @@ function crearNuevaPestaniaViaje(esRestauracion = false) {
                 inputMontoAdelanto.required = true;
                 if (selectMetodoAdelanto && selectMetodoAdelanto.value !== 'Efectivo') {
                     contCamposExtra.style.display = 'flex';
+                    poblarSelectCuentaAdelanto(selectCuentaAdelanto, selectMetodoAdelanto.value);
+                    if (selectCuentaAdelanto) selectCuentaAdelanto.required = true;
                     inputOperacion.required = true;
                 }
             } else {
                 contAdelanto.style.display = 'none';
                 inputMontoAdelanto.required = false;
                 inputMontoAdelanto.value = '';
-                
+
                 if (contCamposExtra) contCamposExtra.style.display = 'none';
+                if (selectCuentaAdelanto) {
+                    selectCuentaAdelanto.required = false;
+                    selectCuentaAdelanto.value = '';
+                }
                 if (inputOperacion) {
                     inputOperacion.required = false;
                     inputOperacion.value = '';
@@ -326,9 +418,15 @@ function crearNuevaPestaniaViaje(esRestauracion = false) {
         selectMetodoAdelanto.addEventListener('change', (e) => {
             if (e.target.value !== 'Efectivo') {
                 contCamposExtra.style.display = 'flex';
+                poblarSelectCuentaAdelanto(selectCuentaAdelanto, e.target.value);
+                if (selectCuentaAdelanto) selectCuentaAdelanto.required = true;
                 inputOperacion.required = true;
             } else {
                 contCamposExtra.style.display = 'none';
+                if (selectCuentaAdelanto) {
+                    selectCuentaAdelanto.required = false;
+                    selectCuentaAdelanto.value = '';
+                }
                 inputOperacion.required = false;
                 inputOperacion.value = '';
                 inputEvidencia.value = '';
@@ -337,6 +435,10 @@ function crearNuevaPestaniaViaje(esRestauracion = false) {
             }
             guardarEstadoEnLocalStorage(idViaje);
         });
+    }
+
+    if (selectCuentaAdelanto) {
+        selectCuentaAdelanto.addEventListener('change', () => guardarEstadoEnLocalStorage(idViaje));
     }
 
     if (inputEvidencia && spanNombreArchivo) {
@@ -1000,6 +1102,7 @@ function guardarEstadoEnLocalStorage(idViaje) {
         tiene_adelanto: vista.querySelector('.chk-adelanto') ? vista.querySelector('.chk-adelanto').checked : false,
         monto_adelanto: vista.querySelector('.input-monto-adelanto') ? vista.querySelector('.input-monto-adelanto').value : '',
         metodo_adelanto: vista.querySelector('.select-metodo-adelanto') ? vista.querySelector('.select-metodo-adelanto').value : 'Efectivo',
+        id_cuenta_adelanto: vista.querySelector('.select-cuenta-adelanto') ? vista.querySelector('.select-cuenta-adelanto').value : '',
         numero_operacion: vista.querySelector('.input-operacion-adelanto') ? vista.querySelector('.input-operacion-adelanto').value : '',
         cargas: window.cargasPorViaje[idViaje] || []
     };
@@ -1055,6 +1158,12 @@ function restaurarEstadoDesdeLocalStorage() {
                                     if (data.numero_operacion) {
                                         vista.querySelector('.input-operacion-adelanto').value = data.numero_operacion;
                                     }
+                                    const selectCuentaAdelanto = vista.querySelector('.select-cuenta-adelanto');
+                                    if (selectCuentaAdelanto) {
+                                        selectCuentaAdelanto.required = true;
+                                        poblarSelectCuentaAdelanto(selectCuentaAdelanto, data.metodo_adelanto);
+                                        if (data.id_cuenta_adelanto) selectCuentaAdelanto.value = data.id_cuenta_adelanto;
+                                    }
                                 }
                             }
                         }
@@ -1087,6 +1196,7 @@ async function registrarViajeBackend(btn) {
     const tiene_adelanto = vista.querySelector('.chk-adelanto') ? vista.querySelector('.chk-adelanto').checked : false;
     const monto_adelanto = vista.querySelector('.input-monto-adelanto') ? vista.querySelector('.input-monto-adelanto').value : '';
     const metodo_adelanto = vista.querySelector('.select-metodo-adelanto') ? vista.querySelector('.select-metodo-adelanto').value : '';
+    const id_cuenta_adelanto = vista.querySelector('.select-cuenta-adelanto') ? vista.querySelector('.select-cuenta-adelanto').value : '';
     const numero_operacion = vista.querySelector('.input-operacion-adelanto') ? vista.querySelector('.input-operacion-adelanto').value : '';
     const fileEvidencia = vista.querySelector('.input-evidencia-adelanto');
     const cargas = window.cargasPorViaje[idViaje] || [];
@@ -1095,9 +1205,14 @@ async function registrarViajeBackend(btn) {
         Swal.fire({ icon: 'warning', title: 'Datos incompletos', text: 'Por favor, llene todos los campos de Detalles del Viaje.' });
         return;
     }
-    
+
     if (tiene_adelanto && metodo_adelanto !== 'Efectivo' && !numero_operacion) {
         Swal.fire({ icon: 'warning', title: 'Datos incompletos', text: 'Por favor, ingrese el N° de Operación para el adelanto.' });
+        return;
+    }
+
+    if (tiene_adelanto && metodo_adelanto !== 'Efectivo' && !id_cuenta_adelanto) {
+        Swal.fire({ icon: 'warning', title: 'Datos incompletos', text: 'Por favor, seleccione la cuenta o billetera desde donde sale el adelanto.' });
         return;
     }
     
@@ -1106,12 +1221,29 @@ async function registrarViajeBackend(btn) {
         return;
     }
     
+    const textoOriginalBtn = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i> Procesando...';
-    
+
     try {
         const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
-        
+
+        if (tiene_adelanto && Number(monto_adelanto) > 0) {
+            const resumenCuentas = await obtenerResumenCuentasFinanciero();
+            const saldoDisponible = resolverSaldoDisponible(resumenCuentas, metodo_adelanto, id_cuenta_adelanto, id_cuenta_adelanto);
+
+            if (Number(monto_adelanto) > saldoDisponible) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Fondos Insuficientes',
+                    text: `El método de pago seleccionado para el adelanto solo tiene S/ ${saldoDisponible.toFixed(2)} disponible.`
+                });
+                btn.disabled = false;
+                btn.innerHTML = textoOriginalBtn;
+                return;
+            }
+        }
+
         const formData = new FormData();
         formData.append('camion', camion);
         formData.append('ruta', ruta);
@@ -1125,11 +1257,16 @@ async function registrarViajeBackend(btn) {
         
         if (tiene_adelanto && metodo_adelanto !== 'Efectivo') {
             formData.append('numero_operacion', numero_operacion);
+            if (metodo_adelanto === 'Billetera Digital') {
+                formData.append('id_billetera_adelanto', id_cuenta_adelanto);
+            } else {
+                formData.append('id_cuenta_adelanto', id_cuenta_adelanto);
+            }
             if (fileEvidencia && fileEvidencia.files.length > 0) {
                 formData.append('evidencia', fileEvidencia.files[0]);
             }
         }
-        
+
         const res = await fetch('/api/viajes', {
             method: 'POST',
             headers: {

@@ -14,6 +14,23 @@ class CamionModel {
         return rows;
     }
 
+    static async obtenerCamionesDisponibles() {
+        const query = `
+            SELECT id_camion, nombre, placa, tipo_documento, numero_documento, conductor, direccion, telefono, estado,
+                   fecha_creacion, fecha_actualizacion
+            FROM camiones
+            WHERE estado = 1
+              AND id_camion NOT IN (
+                  SELECT id_camion FROM viaje
+                  WHERE estado = 1
+                    AND estado_operativo IN ('En Ruta', 'Llegó a Destino', 'Descargado', 'Incidencia')
+              )
+            ORDER BY id_camion ASC
+        `;
+        const [rows] = await db.query(query);
+        return rows;
+    }
+
     static async obtenerCamionPorId(id_camion) {
         const query = `SELECT * FROM camiones WHERE id_camion = ?`;
         const [rows] = await db.query(query, [id_camion]);

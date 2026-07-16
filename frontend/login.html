@@ -1,54 +1,98 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Transporte Joselito</title>
-    <!-- Favicons -->
-    <link rel="apple-touch-icon" sizes="180x180" href="img/ico/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="img/ico/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="img/ico/favicon-16x16.png">
-    <link rel="manifest" href="img/ico/site.webmanifest">
-    <link rel="shortcut icon" href="img/ico/favicon.ico">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>Transporte Joselito - Central Logística</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/login.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
-
 <body>
+
     <div class="login-wrapper">
-        <div class="login-container">
-            <div class="login-header">
-                <h1>Transporte Joselito</h1>
-                <p>Acceso al panel administrativo</p>
+
+        <!-- COLUMNA IZQUIERDA: MAPA DE CARRETERA INTERACTIVO (PARALLAX + TILT) -->
+        <div class="panel-visual" id="panelVisual">
+            <!-- Capa de imagen de carretera -->
+            <div class="visual-background" id="bgLayer"></div>
+            <div class="visual-overlay"></div>
+
+            <!-- Cabecera Logo -->
+            <div class="visual-header">
+                <div class="logo-container">
+                    <i class="fa-solid fa-truck-ramp-box"></i>
+                    <h2>Transporte Joselito</h2>
+                </div>
             </div>
 
-            <form id="loginForm" class="login-form">
-                <div class="form-group">
-                    <label for="usuario">Usuario</label>
-                    <input type="text" id="usuario" name="usuario" placeholder="Ingresa tu usuario" required
-                        autocomplete="off">
+            <!-- Tarjeta Interactiva con Efecto Tilt 3D -->
+            <div class="visual-body">
+                <div class="info-card-interactive" id="infoCard">
+                    <span>Central de Operaciones</span>
+                    <h1>Conectando Caminos, Asegurando tu Carga.</h1>
+                    <p>Módulo administrativo inteligente para el control de flota, conductores e ingresos logísticos a nivel nacional.</p>
+                    
+                    <div class="system-status-pill">
+                        <div class="pulse-dot"></div>
+                        <span>Operaciones en Línea</span>
+                    </div>
                 </div>
+            </div>
 
-                <div class="form-group">
-                    <label for="clave">Contraseña</label>
-                    <input type="password" id="clave" name="clave" placeholder="Ingresa tu contraseña" required>
-                </div>
-
-                <button type="submit" class="btn-primary" id="btnSubmit">
-                    <span>Iniciar Sesión</span>
-                    <div class="spinner" id="spinner" style="display: none;"></div>
-                </button>
-            </form>
-
-            <div class="login-footer">
-                <p>&copy; 2026 Transporte Joselito. Todos los derechos reservados.</p>
+            <!-- Pie de página izquierdo -->
+            <div class="visual-footer">
+                <span>© 2026 Transporte Joselito S.A.C. Todos los derechos reservados.</span>
             </div>
         </div>
+
+        <!-- COLUMNA DERECHA: FORMULARIO DE ACCESO MINIMALISTA -->
+        <div class="panel-form">
+            <div class="form-container">
+                
+                <div class="form-header">
+                    <h2>Iniciar Sesión</h2>
+                    <p>Ingresa tus credenciales para acceder al panel de control.</p>
+                </div>
+
+                <!-- Formulario -->
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="usuario">Usuario</label>
+                        <div class="input-wrapper">
+                            <i class="fa-solid fa-envelope"></i>
+                            <input type="text" id="usuario" name="usuario" placeholder="Ingresa tu usuario" required autocomplete="off">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="clave">Contraseña</label>
+                        <div class="input-wrapper">
+                            <i class="fa-solid fa-lock"></i>
+                            <input type="password" id="clave" name="clave" placeholder="Ingresa tu contraseña" required>
+                        </div>
+                    </div>
+
+                    <div class="form-options">
+                        <label class="remember-me">
+                            <input type="checkbox" checked> Recordar acceso
+                        </label>
+                        <a href="#" class="forgot-password" onclick="Swal.fire('Recuperar contraseña', 'Contacta al administrador del sistema para restablecer tu contraseña.', 'info')">¿Olvidaste tu contraseña?</a>
+                    </div>
+
+                    <button type="submit" class="btn-login" id="btnSubmit">
+                        <span>Ingresar a la Plataforma</span>
+                        <i class="fa-solid fa-right-to-bracket"></i>
+                        <div class="spinner" id="spinner" style="display: none;"></div>
+                    </button>
+                </form>
+
+            </div>
+        </div>
+
     </div>
 
     <script src="js/login.js"></script>
 </body>
-
 </html>

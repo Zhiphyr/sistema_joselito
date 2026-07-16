@@ -1521,14 +1521,14 @@ async function abrirModalTransbordo(idViaje) {
             hour: '2-digit', minute: '2-digit', hour12: false
         }).replace(',', '');
 
-        // 3. Fetch Camiones
-        const resCamiones = await fetch('/api/camiones', { headers });
+        // 3. Fetch Camiones disponibles (activos y sin viaje operativo en curso)
+        const resCamiones = await fetch('/api/camiones/disponibles', { headers });
         const dataCamiones = await resCamiones.json();
 
         if (dataCamiones.success) {
             selectCamion.innerHTML = '<option value="">Seleccione un camión disponible...</option>';
             dataCamiones.data.forEach(camion => {
-                if (camion.id_camion !== viaje.id_camion && camion.estado === 1) {
+                if (camion.id_camion !== viaje.id_camion) {
                     const opt = document.createElement('option');
                     opt.value = camion.id_camion;
                     opt.textContent = `${camion.vehiculo || camion.nombre} - ${camion.placa} (Cond: ${camion.conductor || 'Sin asignar'})`;

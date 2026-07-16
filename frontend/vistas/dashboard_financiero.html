@@ -1,0 +1,275 @@
+<div class="module-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+    <div>
+        <h2 style="margin: 0;">Dashboard Financiero</h2>
+        <p style="margin: 4px 0 0;">Visión general de la salud financiera de la empresa.</p>
+    </div>
+    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+        <button class="btn-primary" id="btnNuevoIngreso" style="width: auto; background: #10b981;">
+            <i class="fas fa-arrow-down"></i> Nuevo Ingreso
+        </button>
+        <button class="btn-primary" id="btnNuevoEgreso" style="width: auto; background: #ef4444;">
+            <i class="fas fa-arrow-up"></i> Nuevo Egreso
+        </button>
+        <button class="btn-primary" id="btnTransferenciaInterna" style="width: auto; background: #3b82f6;">
+            <i class="fas fa-exchange-alt"></i> Transferencia Interna
+        </button>
+    </div>
+</div>
+
+<!-- KPIs de Salud Financiera -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 20px;">
+    <!-- Saldo Total Disponible -->
+    <div style="background: linear-gradient(135deg, #1e3a8a, #3b82f6); border-radius: 12px; padding: 20px; color: white; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div>
+            <p style="margin: 0; font-size: 13px; opacity: 0.9; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Saldo Total Disponible</p>
+            <h3 id="cardSaldoTotal" style="margin: 4px 0 0; font-size: 26px; font-weight: 700;">S/ 0.00</h3>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.2); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+            <i class="fas fa-wallet"></i>
+        </div>
+    </div>
+
+    <!-- Ingresos del Mes -->
+    <div style="background: linear-gradient(135deg, #065f46, #10b981); border-radius: 12px; padding: 20px; color: white; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div>
+            <p style="margin: 0; font-size: 13px; opacity: 0.9; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Ingresos del Mes</p>
+            <h3 id="cardIngresosMes" style="margin: 4px 0 0; font-size: 26px; font-weight: 700;">S/ 0.00</h3>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.2); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+            <i class="fas fa-arrow-trend-up"></i>
+        </div>
+    </div>
+
+    <!-- Egresos del Mes -->
+    <div style="background: linear-gradient(135deg, #9a3412, #ef4444); border-radius: 12px; padding: 20px; color: white; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div>
+            <p style="margin: 0; font-size: 13px; opacity: 0.9; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Egresos del Mes</p>
+            <h3 id="cardEgresosMes" style="margin: 4px 0 0; font-size: 26px; font-weight: 700;">S/ 0.00</h3>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.2); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+            <i class="fas fa-arrow-trend-down"></i>
+        </div>
+    </div>
+
+    <!-- Rentabilidad -->
+    <div id="cardRentabilidadWrapper" style="background: linear-gradient(135deg, #581c87, #8b5cf6); border-radius: 12px; padding: 20px; color: white; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div>
+            <p style="margin: 0; font-size: 13px; opacity: 0.9; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Rentabilidad</p>
+            <h3 id="cardRentabilidad" style="margin: 4px 0 0; font-size: 26px; font-weight: 700;">S/ 0.00</h3>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.2); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+            <i class="fas fa-chart-pie"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficos Estadísticos -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; margin-bottom: 20px; align-items: stretch;">
+    <!-- Ingresos vs Egresos por Día -->
+    <div class="welcome-card" style="margin: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+            <div>
+                <h3 style="margin: 0; font-size: 15px; color: var(--text-primary);">Ingresos vs Egresos por Día</h3>
+                <p style="margin: 4px 0 0; font-size: 12px; color: var(--text-secondary);">Flujo de caja diario</p>
+            </div>
+            <div style="display: flex; gap: 4px; background: #f1f5f9; padding: 4px; border-radius: 8px;">
+                <button type="button" class="btn-rango-flujo" data-dias="7" style="border: none; background: transparent; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; color: #64748b;">7 días</button>
+                <button type="button" class="btn-rango-flujo" data-dias="15" style="border: none; background: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; color: #1e293b; box-shadow: 0 1px 2px rgba(0,0,0,0.08);">15 días</button>
+        </div>
+        </div>
+        <div style="position: relative; height: 260px;">
+            <canvas id="chartFlujoDiario"></canvas>
+        </div>
+        <div style="display: flex; gap: 20px; justify-content: center; margin-top: 12px; font-size: 12px; color: var(--text-secondary);">
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #10b981; display: inline-block;"></span> Ingresos</span>
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #ef4444; display: inline-block;"></span> Egresos</span>
+        </div>
+    </div>
+
+    <!-- Distribución de Gastos -->
+    <div class="welcome-card" style="margin: 0;">
+        <div style="margin-bottom: 16px;">
+            <h3 style="margin: 0; font-size: 15px; color: var(--text-primary);">Distribución de Gastos</h3>
+            <p style="margin: 4px 0 0; font-size: 12px; color: var(--text-secondary);">Egresos del mes actual por categoría</p>
+        </div>
+        <div style="position: relative; height: 200px;">
+            <canvas id="chartDistribucionGastos"></canvas>
+        </div>
+        <div id="leyendaDistribucionGastos" style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px; font-size: 12px;"></div>
+    </div>
+</div>
+
+<!-- Detalle por Caja Física / Cuentas Bancarias / Billeteras Independientes -->
+<div class="welcome-card" style="max-width: 100%;">
+    <h2 style="margin-bottom: 16px;">Estado de Cuentas</h2>
+    <div id="contenedorCuentasDetalle" style="padding: 4px 4px 8px;">
+        <div style="text-align: center; color: #94a3b8; padding: 30px;">
+            <i class="fas fa-spinner fa-spin fa-2x"></i>
+            <p style="margin-top: 10px;">Cargando cuentas...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Últimos Movimientos -->
+<div class="welcome-card" style="max-width: 100%; margin-top: 20px; margin-bottom: 30px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 style="margin: 0;">Últimos Movimientos (Top 10)</h2>
+    </div>
+    
+    <div class="tabla-scroll">
+        <table class="tabla-modulo">
+            <thead>
+                <tr>
+                    <th class="tabla-th">Tipo</th>
+                    <th class="tabla-th">Concepto</th>
+                    <th class="tabla-th">Monto</th>
+                    <th class="tabla-th">Método de Pago</th>
+                    <th class="tabla-th">Cuenta Afectada</th>
+                    <th class="tabla-th">Origen</th>
+                    <th class="tabla-th">N° Operación</th>
+                    <th class="tabla-th">Fecha</th>
+                    <th class="tabla-th">Usuario</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyUltimosMovimientos">
+                <tr class="tabla-estado-fila">
+                    <td colspan="9">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <p style="margin-top: 10px;">Cargando movimientos...</p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div style="text-align: center; margin-top: 20px;">
+        <button class="btn-secondary" id="btnVerTodosMovimientos" style="padding: 8px 16px; font-size: 13px;">
+            <i class="fas fa-history"></i> Ver historial completo
+        </button>
+    </div>
+</div>
+
+<!-- Modal Nuevo Ingreso -->
+<div id="modalNuevoIngreso" class="modal-overlay" style="display: none; align-items: center;">
+    <div class="modal-container" style="max-width: 480px; width: 100%;">
+        <div class="modal-header">
+            <h3><i class="fas fa-arrow-down" style="color: #10b981; margin-right: 8px;"></i>Nuevo Ingreso</h3>
+            <button class="btn-close" onclick="cerrarModalNuevoIngreso()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <form id="formNuevoIngreso">
+                <div class="form-group">
+                    <label>Concepto *</label>
+                    <input type="text" id="ingresoConcepto" class="form-control" required maxlength="150" oninput="limpiarInputConceptoFinanciero(this)">
+                    <small style="color: var(--text-muted); display: block; margin-top: 4px;">Letras, números, paréntesis y guiones. Máx. 150 caracteres.</small>
+                </div>
+                <div class="form-group">
+                    <label>Monto (S/) *</label>
+                    <input type="text" id="ingresoMonto" class="form-control" inputmode="decimal" placeholder="0.00" maxlength="11" required oninput="limpiarInputMontoDecimalFinanciero(this)">
+                </div>
+                <div class="form-group">
+                    <label>¿A dónde ingresa el dinero? *</label>
+                    <select id="ingresoDestino" class="form-control" required onchange="actualizarNumeroOperacionFinanciero('ingresoDestino', 'grupoNumeroOperacionIngreso', 'ingresoNumeroOperacion')">
+                        <option value="">Seleccione...</option>
+                    </select>
+                </div>
+                <div class="form-group" id="grupoNumeroOperacionIngreso" style="display: none;">
+                    <label>N° de Operación *</label>
+                    <input type="text" id="ingresoNumeroOperacion" class="form-control" maxlength="100" oninput="limpiarInputNumeroOperacionFinanciero(this)">
+                </div>
+            </form>
+        </div>
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; gap: 12px; background: #f8fafc; border-bottom-left-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-lg);">
+            <button class="btn-secondary" onclick="cerrarModalNuevoIngreso()">Cancelar</button>
+            <button class="btn-primary" id="btnGuardarNuevoIngreso" onclick="guardarNuevoIngreso()" style="background: #10b981;">
+                <i class="fas fa-save"></i> Registrar Ingreso
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo Egreso -->
+<div id="modalNuevoEgreso" class="modal-overlay" style="display: none; align-items: center;">
+    <div class="modal-container" style="max-width: 480px; width: 100%;">
+        <div class="modal-header">
+            <h3><i class="fas fa-arrow-up" style="color: #ef4444; margin-right: 8px;"></i>Nuevo Egreso</h3>
+            <button class="btn-close" onclick="cerrarModalNuevoEgreso()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <form id="formNuevoEgreso">
+                <div class="form-group">
+                    <label>Concepto *</label>
+                    <input type="text" id="egresoConcepto" class="form-control" required maxlength="150" oninput="limpiarInputConceptoFinanciero(this)">
+                    <small style="color: var(--text-muted); display: block; margin-top: 4px;">Letras, números, paréntesis y guiones. Máx. 150 caracteres.</small>
+                </div>
+                <div class="form-group">
+                    <label>Monto (S/) *</label>
+                    <input type="text" id="egresoMonto" class="form-control" inputmode="decimal" placeholder="0.00" maxlength="11" required oninput="limpiarInputMontoDecimalFinanciero(this)">
+                </div>
+                <div class="form-group">
+                    <label>¿De dónde sale el dinero? *</label>
+                    <select id="egresoOrigen" class="form-control" required onchange="onCambioOrigenEgreso()">
+                        <option value="">Seleccione...</option>
+                    </select>
+                    <small id="egresoSaldoDisponible" style="color: var(--text-muted); display: block; margin-top: 4px;"></small>
+                </div>
+                <div class="form-group" id="grupoNumeroOperacionEgreso" style="display: none;">
+                    <label>N° de Operación *</label>
+                    <input type="text" id="egresoNumeroOperacion" class="form-control" maxlength="100" oninput="limpiarInputNumeroOperacionFinanciero(this)">
+                </div>
+            </form>
+        </div>
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; gap: 12px; background: #f8fafc; border-bottom-left-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-lg);">
+            <button class="btn-secondary" onclick="cerrarModalNuevoEgreso()">Cancelar</button>
+            <button class="btn-primary" id="btnGuardarNuevoEgreso" onclick="guardarNuevoEgreso()" style="background: #ef4444;">
+                <i class="fas fa-save"></i> Registrar Egreso
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Transferencia Interna -->
+<div id="modalTransferenciaInterna" class="modal-overlay" style="display: none; align-items: center;">
+    <div class="modal-container" style="max-width: 480px; width: 100%;">
+        <div class="modal-header">
+            <h3><i class="fas fa-exchange-alt" style="color: #3b82f6; margin-right: 8px;"></i>Transferencia Interna</h3>
+            <button class="btn-close" onclick="cerrarModalTransferenciaInterna()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <form id="formTransferenciaInterna">
+                <div class="form-group">
+                    <label>Origen (¿de dónde sale?) *</label>
+                    <select id="transferenciaOrigen" class="form-control" required onchange="onCambioOrigenTransferencia()">
+                        <option value="">Seleccione...</option>
+                    </select>
+                    <small id="transferenciaSaldoDisponible" style="color: var(--text-muted); display: block; margin-top: 4px;"></small>
+                </div>
+                <div class="form-group">
+                    <label>Destino (¿a dónde llega?) *</label>
+                    <select id="transferenciaDestino" class="form-control" required>
+                        <option value="">Seleccione...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Monto (S/) *</label>
+                    <input type="text" id="transferenciaMonto" class="form-control" inputmode="decimal" placeholder="0.00" maxlength="11" required oninput="limpiarInputMontoDecimalFinanciero(this)">
+                </div>
+                <div class="form-group">
+                    <label>Concepto *</label>
+                    <input type="text" id="transferenciaConcepto" class="form-control" required maxlength="150" value="Transferencia entre cuentas propias" oninput="limpiarInputConceptoFinanciero(this)">
+                    <small style="color: var(--text-muted); display: block; margin-top: 4px;">Letras, números, paréntesis y guiones. Máx. 150 caracteres.</small>
+                </div>
+                <div class="form-group">
+                    <label>N° de Operación (Opcional)</label>
+                    <input type="text" id="transferenciaNumeroOperacion" class="form-control" maxlength="100" oninput="limpiarInputNumeroOperacionFinanciero(this)">
+                </div>
+            </form>
+        </div>
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; gap: 12px; background: #f8fafc; border-bottom-left-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-lg);">
+            <button class="btn-secondary" onclick="cerrarModalTransferenciaInterna()">Cancelar</button>
+            <button class="btn-primary" id="btnGuardarTransferenciaInterna" onclick="guardarTransferenciaInterna()" style="background: #3b82f6;">
+                <i class="fas fa-exchange-alt"></i> Transferir
+            </button>
+        </div>
+    </div>
+</div>

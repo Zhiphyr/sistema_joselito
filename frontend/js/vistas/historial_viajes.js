@@ -1,5 +1,7 @@
 let historialViajesTodos = [];
 let dtHistorial = null;
+let opcionesCuentasBancariasAdelanto = [];
+let opcionesBilleterasDigitalesAdelanto = [];
 
 // Fusiona los viajes recién obtenidos con la caché existente por id_viaje,
 // en vez de reemplazarla. Las pestañas Gestionar/Historial comparten esta
@@ -31,6 +33,8 @@ async function init_historial_viajes() {
     // este reseteo, el guard de la pestaña Historial no vuelve a pedir datos
     // y renderizarTablaHistorialViajes intenta actualizar una tabla fantasma.
     dtHistorial = null;
+
+    cargarCuentasBancariasAdelanto();
 
     // El HTML recién inyectado siempre muestra la pestaña Gestionar activa
     // por defecto, pero currentTab (y las páginas) quedaban con el valor de
@@ -2204,8 +2208,15 @@ function mostrarFormularioNuevoAdelanto(idViaje) {
                 </div>
             </div>
 
-            <!-- Segunda Fila (Operación y Evidencia) - Inicialmente oculta porque por defecto es Efectivo -->
-            <div id="container-adelanto-operacion-evidencia" style="display: none; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <!-- Segunda Fila (Cuenta/Billetera y Operación) - Inicialmente oculta porque por defecto es Efectivo -->
+            <div id="container-adelanto-operacion-evidencia" style="display: none; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                <div>
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Cuenta / Billetera *</label>
+                    <select id="nuevo-adelanto-cuenta" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; color: var(--text-primary); outline: none; background: white; transition: border-color 0.2s;">
+                        <option value="">Seleccione...</option>
+                    </select>
+                </div>
+
                 <div>
                     <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Nro. de Operación *</label>
                     <input type="text" id="nuevo-adelanto-operacion" placeholder="Ej: 123456789" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; box-sizing: border-box; outline: none; transition: border-color 0.2s;">
@@ -2239,6 +2250,90 @@ function mostrarFormularioNuevoAdelanto(idViaje) {
     `;
 }
 
+async function cargarCuentasBancariasAdelanto() {
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const response = await fetch('/api/deudas/cuentas-bancarias', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const result = await response.json();
+        if (result.success) {
+            opcionesCuentasBancariasAdelanto = result.data.cuentas || [];
+            opcionesBilleterasDigitalesAdelanto = result.data.billeteras || [];
+        }
+    } catch (error) {
+        console.error('Error al cargar cuentas bancarias para adelantos:', error);
+    }
+}
+
+/**
+ * Trae el saldo actual de todas las cuentas/billeteras (caja física, cuentas bancarias
+ * y billeteras independientes) para validar fondos suficientes antes de dar un adelanto.
+ * Se pide fresco cada vez que se necesita (no se cachea) porque el saldo cambia constantemente.
+ */
+async function obtenerResumenCuentasFinanciero() {
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const res = await fetch('/api/dashboard-financiero/cuentas-resumen', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const json = await res.json();
+        return json.success ? json.data : null;
+    } catch (error) {
+        console.error('Error al obtener el saldo de las cuentas:', error);
+        return null;
+    }
+}
+
+/**
+ * Resuelve el saldo disponible del método de pago elegido (Efectivo -> Caja Física;
+ * Billetera Digital -> billetera independiente o, si está vinculada a una cuenta, el saldo
+ * combinado de esa cuenta; Transferencia/Depósito -> la cuenta bancaria seleccionada).
+ */
+function resolverSaldoDisponible(resumenCuentas, metodo, idCuentaSeleccionada, idBilleteraSeleccionada) {
+    if (!resumenCuentas) return 0;
+
+    if (metodo === 'Efectivo') {
+        return resumenCuentas.caja_fisica ? Number(resumenCuentas.caja_fisica.saldo) : 0;
+    }
+
+    if (metodo === 'Billetera Digital') {
+        const cuentaVinculada = resumenCuentas.cuentas_bancarias.find(c =>
+            c.billetera_vinculada && String(c.billetera_vinculada.id_billetera) === String(idBilleteraSeleccionada)
+        );
+        if (cuentaVinculada) return Number(cuentaVinculada.saldo);
+
+        const billeteraIndependiente = resumenCuentas.billeteras_independientes.find(b =>
+            String(b.id_billetera) === String(idBilleteraSeleccionada)
+        );
+        return billeteraIndependiente ? Number(billeteraIndependiente.saldo) : 0;
+    }
+
+    // Transferencia / Depósito
+    const cuenta = resumenCuentas.cuentas_bancarias.find(c => String(c.id_cuenta) === String(idCuentaSeleccionada));
+    return cuenta ? Number(cuenta.saldo) : 0;
+}
+
+function poblarSelectCuentaAdelantoHistorial(canal) {
+    const select = document.getElementById('nuevo-adelanto-cuenta');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">Seleccione...</option>';
+    const opciones = canal === 'Billetera Digital' ? opcionesBilleterasDigitalesAdelanto : opcionesCuentasBancariasAdelanto;
+
+    opciones.forEach(o => {
+        const opt = document.createElement('option');
+        if (canal === 'Billetera Digital') {
+            opt.value = o.id_billetera;
+            opt.textContent = `${o.entidad_financiera} - ${o.numero_celular} (${o.titular})`;
+        } else {
+            opt.value = o.id_cuenta;
+            opt.textContent = `${o.entidad_financiera} - ${o.nro_cuenta} (${o.titular})`;
+        }
+        select.appendChild(opt);
+    });
+}
+
 function mostrarNombreArchivoEvidencia() {
     const input = document.getElementById('nuevo-adelanto-evidencia');
     const label = document.getElementById('nombre-archivo-evidencia');
@@ -2254,8 +2349,10 @@ function toggleAdelantoOperacion() {
     const container = document.getElementById('container-adelanto-operacion-evidencia');
     if (metodo !== 'Efectivo') {
         container.style.display = 'grid';
+        poblarSelectCuentaAdelantoHistorial(metodo);
     } else {
         container.style.display = 'none';
+        document.getElementById('nuevo-adelanto-cuenta').innerHTML = '<option value="">Seleccione...</option>';
         document.getElementById('nuevo-adelanto-operacion').value = '';
         document.getElementById('nuevo-adelanto-evidencia').value = ''; // Reset file input
         document.getElementById('nombre-archivo-evidencia').textContent = ''; // Reset label
@@ -2267,6 +2364,7 @@ async function guardarAdelantoViaje(idViaje) {
     const metodo = document.getElementById('nuevo-adelanto-metodo').value;
     const motivo = document.getElementById('nuevo-adelanto-motivo').value.trim();
     const operacion = document.getElementById('nuevo-adelanto-operacion').value.trim();
+    const idCuentaSeleccionada = document.getElementById('nuevo-adelanto-cuenta').value;
     const evidenciaInput = document.getElementById('nuevo-adelanto-evidencia');
 
     if (!monto || monto <= 0) {
@@ -2276,6 +2374,22 @@ async function guardarAdelantoViaje(idViaje) {
 
     if (metodo !== 'Efectivo' && !operacion) {
         alert('El número de operación es obligatorio para el método de entrega seleccionado.');
+        return;
+    }
+
+    if (metodo !== 'Efectivo' && !idCuentaSeleccionada) {
+        alert('Selecciona la cuenta o billetera desde donde sale el adelanto.');
+        return;
+    }
+
+    const resumenCuentas = await obtenerResumenCuentasFinanciero();
+    const saldoDisponible = resolverSaldoDisponible(resumenCuentas, metodo, idCuentaSeleccionada, idCuentaSeleccionada);
+    if (monto > saldoDisponible) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Fondos Insuficientes',
+            text: `El método de pago seleccionado solo tiene S/ ${saldoDisponible.toFixed(2)} disponible.`
+        });
         return;
     }
 
@@ -2305,8 +2419,13 @@ async function guardarAdelantoViaje(idViaje) {
         formData.append('motivo_referencial', motivo);
         if (metodo !== 'Efectivo') {
             formData.append('numero_operacion', operacion);
+            if (metodo === 'Billetera Digital') {
+                formData.append('id_billetera', idCuentaSeleccionada);
+            } else {
+                formData.append('id_cuenta', idCuentaSeleccionada);
+            }
         }
-        
+
         if (evidenciaInput.files.length > 0) {
             formData.append('evidencia', evidenciaInput.files[0]);
         }

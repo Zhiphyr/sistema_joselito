@@ -273,11 +273,55 @@ function abrirModalRegistro() {
     document.getElementById('formCuentaBancaria').reset();
     document.getElementById('formBilleteraDigital').reset();
     Array.from(document.querySelectorAll('.form-group small')).forEach(s => s.style.display = 'none');
-    
+    toggleMontoInicialBilletera();
+
     const tabBancosVisible = document.getElementById('tab-bancos').style.display !== 'none';
     seleccionarTipoRegistro(tabBancosVisible ? 'cuenta' : 'billetera');
-    
+
     document.getElementById('modalRegistro').style.display = 'flex';
+}
+
+// Solo permite dígitos y un único punto decimal, máx. 2 decimales (DECIMAL(10,2), sin negativos).
+function limpiarInputMontoDecimal(input) {
+    let val = input.value.replace(/[^0-9.]/g, '');
+
+    const partes = val.split('.');
+    if (partes.length > 2) {
+        val = partes[0] + '.' + partes.slice(1).join('');
+    }
+
+    if (val.includes('.')) {
+        const [entero, decimal] = val.split('.');
+        val = entero.slice(0, 8) + '.' + decimal.slice(0, 2);
+    } else {
+        val = val.slice(0, 8);
+    }
+
+    input.value = val;
+}
+
+// El monto inicial de una billetera solo tiene sentido si es independiente: si el usuario
+// vincula una cuenta bancaria, el saldo de apertura le corresponde a esa cuenta, no a la billetera.
+function toggleMontoInicialBilletera() {
+    const idCuenta = document.getElementById('regBillCuentaVinculada').value;
+    const grupo = document.getElementById('grupoMontoInicialBilletera');
+    const input = document.getElementById('regBillMontoInicial');
+
+    if (idCuenta) {
+        grupo.style.display = 'none';
+        input.value = ''; // Se ignora/limpia lo que el usuario haya escrito antes de vincular.
+    } else {
+        grupo.style.display = 'block';
+    }
+}
+
+// Valida un monto ya saneado por limpiarInputMontoDecimal (DECIMAL(10,2), sin negativos).
+// Devuelve el número, o null si el campo está vacío, o false si el valor no es válido.
+function validarMontoInicial(valorTexto) {
+    const val = (valorTexto || '').trim();
+    if (val === '') return null;
+    if (!/^\d{1,8}(\.\d{1,2})?$/.test(val)) return false;
+    return Number(val);
 }
 
 function seleccionarTipoRegistro(tipo) {
@@ -357,6 +401,12 @@ async function guardarCuentaBancaria() {
         return;
     }
 
+    const montoInicial = validarMontoInicial(document.getElementById('regBancoMontoInicial').value);
+    if (montoInicial === false) {
+        Swal.fire({icon: 'warning', title: 'Monto inicial inválido', text: 'Ingresa un monto válido, sin negativos y con máximo 2 decimales.', confirmButtonColor: '#3b82f6'});
+        return;
+    }
+
     try {
         const headers = {
             'Content-Type': 'application/json',
@@ -365,6 +415,9 @@ async function guardarCuentaBancaria() {
         };
 
         const body = { id_entidad, tipo_cuenta, nro_cuenta, nro_cci, titular };
+        if (montoInicial) {
+            body.monto_inicial = montoInicial;
+        }
 
         const response = await fetch('http://localhost:3000/api/cuentas-bancarias/cuenta', {
             method: 'POST',
@@ -415,6 +468,16 @@ async function guardarBilleteraDigital() {
         return;
     }
 
+    // El monto inicial solo aplica si la billetera es independiente (sin cuenta vinculada).
+    let montoInicial = null;
+    if (!id_cuenta_vinculada) {
+        montoInicial = validarMontoInicial(document.getElementById('regBillMontoInicial').value);
+        if (montoInicial === false) {
+            Swal.fire({icon: 'warning', title: 'Monto inicial inválido', text: 'Ingresa un monto válido, sin negativos y con máximo 2 decimales.', confirmButtonColor: '#3b82f6'});
+            return;
+        }
+    }
+
     // Nota: Como subir QR es opcional y requiere FormData si hay archivo, por ahora enviaremos JSON 
     // y asumiremos ruta_qr nulo, ya que subir archivos requiere un backend con Multer/Cloudinary.
     // El usuario pidió "Subida de QR opcional", lo dejaremos listo para integrarse.
@@ -431,6 +494,9 @@ async function guardarBilleteraDigital() {
         formData.append('titular', titular);
         if (id_cuenta_vinculada) {
             formData.append('id_cuenta_vinculada', id_cuenta_vinculada);
+        }
+        if (montoInicial) {
+            formData.append('monto_inicial', montoInicial);
         }
         if (archivoQRSeleccionado) {
             formData.append('regBillQR', archivoQRSeleccionado);
@@ -711,12 +777,89 @@ async function toggleEstadoCuenta(id, estadoActual) {
             if (data.success) {
                 Swal.fire('¡Éxito!', `Cuenta ${accion.toLowerCase()}da exitosamente.`, 'success');
                 cargarDatos();
+            } else if (data.requiereVaciado) {
+                abrirModalTransferirSaldo(id, data.saldo, data.message);
             } else {
                 Swal.fire('Error', data.message || 'Error al cambiar estado', 'error');
             }
         } catch (e) {
             Swal.fire('Error de conexión', 'Ocurrió un error al cambiar estado', 'error');
         }
+    }
+}
+
+// ----------------------------------------------------
+// TRANSFERIR SALDO ANTES DE INACTIVAR
+// ----------------------------------------------------
+let idCuentaAInactivar = null;
+
+function abrirModalTransferirSaldo(idCuenta, saldo, mensaje) {
+    const cuentasDestino = cuentasGlobales.filter(c => c.estado === 1 && c.id_cuenta !== idCuenta);
+
+    if (cuentasDestino.length === 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'No hay cuentas disponibles',
+            text: 'No tienes otra cuenta activa a la cual transferir este saldo. Activa o registra otra cuenta primero.',
+            confirmButtonColor: '#3b82f6'
+        });
+        return;
+    }
+
+    idCuentaAInactivar = idCuenta;
+
+    document.getElementById('textoTransferirSaldo').textContent =
+        mensaje || `Esta cuenta tiene fondos. Para inactivarla, debes vaciar el saldo de S/ ${Number(saldo).toFixed(2)}. ¿A dónde deseas enviar este dinero?`;
+
+    const select = document.getElementById('selectCuentaDestinoTransferencia');
+    select.innerHTML = '<option value="">Seleccione una cuenta...</option>' +
+        cuentasDestino.map(c => `<option value="${c.id_cuenta}">${c.entidad_financiera} - ${c.tipo_cuenta}${c.nro_cuenta ? ' - ' + c.nro_cuenta : ''} (${c.titular})</option>`).join('');
+
+    document.getElementById('modalTransferirSaldo').style.display = 'flex';
+}
+
+function cerrarModalTransferirSaldo() {
+    document.getElementById('modalTransferirSaldo').style.display = 'none';
+    idCuentaAInactivar = null;
+}
+
+async function confirmarTransferirYVaciarCuenta() {
+    const idDestino = document.getElementById('selectCuentaDestinoTransferencia').value;
+    if (!idDestino) {
+        Swal.fire({ icon: 'warning', title: 'Selecciona una cuenta', text: 'Debes elegir a dónde enviar el saldo.', confirmButtonColor: '#3b82f6' });
+        return;
+    }
+
+    const btn = document.getElementById('btnConfirmarTransferirSaldo');
+    const textoOriginalBtn = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+
+    try {
+        const res = await fetch(`http://localhost:3000/api/cuentas-bancarias/cuenta/${idCuentaAInactivar}/transferir-e-inactivar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionStorage.getItem('token_joselito')}`,
+                'x-user-profile': JSON.parse(sessionStorage.getItem('usuario_joselito'))?.id_usuario || 1
+            },
+            body: JSON.stringify({ id_cuenta_destino: idDestino })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            cerrarModalTransferirSaldo();
+            Swal.fire('¡Listo!', 'El saldo fue transferido y la cuenta quedó inactiva.', 'success');
+            cargarDatos();
+        } else {
+            Swal.fire('Error', data.message || 'No se pudo completar la transferencia.', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        Swal.fire('Error de conexión', 'Ocurrió un error al transferir el saldo.', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginalBtn;
     }
 }
 

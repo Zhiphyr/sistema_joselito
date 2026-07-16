@@ -1,10 +1,74 @@
 const db = require('../config/db');
 const { cloudinary } = require('../config/cloudinary');
 
+// Resuelve la cuenta/billetera de origen de un pago en efectivo/transferencia/billetera,
+// siguiendo la misma convención usada en deudaController.registrarCobro y en
+// liquidarViaje: Efectivo siempre sale de la Caja Física (es_sistema=1); una Billetera
+// Digital arrastra también la cuenta bancaria a la que esté vinculada (si tiene una).
+const resolverOrigenPagoAdelanto = async (connection, metodoPago, idCuentaSeleccionada, idBilleteraSeleccionada) => {
+    if (metodoPago === 'Efectivo') {
+        const [cajaRows] = await connection.query('SELECT id_cuenta FROM cuenta_bancaria WHERE es_sistema = 1 AND tipo_cuenta = "Efectivo" LIMIT 1');
+        return { id_cuenta_origen: cajaRows.length > 0 ? cajaRows[0].id_cuenta : null, id_billetera_origen: null };
+    }
+    if (metodoPago === 'Billetera Digital' && idBilleteraSeleccionada) {
+        const [billRows] = await connection.query('SELECT id_cuenta_vinculada FROM billetera_digital WHERE id_billetera = ?', [idBilleteraSeleccionada]);
+        const idCuentaVinculada = billRows.length > 0 ? billRows[0].id_cuenta_vinculada : null;
+        return { id_cuenta_origen: idCuentaVinculada || null, id_billetera_origen: idBilleteraSeleccionada };
+    }
+    return { id_cuenta_origen: idCuentaSeleccionada || null, id_billetera_origen: null };
+};
+
+// Saldo actual del método de pago ya resuelto por resolverOrigenPagoAdelanto (cuenta y/o
+// billetera). Misma regla anti-doble-conteo que cuentaBancariaController.calcularSaldoCuenta
+// y dashboardFinancieroController.obtenerResumenCuentas: si hay cuenta, esa es la entidad
+// (arrastra su billetera vinculada si tiene); si solo hay billetera, es una independiente.
+const calcularSaldoDisponible = async (connection, idCuentaOrigen, idBilleteraOrigen) => {
+    if (idCuentaOrigen) {
+        const [billRows] = await connection.query('SELECT id_billetera FROM billetera_digital WHERE active_cuenta_vinculada = ?', [idCuentaOrigen]);
+        const idBilleteraVinc = billRows.length > 0 ? billRows[0].id_billetera : null;
+
+        let query = `
+            SELECT
+                IFNULL(SUM(CASE WHEN id_cuenta_destino = ? THEN monto ELSE 0 END), 0) AS ingresos_cuenta,
+                IFNULL(SUM(CASE WHEN id_cuenta_origen = ? THEN monto ELSE 0 END), 0) AS egresos_cuenta
+        `;
+        const params = [idCuentaOrigen, idCuentaOrigen];
+
+        if (idBilleteraVinc) {
+            query += `,
+                IFNULL(SUM(CASE WHEN id_billetera_destino = ? AND id_cuenta_destino IS NULL THEN monto ELSE 0 END), 0) AS ingresos_billetera,
+                IFNULL(SUM(CASE WHEN id_billetera_origen = ? AND id_cuenta_origen IS NULL THEN monto ELSE 0 END), 0) AS egresos_billetera
+            `;
+            params.push(idBilleteraVinc, idBilleteraVinc);
+        }
+
+        query += ' FROM movimiento_caja WHERE estado = 1';
+
+        const [rows] = await connection.query(query, params);
+        const r = rows[0];
+        let saldo = Number(r.ingresos_cuenta) - Number(r.egresos_cuenta);
+        if (idBilleteraVinc) saldo += Number(r.ingresos_billetera) - Number(r.egresos_billetera);
+        return Math.round(saldo * 100) / 100;
+    }
+
+    if (idBilleteraOrigen) {
+        const [rows] = await connection.query(`
+            SELECT
+                IFNULL(SUM(CASE WHEN id_billetera_destino = ? THEN monto ELSE 0 END), 0) AS ingresos,
+                IFNULL(SUM(CASE WHEN id_billetera_origen = ? THEN monto ELSE 0 END), 0) AS egresos
+            FROM movimiento_caja WHERE estado = 1
+        `, [idBilleteraOrigen, idBilleteraOrigen]);
+        const saldo = Number(rows[0].ingresos) - Number(rows[0].egresos);
+        return Math.round(saldo * 100) / 100;
+    }
+
+    return 0;
+};
+
 const registrarViaje = async (req, res) => {
     let connection;
     try {
-        let { camion, ruta, flete_global, tarifa_transportista, fecha_salida, cargas, tiene_adelanto, monto_adelanto, metodo_adelanto, numero_operacion } = req.body;
+        let { camion, ruta, flete_global, tarifa_transportista, fecha_salida, cargas, tiene_adelanto, monto_adelanto, metodo_adelanto, numero_operacion, id_cuenta_adelanto, id_billetera_adelanto } = req.body;
         const userId = req.headers['x-user-profile'] || 1; // Ajustar según tu autenticación
 
         // Parsear datos si vienen de FormData (multipart)
@@ -102,17 +166,51 @@ const registrarViaje = async (req, res) => {
 
         // 4. Insertar Adelanto Inicial si aplica
         if (tiene_adelanto && Number(monto_adelanto) > 0) {
+            const metodoAdelantoFinal = metodo_adelanto || 'Efectivo';
+            const { id_cuenta_origen, id_billetera_origen } = await resolverOrigenPagoAdelanto(
+                connection, metodoAdelantoFinal, id_cuenta_adelanto || null, id_billetera_adelanto || null
+            );
+
+            const saldoDisponibleAdelanto = await calcularSaldoDisponible(connection, id_cuenta_origen, id_billetera_origen);
+            if (saldoDisponibleAdelanto < Number(monto_adelanto)) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    success: false,
+                    message: `Fondos Insuficientes: el método de pago seleccionado para el adelanto solo tiene S/ ${saldoDisponibleAdelanto.toFixed(2)} disponible.`
+                });
+            }
+
             const sqlAdelanto = `
-                INSERT INTO adelantos_viaje (id_viaje, id_usuario, monto, metodo_entrega, numero_operacion, evidencia_url, motivo_referencial)
-                VALUES (?, ?, ?, ?, ?, ?, 'Viáticos iniciales')
+                INSERT INTO adelantos_viaje (id_viaje, id_usuario, monto, id_cuenta, id_billetera, metodo_entrega, numero_operacion, evidencia_url, motivo_referencial)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Viáticos iniciales')
             `;
-            await connection.query(sqlAdelanto, [
+            const [resultAdelanto] = await connection.query(sqlAdelanto, [
                 idViajeInsertado,
                 userId,
                 Number(monto_adelanto),
-                metodo_adelanto || 'Efectivo',
+                id_cuenta_origen,
+                id_billetera_origen,
+                metodoAdelantoFinal,
                 numero_operacion || null,
                 evidencia_url || null
+            ]);
+
+            // 4.1. Inyectar en Libro Mayor (movimiento_caja) - el adelanto ya sale de caja/banco
+            // en este momento; luego, al liquidar, el neto a pagar ya viene descontado.
+            await connection.query(`
+                INSERT INTO movimiento_caja
+                (tipo_movimiento, concepto, monto, metodo_pago, id_cuenta_origen, id_billetera_origen, id_cuenta_destino, id_billetera_destino, modulo_origen, id_registro_origen, numero_operacion, id_usuario)
+                VALUES ('EGRESO', ?, ?, ?, ?, ?, NULL, NULL, 'ADELANTOS', ?, ?, ?)
+            `, [
+                `Adelanto a transportista - Viaje #${idViajeInsertado}`,
+                Number(monto_adelanto),
+                metodoAdelantoFinal,
+                id_cuenta_origen,
+                id_billetera_origen,
+                resultAdelanto.insertId,
+                numero_operacion || null,
+                userId
             ]);
         }
 
@@ -964,9 +1062,10 @@ const obtenerAdelantosViaje = async (req, res) => {
 };
 
 const registrarAdelantoViaje = async (req, res) => {
+    let connection;
     try {
         const idViaje = req.params.id;
-        const { monto, metodo_entrega, motivo_referencial, numero_operacion } = req.body;
+        const { monto, metodo_entrega, motivo_referencial, numero_operacion, id_cuenta, id_billetera } = req.body;
         const userId = req.headers['x-user-id'];
         const evidencia_url = req.file ? req.file.path : null;
 
@@ -1006,23 +1105,63 @@ const registrarAdelantoViaje = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El monto debe ser un número mayor a 0.' });
         }
 
-        await db.query(`
-            INSERT INTO adelantos_viaje (id_viaje, id_usuario, monto, metodo_entrega, numero_operacion, evidencia_url, motivo_referencial, estado)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        const { id_cuenta_origen, id_billetera_origen } = await resolverOrigenPagoAdelanto(
+            connection, metodo_entrega, id_cuenta || null, id_billetera || null
+        );
+
+        const saldoDisponibleAdelanto = await calcularSaldoDisponible(connection, id_cuenta_origen, id_billetera_origen);
+        if (saldoDisponibleAdelanto < montoNumber) {
+            await connection.rollback();
+            connection.release();
+            return res.status(400).json({
+                success: false,
+                message: `Fondos Insuficientes: el método de pago seleccionado solo tiene S/ ${saldoDisponibleAdelanto.toFixed(2)} disponible.`
+            });
+        }
+
+        const [resultAdelanto] = await connection.query(`
+            INSERT INTO adelantos_viaje (id_viaje, id_usuario, monto, id_cuenta, id_billetera, metodo_entrega, numero_operacion, evidencia_url, motivo_referencial, estado)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         `, [
-            idViaje, 
-            userId, 
-            montoNumber, 
-            metodo_entrega, 
-            numero_operacion || null, 
-            evidencia_url, 
+            idViaje,
+            userId,
+            montoNumber,
+            id_cuenta_origen,
+            id_billetera_origen,
+            metodo_entrega,
+            numero_operacion || null,
+            evidencia_url,
             motivo_referencial || null
         ]);
 
+        // Inyectar en Libro Mayor (movimiento_caja) - mismo patrón que el adelanto inicial en registrarViaje.
+        await connection.query(`
+            INSERT INTO movimiento_caja
+            (tipo_movimiento, concepto, monto, metodo_pago, id_cuenta_origen, id_billetera_origen, id_cuenta_destino, id_billetera_destino, modulo_origen, id_registro_origen, numero_operacion, id_usuario)
+            VALUES ('EGRESO', ?, ?, ?, ?, ?, NULL, NULL, 'ADELANTOS', ?, ?, ?)
+        `, [
+            `Adelanto a transportista - Viaje #${idViaje}`,
+            montoNumber,
+            metodo_entrega,
+            id_cuenta_origen,
+            id_billetera_origen,
+            resultAdelanto.insertId,
+            numero_operacion || null,
+            userId
+        ]);
+
+        await connection.commit();
+
         return res.json({ success: true, message: 'Adelanto registrado correctamente.' });
     } catch (error) {
+        if (connection) await connection.rollback();
         console.error('Error al registrar adelanto:', error);
         return res.status(500).json({ success: false, message: 'Error de servidor al registrar el adelanto.' });
+    } finally {
+        if (connection) connection.release();
     }
 };
 
@@ -1348,6 +1487,11 @@ const liquidarViaje = async (req, res) => {
             const [cajaFisica] = await connection.query('SELECT id_cuenta FROM cuenta_bancaria WHERE es_sistema = 1 LIMIT 1');
             const id_caja_fisica = cajaFisica.length > 0 ? cajaFisica[0].id_cuenta : null;
 
+            // Acumula lo ya comprometido por método/cuenta dentro de este mismo carrito, para
+            // detectar el caso de dos líneas de pago que drenan la misma cuenta/billetera y en
+            // conjunto superan su saldo (cada línea sola podría parecer válida).
+            const saldosReservadosLiq = new Map();
+
             for (let i = 0; i < carrito_pagos.length; i++) {
                 const pago = carrito_pagos[i];
                 // Buscar si hay archivo para este indice
@@ -1355,22 +1499,7 @@ const liquidarViaje = async (req, res) => {
                 const fileObj = (req.files || []).find(f => f.fieldname === fileField);
                 const evidencia_url = fileObj ? fileObj.path : null;
 
-                // Insertar en detalle_pago
-                await connection.query(`
-                    INSERT INTO detalle_liquidacion_pago 
-                    (id_liquidacion, metodo_pago, id_cuenta, id_billetera, monto_pagado, numero_operacion, evidencia_url)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                `, [
-                    id_liquidacion, 
-                    pago.metodo_pago, 
-                    pago.id_cuenta || null, 
-                    pago.id_billetera || null, 
-                    pago.monto_pagado, 
-                    pago.numero_operacion || null, 
-                    evidencia_url
-                ]);
-
-                // 4. Inyectar en Libro Mayor (movimiento_caja)
+                // 4. Resolver método de pago y validar fondos suficientes ANTES de mover el dinero.
                 let id_cuenta_origen = null;
                 let id_billetera_origen = null;
 
@@ -1386,6 +1515,41 @@ const liquidarViaje = async (req, res) => {
                         id_cuenta_origen = billRows[0].id_cuenta_vinculada;
                     }
                 }
+
+                const montoPagoLinea = Number(pago.monto_pagado);
+                const claveSaldo = id_cuenta_origen ? `cuenta:${id_cuenta_origen}` : (id_billetera_origen ? `billetera:${id_billetera_origen}` : null);
+
+                if (claveSaldo) {
+                    const saldoBase = await calcularSaldoDisponible(connection, id_cuenta_origen, id_billetera_origen);
+                    const yaReservado = saldosReservadosLiq.get(claveSaldo) || 0;
+                    const saldoRestante = Math.round((saldoBase - yaReservado) * 100) / 100;
+
+                    if (saldoRestante < montoPagoLinea) {
+                        await connection.rollback();
+                        connection.release();
+                        return res.status(400).json({
+                            success: false,
+                            message: `Fondos Insuficientes: el método de pago "${pago.metodo_pago}" del pago #${i + 1} solo tiene S/ ${saldoRestante.toFixed(2)} disponible.`
+                        });
+                    }
+
+                    saldosReservadosLiq.set(claveSaldo, yaReservado + montoPagoLinea);
+                }
+
+                // Insertar en detalle_pago
+                await connection.query(`
+                    INSERT INTO detalle_liquidacion_pago
+                    (id_liquidacion, metodo_pago, id_cuenta, id_billetera, monto_pagado, numero_operacion, evidencia_url)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `, [
+                    id_liquidacion,
+                    pago.metodo_pago,
+                    pago.id_cuenta || null,
+                    pago.id_billetera || null,
+                    pago.monto_pagado,
+                    pago.numero_operacion || null,
+                    evidencia_url
+                ]);
 
                 const conceptoLibro = `Liquidación de viaje #${id} (${pago.metodo_pago})`;
                 await connection.query(`

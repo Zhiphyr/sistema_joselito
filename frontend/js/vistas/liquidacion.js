@@ -1051,6 +1051,72 @@ function obtenerNetoActualLiq() {
     return Math.max(0, bruto - adelanto - totalPenalidades);
 }
 
+/**
+ * Trae el saldo actual de todas las cuentas/billeteras (caja física, cuentas bancarias
+ * y billeteras independientes) para validar fondos suficientes antes de liquidar.
+ * Se pide fresco cada vez (no se cachea) porque el saldo cambia constantemente.
+ */
+async function obtenerResumenCuentasFinancieroLiq() {
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const res = await fetch('/api/dashboard-financiero/cuentas-resumen', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const json = await res.json();
+        return json.success ? json.data : null;
+    } catch (error) {
+        console.error('Error al obtener el saldo de las cuentas:', error);
+        return null;
+    }
+}
+
+/**
+ * Resuelve el saldo disponible del método de pago de una línea del carrito de liquidación.
+ * A diferencia del carrito de adelantos, aquí "Depósito" también sale de la Caja Física
+ * (no tiene selector de cuenta propio), igual que resuelve liquidarViaje en el backend.
+ */
+function resolverSaldoDisponibleLiq(resumenCuentas, metodo, idCuenta, idBilletera) {
+    if (!resumenCuentas) return 0;
+
+    if (metodo === 'Efectivo' || metodo === 'Depósito' || metodo === 'Deposito') {
+        return resumenCuentas.caja_fisica ? Number(resumenCuentas.caja_fisica.saldo) : 0;
+    }
+
+    if (metodo === 'Billetera Digital') {
+        const cuentaVinculada = resumenCuentas.cuentas_bancarias.find(c =>
+            c.billetera_vinculada && String(c.billetera_vinculada.id_billetera) === String(idBilletera)
+        );
+        if (cuentaVinculada) return Number(cuentaVinculada.saldo);
+
+        const billeteraIndependiente = resumenCuentas.billeteras_independientes.find(b =>
+            String(b.id_billetera) === String(idBilletera)
+        );
+        return billeteraIndependiente ? Number(billeteraIndependiente.saldo) : 0;
+    }
+
+    // Transferencia
+    const cuenta = resumenCuentas.cuentas_bancarias.find(c => String(c.id_cuenta) === String(idCuenta));
+    return cuenta ? Number(cuenta.saldo) : 0;
+}
+
+/** Identificador de la cuenta/billetera real que va a debitar una línea de pago, para poder
+ * acumular reservas cuando dos líneas del carrito terminan drenando la misma entidad. */
+function claveEntidadLiq(resumenCuentas, metodo, idCuenta, idBilletera) {
+    if (metodo === 'Efectivo' || metodo === 'Depósito' || metodo === 'Deposito') {
+        return resumenCuentas && resumenCuentas.caja_fisica ? `cuenta:${resumenCuentas.caja_fisica.id_cuenta}` : null;
+    }
+
+    if (metodo === 'Billetera Digital') {
+        const cuentaVinculada = resumenCuentas && resumenCuentas.cuentas_bancarias.find(c =>
+            c.billetera_vinculada && String(c.billetera_vinculada.id_billetera) === String(idBilletera)
+        );
+        if (cuentaVinculada) return `cuenta:${cuentaVinculada.id_cuenta}`;
+        return idBilletera ? `billetera:${idBilletera}` : null;
+    }
+
+    return idCuenta ? `cuenta:${idCuenta}` : null;
+}
+
 function renderizarCarritoPagosLiq() {
     const contenedor = document.getElementById('contenedorListaPagos');
     if (!contenedor) return;
@@ -1458,6 +1524,36 @@ window.procesarLiquidacion = async function() {
             return;
         }
         if (p.metodo_pago === 'Deposito') p.metodo_pago = 'Depósito';
+    }
+
+    // Validar fondos suficientes por método de pago (Efectivo y Depósito comparten la Caja
+    // Física, igual que hace el backend; se acumula lo reservado por si dos líneas del carrito
+    // drenan la misma cuenta/billetera).
+    const resumenCuentasLiq = await obtenerResumenCuentasFinancieroLiq();
+    const saldosReservadosLiq = new Map();
+
+    for (let i = 0; i < carritoPagosLiq.length; i++) {
+        const p = carritoPagosLiq[i];
+        const montoPagoLinea = Number(p.monto_pagado) || 0;
+        if (montoPagoLinea <= 0) continue;
+
+        const clave = claveEntidadLiq(resumenCuentasLiq, p.metodo_pago, p.id_cuenta, p.id_billetera);
+        if (!clave) continue;
+
+        const saldoBase = resolverSaldoDisponibleLiq(resumenCuentasLiq, p.metodo_pago, p.id_cuenta, p.id_billetera);
+        const yaReservado = saldosReservadosLiq.get(clave) || 0;
+        const saldoRestante = Math.round((saldoBase - yaReservado) * 100) / 100;
+
+        if (saldoRestante < montoPagoLinea) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Fondos Insuficientes',
+                text: `El método de pago "${p.metodo_pago}" del pago #${i + 1} solo tiene S/ ${saldoRestante.toFixed(2)} disponible.`
+            });
+            return;
+        }
+
+        saldosReservadosLiq.set(clave, yaReservado + montoPagoLinea);
     }
 
     // Mostrar loader

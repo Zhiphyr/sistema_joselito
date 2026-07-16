@@ -10,6 +10,16 @@ const listarCamiones = async (req, res) => {
     }
 };
 
+const listarCamionesDisponibles = async (req, res) => {
+    try {
+        const camiones = await CamionModel.obtenerCamionesDisponibles();
+        return res.status(200).json({ success: true, data: camiones });
+    } catch (error) {
+        console.error('Error en listarCamionesDisponibles:', error);
+        return res.status(500).json({ success: false, message: 'Error interno del servidor' });
+    }
+};
+
 const registrar = async (req, res) => {
     try {
         const { nombre, placa, tipo_documento, numero_documento, conductor, direccion, telefono } = req.body;
@@ -288,6 +298,7 @@ const obtenerIncidenciasPendientesPorCamion = async (req, res) => {
 
 module.exports = {
     listarCamiones,
+    listarCamionesDisponibles,
     registrar,
     actualizar,
     reactivar,
