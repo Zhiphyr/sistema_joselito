@@ -22,24 +22,10 @@
             <!-- Cabecera Logo -->
             <div class="visual-header">
                 <div class="logo-container">
-                    <i class="fa-solid fa-truck-ramp-box"></i>
                     <h2>Transporte Joselito</h2>
                 </div>
             </div>
 
-            <!-- Tarjeta Interactiva con Efecto Tilt 3D -->
-            <div class="visual-body">
-                <div class="info-card-interactive" id="infoCard">
-                    <span>Central de Operaciones</span>
-                    <h1>Conectando Caminos, Asegurando tu Carga.</h1>
-                    <p>Módulo administrativo inteligente para el control de flota, conductores e ingresos logísticos a nivel nacional.</p>
-                    
-                    <div class="system-status-pill">
-                        <div class="pulse-dot"></div>
-                        <span>Operaciones en Línea</span>
-                    </div>
-                </div>
-            </div>
 
             <!-- Pie de página izquierdo -->
             <div class="visual-footer">
@@ -52,7 +38,8 @@
             <div class="form-container">
                 
                 <div class="form-header">
-                    <h2>Iniciar Sesión</h2>
+                    <img src="img/letras-blancas.png" alt="Transporte Joselito" class="logo-login">
+                    <h2 class="welcome-text">Bienvenido de nuevo</h2>
                     <p>Ingresa tus credenciales para acceder al panel de control.</p>
                 </div>
 
@@ -72,13 +59,6 @@
                             <i class="fa-solid fa-lock"></i>
                             <input type="password" id="clave" name="clave" placeholder="Ingresa tu contraseña" required>
                         </div>
-                    </div>
-
-                    <div class="form-options">
-                        <label class="remember-me">
-                            <input type="checkbox" checked> Recordar acceso
-                        </label>
-                        <a href="#" class="forgot-password" onclick="Swal.fire('Recuperar contraseña', 'Contacta al administrador del sistema para restablecer tu contraseña.', 'info')">¿Olvidaste tu contraseña?</a>
                     </div>
 
                     <button type="submit" class="btn-login" id="btnSubmit">

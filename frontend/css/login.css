@@ -69,7 +69,7 @@ html.swal2-height-auto {
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, rgba(7, 10, 19, 0.9) 0%, rgba(15, 23, 42, 0.45) 50%, rgba(7, 10, 19, 0.95) 100%);
+    background: radial-gradient(circle at center, rgba(15, 23, 42, 0.2) 0%, rgba(7, 10, 19, 0.9) 100%);
     z-index: 2;
     pointer-events: none;
 }
@@ -214,6 +214,7 @@ html.swal2-height-auto {
 
 .form-header {
     margin-bottom: 35px;
+    text-align: center;
 }
 
 .form-header h2 {
@@ -223,8 +224,24 @@ html.swal2-height-auto {
     letter-spacing: 0.5px;
 }
 
+.logo-login {
+    width: 100%;
+    max-width: 250px;
+    margin-bottom: 16px;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.welcome-text {
+    font-size: 22px !important;
+    font-weight: 700 !important;
+    color: #f8fafc;
+}
+
 .form-header p {
-    color: #64748b;
+    color: #94a3b8;
     font-size: 14px;
     margin-top: 6px;
 }
@@ -286,52 +303,19 @@ html.swal2-height-auto {
     color: var(--brand-cyan);
 }
 
-/* Opciones de Acceso */
-.form-options {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 25px;
-    font-size: 13px;
-}
-
-.remember-me {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #64748b;
-    cursor: pointer;
-}
-
-.remember-me input {
-    accent-color: var(--brand-primary);
-    cursor: pointer;
-}
-
-.forgot-password {
-    color: var(--brand-primary);
-    text-decoration: none;
-    font-weight: 600;
-    transition: color 0.2s;
-}
-
-.forgot-password:hover {
-    color: var(--brand-primary-hover);
-}
-
 /* Botón de acceso con animación hover */
 .btn-login {
     width: 100%;
     background: linear-gradient(135deg, var(--brand-primary) 0%, #0284c7 100%);
-    border: none;
+    border: 1px solid rgba(255,255,255,0.1);
     border-radius: var(--radius-lg);
-    padding: 15px;
+    padding: 16px;
     color: #ffffff;
     font-size: 15px;
     font-weight: 700;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-    box-shadow: 0 8px 20px var(--brand-primary-glow);
+    box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -340,9 +324,9 @@ html.swal2-height-auto {
 }
 
 .btn-login:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 25px var(--brand-primary-glow);
-    background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px rgba(14, 165, 233, 0.6);
+    background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
 }
 
 .btn-login:disabled {
