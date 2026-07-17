@@ -55,39 +55,131 @@ function construirSidebar(opciones) {
     const menuList = document.getElementById('menuList');
     menuList.innerHTML = '';
 
-    opciones.forEach(opcion => {
-        const li = document.createElement('li');
+    const { standalone, categorias } = agruparOpciones(opciones);
 
-        const a = document.createElement('a');
-        a.className = 'nav-link';
-        a.dataset.ruta = opcion.ruta;
-        const icon = document.createElement('i');
-        icon.className = opcion.icono || 'fas fa-circle';
-
-        const span = document.createElement('span');
-        span.textContent = opcion.nombre;
-
-        a.appendChild(icon);
-        a.appendChild(span);
-        li.appendChild(a);
-
-        a.addEventListener('click', (e) => {
-            e.preventDefault();
-
-            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
-            a.classList.add('active');
-            document.getElementById('viewTitle').textContent = opcion.nombre;
-
-            cargarVistaSPA(opcion.ruta, opcion.nombre);
-        });
-
-        menuList.appendChild(li);
+    // 1. Enlaces de nivel superior (Dashboard) — fuera de cualquier categoría
+    standalone.forEach(opcion => {
+        menuList.appendChild(crearItemMenu(opcion));
     });
 
-    if (opciones.length > 0) {
-        const firstLink = menuList.querySelector('.nav-link');
-        if (firstLink) firstLink.click();
-    }
+    // 2. Grupos categorizados con acordeón
+    categorias.forEach(categoria => {
+        menuList.appendChild(crearGrupoCategoria(categoria));
+    });
+
+    // 3. Auto-abrir el primer enlace disponible (Dashboard hoy, por ir primero en el DOM)
+    const firstLink = menuList.querySelector('.nav-link');
+    if (firstLink) firstLink.click();
+}
+
+// Agrupa opciones ya ordenadas por `orden` (backend) usando el orden de primera aparición
+// de cada `categoria` para fijar la posición del grupo. Dashboard (ruta === 'dashboard')
+// siempre queda fuera de las categorías, sin importar su valor de categoria en BD.
+function agruparOpciones(opciones) {
+    const standalone = [];
+    const categorias = [];
+    const indice = new Map(); // nombreCategoria -> índice en categorias[]
+
+    opciones.forEach(opcion => {
+        if (opcion.ruta === 'dashboard') {
+            standalone.push(opcion);
+            return;
+        }
+
+        const nombreCategoria = (opcion.categoria && opcion.categoria.trim() !== '')
+            ? opcion.categoria.trim()
+            : 'General';
+
+        if (!indice.has(nombreCategoria)) {
+            indice.set(nombreCategoria, categorias.length);
+            categorias.push({ nombre: nombreCategoria, items: [] });
+        }
+        categorias[indice.get(nombreCategoria)].items.push(opcion);
+    });
+
+    return { standalone, categorias };
+}
+
+function crearGrupoCategoria(categoria) {
+    const liCategoria = document.createElement('li');
+    liCategoria.className = 'nav-category';
+
+    const expandedKey = `sidebarCategoria_${slugify(categoria.nombre)}`;
+    // Por defecto expandido; solo colapsado si el usuario lo cerró explícitamente antes
+    const estaExpandido = localStorage.getItem(expandedKey) !== 'false';
+
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'nav-category-header';
+    header.setAttribute('aria-expanded', String(estaExpandido));
+    if (!estaExpandido) header.classList.add('collapsed');
+
+    const headerText = document.createElement('span');
+    headerText.className = 'nav-category-title';
+    headerText.textContent = categoria.nombre;
+
+    const chevron = document.createElement('i');
+    chevron.className = 'fas fa-chevron-down nav-category-chevron';
+
+    header.appendChild(headerText);
+    header.appendChild(chevron);
+
+    const subList = document.createElement('ul');
+    subList.className = 'nav-category-items';
+    if (!estaExpandido) subList.classList.add('collapsed');
+
+    categoria.items.forEach(opcion => {
+        subList.appendChild(crearItemMenu(opcion));
+    });
+
+    header.addEventListener('click', () => {
+        const colapsado = subList.classList.toggle('collapsed');
+        header.classList.toggle('collapsed', colapsado);
+        header.setAttribute('aria-expanded', String(!colapsado));
+        localStorage.setItem(expandedKey, String(!colapsado));
+    });
+
+    liCategoria.appendChild(header);
+    liCategoria.appendChild(subList);
+    return liCategoria;
+}
+
+function crearItemMenu(opcion) {
+    const li = document.createElement('li');
+
+    const a = document.createElement('a');
+    a.className = 'nav-link';
+    a.dataset.ruta = opcion.ruta;
+
+    const icon = document.createElement('i');
+    icon.className = opcion.icono || 'fas fa-circle';
+
+    const span = document.createElement('span');
+    span.textContent = opcion.nombre;
+
+    a.appendChild(icon);
+    a.appendChild(span);
+    li.appendChild(a);
+
+    a.addEventListener('click', (e) => {
+        e.preventDefault();
+
+        document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+        a.classList.add('active');
+        document.getElementById('viewTitle').textContent = opcion.nombre;
+
+        cargarVistaSPA(opcion.ruta, opcion.nombre);
+    });
+
+    return li;
+}
+
+function slugify(texto) {
+    return texto
+        .toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
 }
 
 async function cargarVistaSPA(ruta, nombre) {

@@ -13,12 +13,16 @@ const listar = async (req, res) => {
 const registrar = async (req, res) => {
     try {
         const { nombre, ruta, icono } = req.body;
+        let { categoria, orden } = req.body;
 
         if (!nombre || !ruta || !icono) {
             return res.status(400).json({ success: false, message: 'Todos los campos (nombre, ruta, icono) son obligatorios' });
         }
 
-        const id = await OpcionModel.registrarOpcion({ nombre, ruta, icono });
+        categoria = (typeof categoria === 'string' && categoria.trim() !== '') ? categoria.trim() : null;
+        orden = Number.isInteger(parseInt(orden, 10)) ? parseInt(orden, 10) : 0;
+
+        const id = await OpcionModel.registrarOpcion({ nombre, ruta, icono, categoria, orden });
         return res.status(201).json({ success: true, message: 'Opción registrada exitosamente', id });
     } catch (error) {
         console.error('Error en registrar opción:', error);
@@ -33,12 +37,16 @@ const actualizar = async (req, res) => {
     try {
         const { id } = req.params;
         const { nombre, ruta, icono } = req.body;
+        let { categoria, orden } = req.body;
 
         if (!nombre || !ruta || !icono) {
             return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
         }
 
-        const afectados = await OpcionModel.actualizarOpcion(id, { nombre, ruta, icono });
+        categoria = (typeof categoria === 'string' && categoria.trim() !== '') ? categoria.trim() : null;
+        orden = Number.isInteger(parseInt(orden, 10)) ? parseInt(orden, 10) : 0;
+
+        const afectados = await OpcionModel.actualizarOpcion(id, { nombre, ruta, icono, categoria, orden });
         if (afectados > 0) {
             return res.status(200).json({ success: true, message: 'Opción actualizada exitosamente' });
         } else {
