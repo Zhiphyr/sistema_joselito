@@ -17,13 +17,13 @@
         </div>
     </div>
 
-    <!-- Viajes Finalizados -->
+    <!-- Viajes por Liquidar -->
     <div style="background: white; border-radius: 12px; padding: 20px; border: 1px solid var(--border-light); box-shadow: 0 2px 4px rgba(0,0,0,0.02); display: flex; align-items: center; gap: 16px;">
-        <div style="width: 48px; height: 48px; border-radius: 12px; background: #dcfce7; color: #22c55e; display: flex; align-items: center; justify-content: center; font-size: 20px;">
-            <i class="fas fa-flag-checkered"></i>
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: #ffedd5; color: #f97316; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+            <i class="fas fa-file-invoice"></i>
         </div>
         <div>
-            <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Viajes Liquidados</div>
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Viajes por Liquidar</div>
             <div id="kpi-viajes-fin" style="font-size: 24px; font-weight: 800; color: var(--text-primary);">-</div>
         </div>
     </div>
@@ -39,13 +39,13 @@
         </div>
     </div>
 
-    <!-- Flota Disponible -->
+    <!-- Transportistas Disponibles -->
     <div style="background: white; border-radius: 12px; padding: 20px; border: 1px solid var(--border-light); box-shadow: 0 2px 4px rgba(0,0,0,0.02); display: flex; align-items: center; gap: 16px;">
         <div style="width: 48px; height: 48px; border-radius: 12px; background: #f3e8ff; color: #a855f7; display: flex; align-items: center; justify-content: center; font-size: 20px;">
-            <i class="fas fa-key"></i>
+            <i class="fas fa-user-check"></i>
         </div>
         <div>
-            <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Flota Activa</div>
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Transportistas Disp.</div>
             <div id="kpi-flota" style="font-size: 24px; font-weight: 800; color: var(--text-primary);">-</div>
         </div>
     </div>
@@ -66,17 +66,31 @@
 <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px;">
     <!-- Gráfico Principal: Volumen de Viajes -->
     <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-        <h3 style="margin: 0 0 16px; font-size: 15px; color: var(--text-primary);"><i class="fas fa-chart-area" style="color:var(--text-muted); margin-right:6px;"></i> Volumen de Viajes (Últimos 30 días)</h3>
-        <div style="height: 250px; position: relative;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; font-size: 15px; color: var(--text-primary);"><i class="fas fa-chart-area" style="color:var(--text-muted); margin-right:6px;"></i> Volumen de Viajes al Mes</h3>
+            <input type="month" id="filtro-mes-viajes" style="padding: 4px 8px; border: 1px solid var(--border-light); border-radius: 6px; font-size: 12px; color: var(--text-secondary);" />
+        </div>
+        <div style="height: 250px; position: relative; display: flex; justify-content: center;">
             <canvas id="chart-volumen"></canvas>
+            <div id="no-data-viajes" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--text-muted); width: 100%;">
+                <i class="fas fa-box-open" style="font-size: 32px; margin-bottom: 12px; color: #cbd5e1;"></i>
+                <div style="font-size: 13px; font-weight: 500;">No hay registros históricos<br>para este mes.</div>
+            </div>
         </div>
     </div>
 
     <!-- Gráfico Dona: Estados de Carga -->
     <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-        <h3 style="margin: 0 0 16px; font-size: 15px; color: var(--text-primary);"><i class="fas fa-chart-pie" style="color:var(--text-muted); margin-right:6px;"></i> Distribución de Cargas</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; font-size: 15px; color: var(--text-primary);"><i class="fas fa-chart-pie" style="color:var(--text-muted); margin-right:6px;"></i> Distribución de Cargas al Mes</h3>
+            <input type="month" id="filtro-mes-cargas" style="padding: 4px 8px; border: 1px solid var(--border-light); border-radius: 6px; font-size: 12px; color: var(--text-secondary);" />
+        </div>
         <div style="height: 250px; position: relative; display: flex; justify-content: center;">
             <canvas id="chart-estados-carga"></canvas>
+            <div id="no-data-cargas" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--text-muted); width: 100%;">
+                <i class="fas fa-box-open" style="font-size: 32px; margin-bottom: 12px; color: #cbd5e1;"></i>
+                <div style="font-size: 13px; font-weight: 500;">No hay registros históricos<br>para este mes.</div>
+            </div>
         </div>
     </div>
 </div>
@@ -84,17 +98,31 @@
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
     <!-- Top Rutas -->
     <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-        <h3 style="margin: 0 0 16px; font-size: 15px; color: var(--text-primary);"><i class="fas fa-route" style="color:var(--text-muted); margin-right:6px;"></i> Top Rutas Frecuentes</h3>
-        <div style="height: 200px; position: relative;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; font-size: 15px; color: var(--text-primary);"><i class="fas fa-route" style="color:var(--text-muted); margin-right:6px;"></i> Top Rutas Frecuentes al Mes</h3>
+            <input type="month" id="filtro-mes-rutas" style="padding: 4px 8px; border: 1px solid var(--border-light); border-radius: 6px; font-size: 12px; color: var(--text-secondary);" />
+        </div>
+        <div style="height: 200px; position: relative; display: flex; justify-content: center;">
             <canvas id="chart-rutas"></canvas>
+            <div id="no-data-rutas" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--text-muted); width: 100%;">
+                <i class="fas fa-box-open" style="font-size: 32px; margin-bottom: 12px; color: #cbd5e1;"></i>
+                <div style="font-size: 13px; font-weight: 500;">No hay registros históricos<br>para este mes.</div>
+            </div>
         </div>
     </div>
 
     <!-- Top Incidencias -->
     <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-        <h3 style="margin: 0 0 16px; font-size: 15px; color: var(--text-primary);"><i class="fas fa-exclamation-triangle" style="color:var(--text-muted); margin-right:6px;"></i> Tipos de Incidencias (Top 5)</h3>
-        <div style="height: 200px; position: relative;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; font-size: 15px; color: var(--text-primary);"><i class="fas fa-exclamation-triangle" style="color:var(--text-muted); margin-right:6px;"></i> Tipos de Incidencias al Mes</h3>
+            <input type="month" id="filtro-mes-incidencias" style="padding: 4px 8px; border: 1px solid var(--border-light); border-radius: 6px; font-size: 12px; color: var(--text-secondary);" />
+        </div>
+        <div style="height: 200px; position: relative; display: flex; justify-content: center;">
             <canvas id="chart-incidencias"></canvas>
+            <div id="no-data-incidencias" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--text-muted); width: 100%;">
+                <i class="fas fa-box-open" style="font-size: 32px; margin-bottom: 12px; color: #cbd5e1;"></i>
+                <div style="font-size: 13px; font-weight: 500;">No hay registros históricos<br>para este mes.</div>
+            </div>
         </div>
     </div>
 </div>
@@ -102,36 +130,46 @@
 <!-- 3. LISTAS DE ACCIÓN RÁPIDA -->
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px;">
     
-    <!-- Cargas Críticas -->
-    <div style="background: white; border: 1px solid #fecaca; border-radius: 12px; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.05); overflow: hidden;">
-        <div style="background: #fef2f2; padding: 12px 16px; border-bottom: 1px solid #fecaca; display: flex; justify-content: space-between; align-items: center;">
-            <h3 style="margin: 0; font-size: 14px; color: #b91c1c;"><i class="fas fa-exclamation-circle" style="margin-right:6px;"></i> Cargas Críticas (Siniestros)</h3>
-            <span id="badge-criticas" style="background:#ef4444; color:white; font-size:10px; padding:2px 8px; border-radius:10px; font-weight:700;">0</span>
+    <!-- Incidencias Pendientes -->
+    <div style="background: white; border: 1px solid #fecaca; border-radius: 12px; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.05); overflow: hidden; position: relative;">
+        <div style="background: #fef2f2; padding: 16px 20px; border-bottom: 1px solid #fecaca; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 14px; color: #dc2626; font-weight: 700;"><i class="fas fa-exclamation-circle" style="margin-right: 6px;"></i> Incidencias Pendientes por Justificar</h3>
+            <span id="badge-criticas" style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">0</span>
         </div>
-        <div id="lista-cargas-criticas" style="padding: 0;">
-            <!-- Render JS -->
+        <ul id="lista-cargas-criticas" style="list-style: none; margin: 0; padding: 0;">
+            <!-- Cargado por JS -->
+        </ul>
+        <div id="no-data-incidencias-pendientes" style="display: none; padding: 40px 20px; text-align: center; color: var(--text-muted);">
+            <i class="fas fa-check-circle" style="font-size: 32px; margin-bottom: 12px; color: #10b981;"></i>
+            <div style="font-size: 13px; font-weight: 500;">Todo en orden. No hay incidencias pendientes.</div>
         </div>
     </div>
 
     <!-- Viajes Activos -->
-    <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden;">
+    <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden; position: relative;">
         <div style="background: #f8fafc; padding: 12px 16px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
             <h3 style="margin: 0; font-size: 14px; color: var(--text-primary);"><i class="fas fa-truck-moving" style="color:var(--brand-blue); margin-right:6px;"></i> Últimos Viajes Activos</h3>
-            <button onclick="cargarVista('historial_viajes')" style="background:none; border:none; color:var(--brand-blue); font-size:12px; font-weight:600; cursor:pointer;">Ver todos</button>
         </div>
         <div id="lista-viajes-activos" style="padding: 0;">
             <!-- Render JS -->
         </div>
+        <div id="no-data-viajes-activos" style="display: none; padding: 40px 20px; text-align: center; color: var(--text-muted);">
+            <i class="fas fa-check-circle" style="font-size: 32px; margin-bottom: 12px; color: #10b981;"></i>
+            <div style="font-size: 13px; font-weight: 500;">No hay viajes en curso en este momento.</div>
+        </div>
     </div>
 
     <!-- Pendientes de Cobro -->
-    <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden;">
+    <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden; position: relative;">
         <div style="background: #f8fafc; padding: 12px 16px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
             <h3 style="margin: 0; font-size: 14px; color: var(--text-primary);"><i class="fas fa-file-invoice-dollar" style="color:#f59e0b; margin-right:6px;"></i> Deudas Pendientes</h3>
-            <button onclick="cargarVista('deudas_cobrar')" style="background:none; border:none; color:var(--brand-blue); font-size:12px; font-weight:600; cursor:pointer;">Cobranza</button>
         </div>
         <div id="lista-pendientes-cobro" style="padding: 0;">
             <!-- Render JS -->
+        </div>
+        <div id="no-data-deudas-pendientes" style="display: none; padding: 40px 20px; text-align: center; color: var(--text-muted);">
+            <i class="fas fa-check-circle" style="font-size: 32px; margin-bottom: 12px; color: #10b981;"></i>
+            <div style="font-size: 13px; font-weight: 500;">Todo al día. No hay deudas pendientes.</div>
         </div>
     </div>
 
