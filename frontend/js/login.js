@@ -76,12 +76,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 sessionStorage.setItem('usuario_joselito', JSON.stringify(result.data));
 
                 Swal.fire({
+                    toast: true,
+                    position: 'top-end',
                     icon: 'success',
-                    title: '¡Bienvenido!',
-                    text: `Hola ${result.data.nombre}`,
+                    title: '¡Acceso concedido!',
+                    text: `Conectando: ${result.data.nombre}...`,
                     showConfirmButton: false,
                     timer: 1500,
-                    heightAuto: false
+                    background: '#070a13',
+                    color: '#ffffff',
+                    iconColor: '#0ea5e9'
                 }).then(() => {
                     // Redirigir al dashboard
                     window.location.href = 'dashboard.html';
@@ -92,7 +96,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     icon: 'error',
                     title: 'Error de acceso',
                     text: result.message || 'Ocurrió un problema al iniciar sesión.',
-                    confirmButtonColor: '#0f4c81',
+                    confirmButtonColor: '#0ea5e9',
+                    background: '#070a13',
+                    color: '#ffffff',
                     heightAuto: false
                 });
             }
@@ -102,7 +108,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 icon: 'error',
                 title: 'Error de conexión',
                 text: 'No se pudo conectar con el servidor. Intente más tarde.',
-                confirmButtonColor: '#0f4c81',
+                confirmButtonColor: '#0ea5e9',
+                background: '#070a13',
+                color: '#ffffff',
                 heightAuto: false
             });
         } finally {

@@ -49,7 +49,7 @@ body {
 /* Sidebar */
 .sidebar {
     width: var(--sidebar-width);
-    background-color: #1f2937; /* Tema Oscuro */
+    background-color: #070a13; /* Tema Oscuro Premium */
     border-right: none;
     display: flex;
     flex-direction: column;
@@ -63,7 +63,7 @@ body {
     align-items: center;
     justify-content: center;
     padding: 0 24px;
-    border-bottom: 1px solid #374151; 
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05); 
 }
 
 .sidebar-logo {
@@ -146,21 +146,23 @@ body {
 }
 
 .nav-link:hover {
-    background-color: #374151; /* Gris intermedio */
+    background: rgba(14, 165, 233, 0.1);
     color: #ffffff;
 }
 
 .nav-link:hover i {
-    color: #ffffff;
+    color: #0ea5e9;
 }
 
 .nav-link.active {
-    background-color: #4b5563; /* Gris claro para resaltar */
+    background: linear-gradient(90deg, rgba(14, 165, 233, 0.15) 0%, transparent 100%);
+    border-left: 3px solid #0ea5e9;
     color: #ffffff;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 
 .nav-link.active i {
-    color: #ffffff;
+    color: #0ea5e9;
 }
 
 /* User Info (Now in Topbar) */
