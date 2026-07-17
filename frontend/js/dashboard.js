@@ -17,6 +17,17 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionStorage.removeItem('usuario_joselito');
         window.location.href = 'login.html';
     });
+
+    // 3b. Menú desplegable del usuario (topbar)
+    const userDropdown = document.getElementById('userDropdown');
+    document.getElementById('userMenuTrigger').addEventListener('click', (e) => {
+        e.stopPropagation();
+        userDropdown.classList.toggle('show');
+    });
+    document.addEventListener('click', () => {
+        userDropdown.classList.remove('show');
+    });
+
     // 4. Manejar colapso del Sidebar
     const sidebar = document.getElementById('sidebar');
     const btnToggleSidebar = document.getElementById('btnToggleSidebar');
@@ -166,12 +177,28 @@ function crearItemMenu(opcion) {
 
         document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
         a.classList.add('active');
-        document.getElementById('viewTitle').textContent = opcion.nombre;
+        actualizarTituloVista(opcion);
 
         cargarVistaSPA(opcion.ruta, opcion.nombre);
     });
 
     return li;
+}
+
+// Muestra el título de la vista como breadcrumb "Categoría > Nombre" cuando la
+// opción pertenece a una categoría del sidebar; si no (ej. Dashboard), solo el nombre.
+function actualizarTituloVista(opcion) {
+    const viewTitle = document.getElementById('viewTitle');
+
+    if (opcion.categoria && opcion.categoria.trim() !== '') {
+        viewTitle.innerHTML = `
+            <span class="breadcrumb-parent">${opcion.categoria}</span>
+            <i class="fas fa-chevron-right breadcrumb-separator"></i>
+            <span class="breadcrumb-current">${opcion.nombre}</span>
+        `;
+    } else {
+        viewTitle.innerHTML = `<span class="breadcrumb-current">${opcion.nombre}</span>`;
+    }
 }
 
 function slugify(texto) {

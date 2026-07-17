@@ -277,18 +277,59 @@ body {
     color: var(--text-secondary);
 }
 
-.btn-logout {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 8px;
-    border-radius: var(--radius-md);
-    transition: all 0.2s ease;
+/* Menú desplegable de usuario (topbar) */
+.user-menu {
+    position: relative;
 }
 
-.btn-logout:hover {
+.user-info {
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: var(--radius-md);
+    transition: background-color 0.2s ease;
+}
+
+.user-info:hover {
+    background-color: var(--surface-bg);
+}
+
+.user-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 190px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-soft);
+    padding: 6px;
+    z-index: 200;
+}
+
+.user-dropdown.show {
+    display: block;
+}
+
+.user-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    background: none;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
     color: #ef4444; /* Rojo para cerrar sesión */
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.user-dropdown-item:hover {
     background-color: rgba(239, 68, 68, 0.1);
 }
 
@@ -326,8 +367,25 @@ body {
 }
 
 .topbar-title h1 {
-    font-size: 18px;
-    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.breadcrumb-parent {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.breadcrumb-separator {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.breadcrumb-current {
+    font-size: 16px;
+    font-weight: 700;
     color: var(--text-primary);
 }
 

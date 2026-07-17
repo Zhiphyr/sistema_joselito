@@ -59,18 +59,22 @@
                 </div>
 
                 <div class="topbar-user">
-                    <div class="user-info">
-                        <div class="user-avatar">
-                            <i class="fas fa-user"></i>
+                    <div class="user-menu" id="userMenu">
+                        <div class="user-info" id="userMenuTrigger">
+                            <div class="user-avatar">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div class="user-details">
+                                <span class="user-name" id="userName">Cargando...</span>
+                                <span class="user-role" id="userRole">...</span>
+                            </div>
                         </div>
-                        <div class="user-details">
-                            <span class="user-name" id="userName">Cargando...</span>
-                            <span class="user-role" id="userRole">...</span>
+                        <div class="user-dropdown" id="userDropdown">
+                            <button type="button" id="btnLogout" class="user-dropdown-item">
+                                <i class="fas fa-sign-out-alt"></i> Cerrar sesión
+                            </button>
                         </div>
                     </div>
-                    <button id="btnLogout" class="btn-logout" title="Cerrar Sesión">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </button>
                 </div>
             </header>
 
