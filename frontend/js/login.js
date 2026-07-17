@@ -1,3 +1,11 @@
+// Si el navegador restaura esta página desde la bfcache (botón atrás/adelante) y
+// ya hay una sesión activa, no debe quedarse mostrando el formulario de login.
+window.addEventListener('pageshow', (e) => {
+    if (e.persisted && sessionStorage.getItem('usuario_joselito')) {
+        window.location.replace('/dashboard');
+    }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     const loginForm = document.getElementById('loginForm');
     const btnSubmit = document.getElementById('btnSubmit');
@@ -40,6 +48,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Lógica de autenticación del formulario
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+
+        // Evita envíos duplicados si el submit se dispara de nuevo mientras la petición sigue en curso
+        if (btnSubmit.disabled) {
+            return;
+        }
 
         const usuario = document.getElementById('usuario').value.trim();
         const clave = document.getElementById('clave').value;
@@ -87,8 +100,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     color: '#ffffff',
                     iconColor: '#0ea5e9'
                 }).then(() => {
-                    // Redirigir al dashboard
-                    window.location.href = 'dashboard.html';
+                    // Redirigir al dashboard (replace: la pantalla de login no queda en el historial)
+                    window.location.replace('/dashboard');
                 });
             } else {
                 // Error de credenciales o estado inactivo

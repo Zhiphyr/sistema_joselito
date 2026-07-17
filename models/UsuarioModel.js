@@ -75,6 +75,31 @@ class UsuarioModel {
         const [result] = await db.query(query, [estado, id_usuario]);
         return result.affectedRows;
     }
+
+    static async registrarIntentoFallido(id_usuario, maxIntentos, minutosBloqueo) {
+        const query = `
+            UPDATE usuarios
+            SET intentos_fallidos = intentos_fallidos + 1,
+                bloqueado_hasta = CASE
+                    WHEN intentos_fallidos >= ? THEN DATE_ADD(NOW(), INTERVAL ? MINUTE)
+                    ELSE bloqueado_hasta
+                END
+            WHERE id_usuario = ?
+        `;
+        await db.query(query, [maxIntentos, minutosBloqueo, id_usuario]);
+
+        const [rows] = await db.query(
+            `SELECT intentos_fallidos, bloqueado_hasta FROM usuarios WHERE id_usuario = ?`,
+            [id_usuario]
+        );
+        return rows[0];
+    }
+
+    static async resetearIntentosFallidos(id_usuario) {
+        const query = `UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id_usuario = ?`;
+        const [result] = await db.query(query, [id_usuario]);
+        return result.affectedRows;
+    }
 }
 
 module.exports = UsuarioModel;

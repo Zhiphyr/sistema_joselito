@@ -28,7 +28,10 @@ exports.getResumenGeneral = async (req, res) => {
             [topRutasRows],
             [ultimosViajesRows],
             [cargasCriticasRows],
-            [pendientesCobroRows]
+            [pendientesCobroRows],
+            [llegadasHoyRow],
+            [usuariosActivosRow],
+            [incidenciasHoyRow]
         ] = await Promise.all([
             pool.query(`SELECT COUNT(*) AS count FROM Viaje WHERE estado_operativo NOT IN ('Finalizado', 'Incidencia') AND estado != 2`),
             pool.query(`SELECT COUNT(*) AS count FROM Viaje WHERE estado_operativo = 'Finalizado' AND estado_pagos = 'Pendiente' AND estado != 2`),
@@ -60,7 +63,10 @@ exports.getResumenGeneral = async (req, res) => {
                 ORDER BY dc.id_detalle DESC 
                 LIMIT 5
             `),
-            pool.query(`SELECT cli.nombre_razon_social AS razon_social, ${saldoPendienteExpr} AS monto_restante, v.fecha_llegada AS fecha_vencimiento ${deudaFilterJoin.replace('FROM Carga c', 'FROM Carga c JOIN clientes cli ON c.id_destinatario = cli.id_cliente')} ORDER BY v.fecha_llegada ASC LIMIT 5`)
+            pool.query(`SELECT cli.nombre_razon_social AS razon_social, ${saldoPendienteExpr} AS monto_restante, v.fecha_llegada AS fecha_vencimiento ${deudaFilterJoin.replace('FROM Carga c', 'FROM Carga c JOIN clientes cli ON c.id_destinatario = cli.id_cliente')} ORDER BY v.fecha_llegada ASC LIMIT 5`),
+            pool.query(`SELECT COUNT(*) AS count FROM Viaje WHERE DATE(fecha_llegada) = CURRENT_DATE() AND estado != 2`),
+            pool.query(`SELECT COUNT(*) AS count FROM usuarios WHERE estado = 1`),
+            pool.query(`SELECT COUNT(*) AS count FROM Incidencia_Viaje WHERE DATE(fecha_creacion) = CURRENT_DATE() AND estado != 2`)
         ]);
 
         res.json({
@@ -74,6 +80,11 @@ exports.getResumenGeneral = async (req, res) => {
                     transportistasDisponibles: flotaRow[0].activos,
                     transportistasTotal: flotaRow[0].total,
                     deudaTotal: deudaRow[0].total || 0
+                },
+                contexto: {
+                    llegadasHoy: llegadasHoyRow[0].count,
+                    usuariosActivos: usuariosActivosRow[0].count,
+                    incidenciasHoy: incidenciasHoyRow[0].count
                 },
                 graficos: {
                     distribucionCargas: distribucionCargasRows,

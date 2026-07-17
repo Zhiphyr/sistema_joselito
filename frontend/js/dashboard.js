@@ -1,8 +1,17 @@
+// Si el navegador restaura esta página desde la bfcache (botón atrás/adelante tras
+// cerrar sesión en otra pestaña o en esta misma), revalida la sesión en vez de
+// mostrar el dashboard congelado tal cual quedó.
+window.addEventListener('pageshow', (e) => {
+    if (e.persisted && !sessionStorage.getItem('usuario_joselito')) {
+        window.location.replace('/login');
+    }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Validar sesión
     const userDataStr = sessionStorage.getItem('usuario_joselito');
     if (!userDataStr) {
-        window.location.href = 'login.html';
+        window.location.replace('/login');
         return;
     }
 
@@ -15,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. Manejar Cerrar Sesión
     document.getElementById('btnLogout').addEventListener('click', () => {
         sessionStorage.removeItem('usuario_joselito');
-        window.location.href = 'login.html';
+        window.location.replace('/login');
     });
 
     // 3b. Menú desplegable del usuario (topbar)
@@ -41,6 +50,9 @@ document.addEventListener('DOMContentLoaded', () => {
         sidebar.classList.toggle('collapsed');
         // Guardar el estado actual en localStorage
         localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+        // Los gráficos Chart.js de la vista activa no siempre se reajustan solos
+        // al cambiar el ancho del sidebar; se fuerza su resize tras el reflow.
+        requestAnimationFrame(redimensionarGraficosActivos);
     });
 
     // 5. Cargar menú dinámico RBAC
@@ -199,6 +211,14 @@ function actualizarTituloVista(opcion) {
     } else {
         viewTitle.innerHTML = `<span class="breadcrumb-current">${opcion.nombre}</span>`;
     }
+}
+
+// Fuerza el redibujado de los gráficos Chart.js de la vista actual (si los hay)
+// al ancho real disponible, para evitar que queden con el tamaño de antes de
+// colapsar/expandir el sidebar.
+function redimensionarGraficosActivos() {
+    if (!window.Chart || !window.Chart.instances) return;
+    Object.values(window.Chart.instances).forEach(chart => chart.resize());
 }
 
 function slugify(texto) {

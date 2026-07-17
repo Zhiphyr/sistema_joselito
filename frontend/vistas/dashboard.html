@@ -1,7 +1,27 @@
-<div class="header-container" style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-light);">
-    <h1 style="margin:0; color:var(--text-primary); font-size:24px;"><i class="fas fa-chart-pie" style="color:var(--brand-blue); margin-right:8px;"></i> Dashboard Operativo</h1>
-    <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 14px;">Visión general del estado actual de operaciones y finanzas.</p>
-</div>
+<!-- Header Dinámico -->
+            <div class="header-container" style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-light); flex-wrap: wrap; gap: 16px;">
+                <!-- Lado Izquierdo: Saludo y Fecha -->
+                <div>
+                    <h1 id="header-greeting" style="margin:0; color:var(--text-primary); font-size:26px; font-weight: 800; letter-spacing: -0.5px;">¡Bienvenido al panel!</h1>
+                    <p id="header-date" style="margin: 6px 0 0; color: var(--text-muted); font-size: 14px; font-weight: 500;">Cargando fecha actual...</p>
+                </div>
+                
+                <!-- Lado Derecho: Cinta de Contexto -->
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-truck-loading" style="font-size: 14px;"></i> 
+                        <span><span id="chip-camiones">0</span> llegadas hoy</span>
+                    </div>
+                    <div style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-users" style="font-size: 14px;"></i> 
+                        <span><span id="chip-usuarios">0</span> usuarios activos</span>
+                    </div>
+                    <div style="background: #fffbeb; border: 1px solid #fde68a; color: #b45309; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 14px;"></i> 
+                        <span><span id="chip-incidencias">0</span> incidencias hoy</span>
+                    </div>
+                </div>
+            </div>
 
 <!-- 1. MÉTRICAS DE PULSO (KPIs) -->
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
@@ -65,7 +85,7 @@
 <!-- 2. GRÁFICOS (CHART.JS) -->
 <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px;">
     <!-- Gráfico Principal: Volumen de Viajes -->
-    <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+    <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); min-width: 0;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <h3 style="margin: 0; font-size: 15px; color: var(--text-primary);"><i class="fas fa-chart-area" style="color:var(--text-muted); margin-right:6px;"></i> Volumen de Viajes al Mes</h3>
             <input type="month" id="filtro-mes-viajes" style="padding: 4px 8px; border: 1px solid var(--border-light); border-radius: 6px; font-size: 12px; color: var(--text-secondary);" />
@@ -80,7 +100,7 @@
     </div>
 
     <!-- Gráfico Dona: Estados de Carga -->
-    <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+    <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); min-width: 0;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <h3 style="margin: 0; font-size: 15px; color: var(--text-primary);"><i class="fas fa-chart-pie" style="color:var(--text-muted); margin-right:6px;"></i> Distribución de Cargas al Mes</h3>
             <input type="month" id="filtro-mes-cargas" style="padding: 4px 8px; border: 1px solid var(--border-light); border-radius: 6px; font-size: 12px; color: var(--text-secondary);" />
@@ -97,7 +117,7 @@
 
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
     <!-- Top Rutas -->
-    <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+    <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); min-width: 0;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <h3 style="margin: 0; font-size: 15px; color: var(--text-primary);"><i class="fas fa-route" style="color:var(--text-muted); margin-right:6px;"></i> Top Rutas Frecuentes al Mes</h3>
             <input type="month" id="filtro-mes-rutas" style="padding: 4px 8px; border: 1px solid var(--border-light); border-radius: 6px; font-size: 12px; color: var(--text-secondary);" />
@@ -112,7 +132,7 @@
     </div>
 
     <!-- Top Incidencias -->
-    <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+    <div style="background: white; border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); min-width: 0;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <h3 style="margin: 0; font-size: 15px; color: var(--text-primary);"><i class="fas fa-exclamation-triangle" style="color:var(--text-muted); margin-right:6px;"></i> Tipos de Incidencias al Mes</h3>
             <input type="month" id="filtro-mes-incidencias" style="padding: 4px 8px; border: 1px solid var(--border-light); border-radius: 6px; font-size: 12px; color: var(--text-secondary);" />

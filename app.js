@@ -11,6 +11,18 @@ app.use(cors()); // Permitir peticiones de otros orígenes
 app.use(express.json()); // Parseo de JSON
 app.use(express.urlencoded({ extended: true })); // Parseo de datos de formularios urlencoded
 
+// Rutas "limpias" para las vistas principales (sin exponer la extensión .html)
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend', 'login.html'));
+});
+app.get('/dashboard', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend', 'dashboard.html'));
+});
+
+// Compatibilidad: si alguien entra con la URL .html antigua, se lleva a la versión limpia
+app.get('/login.html', (req, res) => res.redirect(301, '/login'));
+app.get('/dashboard.html', (req, res) => res.redirect(301, '/dashboard'));
+
 // Servir archivos estáticos del frontend
 app.use(express.static(path.join(__dirname, 'frontend')));
 

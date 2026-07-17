@@ -1,7 +1,33 @@
 let chartVolumen, chartCargas, chartRutas, chartIncidencias;
 
 function init_dashboard() {
+    iniciarRelojDashboard();
     cargarDatosDashboard();
+}
+
+function iniciarRelojDashboard() {
+    const saludoEl = document.getElementById('header-greeting');
+    const fechaEl = document.getElementById('header-date');
+    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+    const nombre = sessionData.nombre ? sessionData.nombre.split(' ')[0] : 'Usuario';
+    
+    if (saludoEl) saludoEl.textContent = `¡Bienvenido de vuelta, ${nombre}!`;
+
+    const actualizarReloj = () => {
+        const ahora = new Date();
+        const opcionesFecha = { weekday: 'long', day: 'numeric', month: 'long' };
+        const fechaTexto = ahora.toLocaleDateString('es-ES', opcionesFecha);
+        const horaTexto = ahora.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        
+        if (fechaEl) {
+            // Capitalizar la primera letra del texto
+            const textoFinal = `Hoy es ${fechaTexto}. Son las ${horaTexto}.`;
+            fechaEl.textContent = textoFinal.charAt(0).toUpperCase() + textoFinal.slice(1);
+        }
+    };
+    
+    actualizarReloj();
+    setInterval(actualizarReloj, 10000); // Actualiza cada 10 seg
 }
 
 function cargarChartJsSiFalta(callback) {
@@ -28,6 +54,7 @@ async function cargarDatosDashboard() {
         const result = await response.json();
 
         if (result.success) {
+            renderContexto(result.data.contexto);
             renderKPIs(result.data.kpis);
             renderListas(result.data.listas);
             cargarChartJsSiFalta(() => renderGraficos(result.data.graficos));
@@ -45,6 +72,17 @@ function renderKPIs(kpis) {
     document.getElementById('kpi-cargas-transito').textContent = kpis.cargasTransito || 0;
     document.getElementById('kpi-flota').textContent = `${kpis.transportistasDisponibles || 0} / ${kpis.transportistasTotal || 0}`;
     document.getElementById('kpi-deuda').textContent = formatMonedaLocal(kpis.deudaTotal || 0);
+}
+
+function renderContexto(contexto) {
+    if (!contexto) return;
+    const camionesEl = document.getElementById('chip-camiones');
+    const usuariosEl = document.getElementById('chip-usuarios');
+    const incidenciasEl = document.getElementById('chip-incidencias');
+    
+    if (camionesEl) camionesEl.textContent = contexto.llegadasHoy || 0;
+    if (usuariosEl) usuariosEl.textContent = contexto.usuariosActivos || 0;
+    if (incidenciasEl) incidenciasEl.textContent = contexto.incidenciasHoy || 0;
 }
 
 function renderListas(listas) {
