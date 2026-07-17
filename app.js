@@ -29,6 +29,7 @@ const deudaRoutes = require('./routes/deudaRoutes');
 const cuentaBancariaRoutes = require('./routes/cuentaBancariaRoutes');
 const dashboardFinancieroRoutes = require('./routes/dashboardFinancieroRoutes');
 const indemnizacionRoutes = require('./routes/indemnizacionRoutes');
+const dashboardGeneralRoutes = require('./routes/dashboardGeneralRoutes');
 
 // Registro de rutas
 app.use('/api/auth', authRoutes);
@@ -45,6 +46,7 @@ app.use('/api/deudas', deudaRoutes);
 app.use('/api/cuentas-bancarias', cuentaBancariaRoutes);
 app.use('/api/dashboard-financiero', dashboardFinancieroRoutes);
 app.use('/api/indemnizaciones', indemnizacionRoutes);
+app.use('/api/dashboard-general', dashboardGeneralRoutes);
 
 // Ruta de prueba
 app.get('/api/ping', (req, res) => {
