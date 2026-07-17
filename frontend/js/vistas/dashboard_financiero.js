@@ -33,17 +33,8 @@ window.init_dashboard_financiero = function () {
     document.getElementById('btnNuevoIngreso').addEventListener('click', abrirModalNuevoIngreso);
     document.getElementById('btnNuevoEgreso').addEventListener('click', abrirModalNuevoEgreso);
     document.getElementById('btnTransferenciaInterna').addEventListener('click', abrirModalTransferenciaInterna);
-    document.getElementById('btnVerTodosMovimientos').addEventListener('click', () => accionProximamente('Historial Completo de Movimientos'));
+    document.getElementById('btnVerTodosMovimientos').addEventListener('click', abrirModalHistorialMovimientos);
 };
-
-function accionProximamente(nombreAccion) {
-    Swal.fire({
-        icon: 'info',
-        title: nombreAccion,
-        text: 'Esta funcionalidad estará disponible próximamente.',
-        confirmButtonColor: '#3b82f6'
-    });
-}
 
 // ----------------------------------------------------
 // HELPERS COMPARTIDOS: Nuevo Ingreso / Nuevo Egreso / Transferencia Interna
@@ -1031,55 +1022,246 @@ async function cargarUltimosMovimientos() {
     }
 }
 
+// Movimientos ya renderizados (Top 10 + historial completo), indexados por
+// id_movimiento, para poder abrir el modal de auditoría de anulación sin volver a
+// pedirlos al servidor ni tener que serializar el objeto entero en el onclick.
+let movimientosIndexados = {};
+
+// Construye el <tr> de un movimiento — compartido entre la tabla "Top 10" del
+// dashboard y el historial completo del modal, para no duplicar la plantilla.
+function construirFilaMovimiento(m) {
+    const isAnulado = m.estado === 0;
+    const isEgreso = !m.tipo_movimiento.includes('INGRESO');
+    const colorTipo = isAnulado ? '#94a3b8' : (isEgreso ? '#ef4444' : '#10b981');
+
+    const badgeTipo = `<span style="background:${colorTipo}20; color:${colorTipo}; padding:4px 8px; border-radius:12px; font-size:11px; font-weight:700; white-space:nowrap;">
+        <i class="fas ${isEgreso ? 'fa-arrow-up' : 'fa-arrow-down'}"></i> ${m.tipo_movimiento}
+    </span>`;
+
+    const rowStyle = isAnulado ? 'opacity: 0.75;' : '';
+
+    const colorMonto = isAnulado ? '#94a3b8' : (isEgreso ? '#ef4444' : 'var(--text-primary)');
+    const prefijoMonto = isEgreso ? '- S/' : 'S/';
+
+    let displayMonto = `${prefijoMonto} ${m.monto.toFixed(2)}`;
+    if (isAnulado) {
+        displayMonto = `<span style="text-decoration: line-through;">${displayMonto}</span>`;
+    }
+
+    const badgeEstado = isAnulado
+        ? `<button type="button" onclick="verAuditoriaAnulacion(${m.id_movimiento})" title="Ver detalle de la anulación" style="cursor: pointer; font-size: 11px; padding: 4px 10px; background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;"><i class="fas fa-undo" style="margin-right: 4px;"></i> Anulado</button>`
+        : `<span style="font-size: 11px; padding: 4px 10px; background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;"><i class="fas fa-check-circle" style="margin-right: 4px;"></i> Completado</span>`;
+
+    const fechaObj = new Date(m.fecha_movimiento);
+    const fechaTexto = fechaObj.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }).replace('.', '');
+    const horaTexto = fechaObj.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }).toLowerCase();
+    const displayFecha = `<div style="text-align:center; white-space:nowrap;">
+                            <div style="font-size:13px; font-weight:500; color: #1e293b;">${fechaTexto}</div>
+                            <div style="font-size:11px; color:#94a3b8; margin-top:2px;">${horaTexto}</div>
+                          </div>`;
+
+    return `
+        <tr class="tabla-tr" style="${rowStyle}">
+            <td class="tabla-td">${badgeTipo}</td>
+            <td class="tabla-td">
+                <div style="font-weight:600; color:var(--text-primary); font-size:13px; max-width:200px; white-space:normal; overflow-wrap:break-word;">${m.concepto || '-'}</div>
+            </td>
+            <td class="tabla-td" style="font-weight:700; color:${colorMonto}; white-space:nowrap;">
+                ${displayMonto}
+            </td>
+            <td class="tabla-td" style="font-size:12px; white-space:nowrap;">${m.metodo_pago || '-'}</td>
+            <td class="tabla-td">
+                <div style="font-size:12px; font-weight:600; color:var(--brand-blue); white-space:nowrap;">${m.cuenta_afectada}</div>
+            </td>
+            <td class="tabla-td" style="font-size:12px; color:var(--text-secondary); white-space:nowrap;">${m.modulo_origen || '-'}</td>
+            <td class="tabla-td">
+                ${m.numero_operacion ? `<span class="tabla-mono">${m.numero_operacion}</span>` : '-'}
+            </td>
+            <td class="tabla-td">${displayFecha}</td>
+            <td class="tabla-td" style="font-size:12px; color:var(--text-secondary); white-space:nowrap;"><i class="fas fa-user" style="font-size:10px; margin-right:4px;"></i>${m.usuario}</td>
+            <td class="tabla-td" style="text-align: center; white-space: nowrap;">${badgeEstado}</td>
+        </tr>
+    `;
+}
+
 function renderUltimosMovimientos(movimientos) {
     const tbody = document.getElementById('tbodyUltimosMovimientos');
-    
+
     if (movimientos.length === 0) {
         tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-secondary); padding:30px;">No hay movimientos recientes.</td></tr>`;
         return;
     }
 
-    const html = movimientos.map(m => {
-        const isAnulado = m.estado === 0;
-        const isEgreso = !m.tipo_movimiento.includes('INGRESO');
-        const colorTipo = isAnulado ? '#94a3b8' : (isEgreso ? '#ef4444' : '#10b981');
-        
-        const badgeTipo = `<span style="background:${colorTipo}20; color:${colorTipo}; padding:4px 8px; border-radius:12px; font-size:11px; font-weight:700; white-space:nowrap;">
-            <i class="fas ${isEgreso ? 'fa-arrow-up' : 'fa-arrow-down'}"></i> ${m.tipo_movimiento}
-        </span>`;
-        
-        const rowStyle = isAnulado ? 'opacity: 0.75;' : '';
-        
-        const colorMonto = isAnulado ? '#94a3b8' : (isEgreso ? '#ef4444' : 'var(--text-primary)');
-        const prefijoMonto = isEgreso ? '- S/' : 'S/';
-        
-        let displayMonto = `${prefijoMonto} ${m.monto.toFixed(2)}`;
-        if (isAnulado) {
-            displayMonto = `<span style="text-decoration: line-through;">${displayMonto}</span> <span style="font-size:10px; background:#fee2e2; color:#ef4444; padding:2px 6px; border-radius:4px; margin-left:6px; font-weight:700;">Anulado</span>`;
+    movimientos.forEach(m => { movimientosIndexados[m.id_movimiento] = m; });
+    tbody.innerHTML = movimientos.map(construirFilaMovimiento).join('');
+}
+
+// ----------------------------------------------------
+// HISTORIAL COMPLETO DE MOVIMIENTOS (modal)
+// ----------------------------------------------------
+
+let historialMovimientosGlobal = [];
+
+function abrirModalHistorialMovimientos() {
+    document.getElementById('modalHistorialMovimientos').style.display = 'flex';
+    cargarHistorialMovimientos();
+}
+
+function cerrarModalHistorialMovimientos() {
+    document.getElementById('modalHistorialMovimientos').style.display = 'none';
+}
+
+async function cargarHistorialMovimientos() {
+    const tbody = document.getElementById('tbodyHistorialMovimientos');
+    if (!tbody) return;
+
+    if ($.fn.DataTable.isDataTable('#tabla-historial-movimientos')) {
+        $('#tabla-historial-movimientos').DataTable().destroy();
+    }
+    tbody.innerHTML = `<tr class="tabla-estado-fila"><td colspan="9"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top:10px;">Cargando movimientos...</p></td></tr>`;
+
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const response = await fetch('/api/dashboard-financiero/todos-movimientos', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const result = await response.json();
+
+        if (result.success && result.data) {
+            historialMovimientosGlobal = result.data;
+            renderHistorialMovimientos(historialMovimientosGlobal);
+        } else {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:#ef4444; padding:20px;">${result.message || 'No se pudieron cargar los movimientos.'}</td></tr>`;
         }
+    } catch (error) {
+        console.error('Error al cargar el historial de movimientos:', error);
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:#ef4444; padding:20px;">Error de conexión.</td></tr>`;
+    }
+}
 
-        return `
-            <tr class="tabla-tr" style="${rowStyle}">
-                <td class="tabla-td">${badgeTipo}</td>
-                <td class="tabla-td">
-                    <div style="font-weight:600; color:var(--text-primary); font-size:13px; max-width:200px; white-space:normal; overflow-wrap:break-word;">${m.concepto || '-'}</div>
-                </td>
-                <td class="tabla-td" style="font-weight:700; color:${colorMonto}; white-space:nowrap;">
-                    ${displayMonto}
-                </td>
-                <td class="tabla-td" style="font-size:12px; white-space:nowrap;">${m.metodo_pago || '-'}</td>
-                <td class="tabla-td">
-                    <div style="font-size:12px; font-weight:600; color:var(--brand-blue); white-space:nowrap;">${m.cuenta_afectada}</div>
-                </td>
-                <td class="tabla-td" style="font-size:12px; color:var(--text-secondary); white-space:nowrap;">${m.modulo_origen || '-'}</td>
-                <td class="tabla-td">
-                    ${m.numero_operacion ? `<span class="tabla-mono">${m.numero_operacion}</span>` : '-'}
-                </td>
-                <td class="tabla-td" style="font-size:12px; white-space:nowrap;">${formatearFechaHora(m.fecha_movimiento)}</td>
-                <td class="tabla-td" style="font-size:12px; color:var(--text-secondary); white-space:nowrap;"><i class="fas fa-user" style="font-size:10px; margin-right:4px;"></i>${m.usuario}</td>
-            </tr>
+function renderHistorialMovimientos(movimientos) {
+    const tbody = document.getElementById('tbodyHistorialMovimientos');
+
+    if (movimientos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-secondary); padding:30px;">No hay movimientos registrados.</td></tr>`;
+        return;
+    }
+
+    movimientos.forEach(m => { movimientosIndexados[m.id_movimiento] = m; });
+    tbody.innerHTML = movimientos.map(construirFilaMovimiento).join('');
+
+    // Filtro de fechas personalizado (mismo patrón que el historial de pagos de
+    // Indemnizaciones): se registra una sola vez en la extensión global de DataTables.
+    if (!$.fn.dataTable.ext.search.includes(filtroRangoFechasMovimientos)) {
+        $.fn.dataTable.ext.search.push(filtroRangoFechasMovimientos);
+    }
+
+    $('#filtro-fecha-desde-mov, #filtro-fecha-hasta-mov').off('change').on('change', function() {
+        if ($.fn.DataTable.isDataTable('#tabla-historial-movimientos')) {
+            $('#tabla-historial-movimientos').DataTable().draw();
+        }
+    });
+
+    const tablaMovimientos = $('#tabla-historial-movimientos').DataTable({
+        language: {
+            url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
+        },
+        order: [[7, 'desc']],
+        pageLength: 15,
+        lengthMenu: [[15, 25, 50, -1], [15, 25, 50, "Todos"]],
+        dom: 'rt<"bottom-controls"ilp>',
+        columnDefs: [
+            { className: "dt-right", targets: 2 }, // Monto a la derecha
+            { className: "dt-center", targets: [0, 5, 6, 7, 9] }
+        ]
+    });
+
+    // Buscador propio (no el `f` de DataTables), igual que en Indemnizaciones.
+    $('#buscador-historial-movimientos').off('keyup change').on('keyup change', function() {
+        tablaMovimientos.search(this.value).draw();
+    });
+}
+
+function filtroRangoFechasMovimientos(settings, data, dataIndex) {
+    if (settings.nTable.id !== 'tabla-historial-movimientos') return true;
+
+    const minDateStr = $('#filtro-fecha-desde-mov').val();
+    const maxDateStr = $('#filtro-fecha-hasta-mov').val();
+
+    if (!minDateStr && !maxDateStr) return true;
+
+    const rowData = historialMovimientosGlobal[dataIndex];
+    if (!rowData) return true;
+
+    const rowDate = new Date(rowData.fecha_movimiento);
+    rowDate.setHours(0, 0, 0, 0);
+
+    if (minDateStr) {
+        const minDate = new Date(minDateStr + 'T00:00:00');
+        if (rowDate < minDate) return false;
+    }
+    if (maxDateStr) {
+        const maxDate = new Date(maxDateStr + 'T23:59:59');
+        if (rowDate > maxDate) return false;
+    }
+    return true;
+}
+
+function limpiarFiltroFechasMovimientos() {
+    $('#filtro-fecha-desde-mov').val('');
+    $('#filtro-fecha-hasta-mov').val('');
+    if ($.fn.DataTable.isDataTable('#tabla-historial-movimientos')) {
+        $('#tabla-historial-movimientos').DataTable().draw();
+    }
+}
+
+// ----------------------------------------------------
+// AUDITORÍA DE ANULACIÓN (quién anuló, cuándo y por qué)
+// ----------------------------------------------------
+
+function verAuditoriaAnulacion(idMovimiento) {
+    const m = movimientosIndexados[idMovimiento];
+    if (!m) return;
+
+    let html;
+    if (m.motivo_anulacion) {
+        const fechaObj = new Date(m.fecha_anulacion);
+        const fechaTexto = fechaObj.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            + ' ' + fechaObj.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+
+        html = `
+            <div style="display:flex; flex-direction:column; gap:14px;">
+                <div>
+                    <span style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Anulado por</span>
+                    <p style="margin:4px 0 0; font-size:14px; font-weight:600; color:var(--text-primary);">
+                        <i class="fas fa-user" style="margin-right:6px; color:var(--text-muted);"></i>${m.usuario_anulacion || 'Desconocido'}
+                    </p>
+                </div>
+                <div>
+                    <span style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Fecha de anulación</span>
+                    <p style="margin:4px 0 0; font-size:14px; color:var(--text-primary);">
+                        <i class="far fa-clock" style="margin-right:6px; color:var(--text-muted);"></i>${fechaTexto}
+                    </p>
+                </div>
+                <div>
+                    <span style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Motivo</span>
+                    <p style="margin:6px 0 0; font-size:13px; color:var(--text-primary); background:#f8fafc; border:1px solid var(--border-light); border-radius:8px; padding:12px; line-height:1.5;">${m.motivo_anulacion}</p>
+                </div>
+            </div>
         `;
-    }).join('');
+    } else {
+        html = `
+            <div style="text-align:center; padding:24px 12px; color:var(--text-muted);">
+                <i class="fas fa-circle-info" style="font-size:24px; margin-bottom:10px; display:block;"></i>
+                <p style="margin:0; font-size:13px;">No hay información de auditoría disponible para esta anulación.</p>
+            </div>
+        `;
+    }
 
-    tbody.innerHTML = html;
+    document.getElementById('contenidoAuditoriaAnulacion').innerHTML = html;
+    document.getElementById('modalAuditoriaAnulacion').style.display = 'flex';
+}
+
+function cerrarModalAuditoriaAnulacion() {
+    document.getElementById('modalAuditoriaAnulacion').style.display = 'none';
 }

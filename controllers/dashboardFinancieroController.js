@@ -296,83 +296,106 @@ const obtenerDistribucionGastos = async (req, res) => {
     }
 };
 
+// Query base de movimientos con toda la resolución de cuenta/billetera de origen y
+// destino (incluida la cuenta vinculada de cada billetera). Compartida entre el
+// listado "Top 10" del dashboard y el historial completo — solo cambia el LIMIT.
+const MOVIMIENTOS_QUERY_BASE = `
+    SELECT
+        m.id_movimiento, m.tipo_movimiento, m.concepto, m.monto, m.metodo_pago, m.modulo_origen, m.numero_operacion, m.fecha_movimiento, m.estado,
+        m.id_cuenta_origen, m.id_cuenta_destino, m.id_billetera_origen, m.id_billetera_destino,
+        u.nombre AS usuario_nombre,
+        co.nro_cuenta AS cuenta_origen_nro, eo.nombre AS entidad_origen,
+        cd.nro_cuenta AS cuenta_destino_nro, ed.nombre AS entidad_destino,
+        bo.numero_celular AS billetera_origen_nro, po.nombre AS proveedor_origen,
+        bd.numero_celular AS billetera_destino_nro, pd.nombre AS proveedor_destino,
+        cob.nro_cuenta AS cuenta_origen_vinculada, eob.nombre AS entidad_origen_vinculada,
+        cdb.nro_cuenta AS cuenta_destino_vinculada, edb.nombre AS entidad_destino_vinculada,
+        aa.motivo AS motivo_anulacion, aa.fecha_anulacion AS fecha_anulacion,
+        ua.nombre AS usuario_anulacion_nombre
+    FROM movimiento_caja m
+    LEFT JOIN usuarios u ON m.id_usuario = u.id_usuario
+    LEFT JOIN cuenta_bancaria co ON m.id_cuenta_origen = co.id_cuenta
+    LEFT JOIN entidad_financiera eo ON co.id_entidad = eo.id_entidad
+    LEFT JOIN cuenta_bancaria cd ON m.id_cuenta_destino = cd.id_cuenta
+    LEFT JOIN entidad_financiera ed ON cd.id_entidad = ed.id_entidad
+    LEFT JOIN billetera_digital bo ON m.id_billetera_origen = bo.id_billetera
+    LEFT JOIN proveedor_billetera po ON bo.id_proveedor = po.id_proveedor
+    LEFT JOIN cuenta_bancaria cob ON bo.active_cuenta_vinculada = cob.id_cuenta
+    LEFT JOIN entidad_financiera eob ON cob.id_entidad = eob.id_entidad
+    LEFT JOIN billetera_digital bd ON m.id_billetera_destino = bd.id_billetera
+    LEFT JOIN proveedor_billetera pd ON bd.id_proveedor = pd.id_proveedor
+    LEFT JOIN cuenta_bancaria cdb ON bd.active_cuenta_vinculada = cdb.id_cuenta
+    LEFT JOIN entidad_financiera edb ON cdb.id_entidad = edb.id_entidad
+    LEFT JOIN auditoria_anulacion aa ON aa.modulo = m.modulo_origen AND aa.id_registro = m.id_registro_origen
+    LEFT JOIN usuarios ua ON aa.id_usuario = ua.id_usuario
+    ORDER BY m.fecha_movimiento DESC
+`;
+
+// Resuelve la cuenta/billetera "afectada" a mostrar y da forma al objeto de
+// movimiento devuelto al frontend, a partir de una fila cruda de MOVIMIENTOS_QUERY_BASE.
+const mapearMovimiento = (r) => {
+    let cuenta_afectada = 'Efectivo'; // Default
+
+    if (r.tipo_movimiento === 'INGRESO' || r.tipo_movimiento === 'TRANSFERENCIA_INGRESO') {
+        if (r.id_billetera_destino) {
+            if (r.cuenta_destino_vinculada) {
+                cuenta_afectada = `${r.entidad_destino_vinculada} - ${r.cuenta_destino_vinculada} (Vía ${r.proveedor_destino})`;
+            } else {
+                cuenta_afectada = `${r.proveedor_destino} - ${r.billetera_destino_nro}`;
+            }
+        } else if (r.id_cuenta_destino) {
+            cuenta_afectada = `${r.entidad_destino} - ${r.cuenta_destino_nro}`;
+        }
+    } else { // EGRESO o TRANSFERENCIA_EGRESO
+        if (r.id_billetera_origen) {
+            if (r.cuenta_origen_vinculada) {
+                cuenta_afectada = `${r.entidad_origen_vinculada} - ${r.cuenta_origen_vinculada} (Vía ${r.proveedor_origen})`;
+            } else {
+                cuenta_afectada = `${r.proveedor_origen} - ${r.billetera_origen_nro}`;
+            }
+        } else if (r.id_cuenta_origen) {
+            cuenta_afectada = `${r.entidad_origen} - ${r.cuenta_origen_nro}`;
+        }
+    }
+
+    return {
+        id_movimiento: r.id_movimiento,
+        tipo_movimiento: r.tipo_movimiento,
+        concepto: r.concepto,
+        monto: Number(r.monto),
+        metodo_pago: r.metodo_pago,
+        cuenta_afectada: cuenta_afectada,
+        modulo_origen: r.modulo_origen,
+        numero_operacion: r.numero_operacion,
+        fecha_movimiento: r.fecha_movimiento,
+        usuario: r.usuario_nombre ? `${r.usuario_nombre}` : 'Sistema',
+        estado: r.estado,
+        // Auditoría de anulación (solo presente cuando estado = 0 y el módulo del
+        // movimiento registra motivo/usuario al anular — hoy Indemnizaciones y Deudas
+        // por Cobrar, vía la tabla auditoria_anulacion).
+        motivo_anulacion: r.motivo_anulacion,
+        fecha_anulacion: r.fecha_anulacion,
+        usuario_anulacion: r.usuario_anulacion_nombre
+    };
+};
+
 const obtenerUltimosMovimientos = async (req, res) => {
     try {
-        const query = `
-            SELECT 
-                m.id_movimiento, m.tipo_movimiento, m.concepto, m.monto, m.metodo_pago, m.modulo_origen, m.numero_operacion, m.fecha_movimiento, m.estado,
-                m.id_cuenta_origen, m.id_cuenta_destino, m.id_billetera_origen, m.id_billetera_destino,
-                u.nombre AS usuario_nombre,
-                co.nro_cuenta AS cuenta_origen_nro, eo.nombre AS entidad_origen,
-                cd.nro_cuenta AS cuenta_destino_nro, ed.nombre AS entidad_destino,
-                bo.numero_celular AS billetera_origen_nro, po.nombre AS proveedor_origen,
-                bd.numero_celular AS billetera_destino_nro, pd.nombre AS proveedor_destino,
-                cob.nro_cuenta AS cuenta_origen_vinculada, eob.nombre AS entidad_origen_vinculada,
-                cdb.nro_cuenta AS cuenta_destino_vinculada, edb.nombre AS entidad_destino_vinculada
-            FROM movimiento_caja m
-            LEFT JOIN usuarios u ON m.id_usuario = u.id_usuario
-            LEFT JOIN cuenta_bancaria co ON m.id_cuenta_origen = co.id_cuenta
-            LEFT JOIN entidad_financiera eo ON co.id_entidad = eo.id_entidad
-            LEFT JOIN cuenta_bancaria cd ON m.id_cuenta_destino = cd.id_cuenta
-            LEFT JOIN entidad_financiera ed ON cd.id_entidad = ed.id_entidad
-            LEFT JOIN billetera_digital bo ON m.id_billetera_origen = bo.id_billetera
-            LEFT JOIN proveedor_billetera po ON bo.id_proveedor = po.id_proveedor
-            LEFT JOIN cuenta_bancaria cob ON bo.active_cuenta_vinculada = cob.id_cuenta
-            LEFT JOIN entidad_financiera eob ON cob.id_entidad = eob.id_entidad
-            LEFT JOIN billetera_digital bd ON m.id_billetera_destino = bd.id_billetera
-            LEFT JOIN proveedor_billetera pd ON bd.id_proveedor = pd.id_proveedor
-            LEFT JOIN cuenta_bancaria cdb ON bd.active_cuenta_vinculada = cdb.id_cuenta
-            LEFT JOIN entidad_financiera edb ON cdb.id_entidad = edb.id_entidad
-            ORDER BY m.fecha_movimiento DESC
-            LIMIT 10
-        `;
-        const [rows] = await db.query(query);
-
-        // Formatear datos
-        const data = rows.map(r => {
-            let cuenta_afectada = 'Efectivo'; // Default
-
-            if (r.tipo_movimiento === 'INGRESO' || r.tipo_movimiento === 'TRANSFERENCIA_INGRESO') {
-                if (r.id_billetera_destino) {
-                    if (r.cuenta_destino_vinculada) {
-                        cuenta_afectada = `${r.entidad_destino_vinculada} - ${r.cuenta_destino_vinculada} (Vía ${r.proveedor_destino})`;
-                    } else {
-                        cuenta_afectada = `${r.proveedor_destino} - ${r.billetera_destino_nro}`;
-                    }
-                } else if (r.id_cuenta_destino) {
-                    cuenta_afectada = `${r.entidad_destino} - ${r.cuenta_destino_nro}`;
-                }
-            } else { // EGRESO o TRANSFERENCIA_EGRESO
-                if (r.id_billetera_origen) {
-                    if (r.cuenta_origen_vinculada) {
-                        cuenta_afectada = `${r.entidad_origen_vinculada} - ${r.cuenta_origen_vinculada} (Vía ${r.proveedor_origen})`;
-                    } else {
-                        cuenta_afectada = `${r.proveedor_origen} - ${r.billetera_origen_nro}`;
-                    }
-                } else if (r.id_cuenta_origen) {
-                    cuenta_afectada = `${r.entidad_origen} - ${r.cuenta_origen_nro}`;
-                }
-            }
-            
-            return {
-                id_movimiento: r.id_movimiento,
-                tipo_movimiento: r.tipo_movimiento,
-                concepto: r.concepto,
-                monto: Number(r.monto),
-                metodo_pago: r.metodo_pago,
-                cuenta_afectada: cuenta_afectada,
-                modulo_origen: r.modulo_origen,
-                numero_operacion: r.numero_operacion,
-                fecha_movimiento: r.fecha_movimiento,
-                usuario: r.usuario_nombre ? `${r.usuario_nombre}` : 'Sistema',
-                estado: r.estado
-            };
-        });
-
-        res.json({ success: true, data });
+        const [rows] = await db.query(MOVIMIENTOS_QUERY_BASE + ' LIMIT 10');
+        res.json({ success: true, data: rows.map(mapearMovimiento) });
     } catch (error) {
         console.error('Error en obtenerUltimosMovimientos (dashboardFinanciero):', error);
         res.status(500).json({ success: false, message: 'Error al obtener últimos movimientos' });
+    }
+};
+
+const obtenerTodosMovimientos = async (req, res) => {
+    try {
+        const [rows] = await db.query(MOVIMIENTOS_QUERY_BASE);
+        res.json({ success: true, data: rows.map(mapearMovimiento) });
+    } catch (error) {
+        console.error('Error en obtenerTodosMovimientos (dashboardFinanciero):', error);
+        res.status(500).json({ success: false, message: 'Error al obtener el historial de movimientos' });
     }
 };
 
@@ -709,6 +732,7 @@ module.exports = {
     obtenerFlujoDiario,
     obtenerDistribucionGastos,
     obtenerUltimosMovimientos,
+    obtenerTodosMovimientos,
     registrarIngresoManual,
     registrarEgresoManual,
     registrarTransferenciaInterna

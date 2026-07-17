@@ -1110,18 +1110,37 @@ function cerrarModalDetallesPago() {
 }
 
 async function confirmarAnularPago(idPago) {
-    const { value: formValues } = await Swal.fire({
+    const pago = historialGlobal.find(p => p.id_pago === idPago);
+    if (!pago) return;
+
+    await Swal.fire({
         title: '¿Anular este pago?',
+        icon: 'warning',
+        reverseButtons: true,
         html: `
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 16px; text-align: left;">
+                <div style="font-size: 13px; font-weight: 700; color: #1e293b;">Pago #PAG-${String(pago.id_pago).padStart(5, '0')} &bull; ${formatMoneda(pago.monto_total)}</div>
+                <div style="font-size: 12px; color: #64748b;">${pago.cliente_nombre}</div>
+            </div>
             <p style="text-align:left; font-size:13px; color:#64748b; margin-bottom:12px;">
                 Esta acción revertirá los productos dañados a estado pendiente y los movimientos de caja asociados.
             </p>
             <label style="display:block; text-align:left; font-size:13px; font-weight:600; margin-bottom:4px;">Motivo de la anulación *</label>
-            <textarea id="swal-motivo-anulacion" class="swal2-textarea" style="margin:0 0 12px;"
-                placeholder="Ej: Se registró el pago con el monto incorrecto, se corrige y se vuelve a registrar."></textarea>
-            <label style="display:block; text-align:left; font-size:13px; font-weight:600; margin-bottom:4px;">PIN de autorización *</label>
-            <input type="password" id="swal-pin-anulacion" class="swal2-input" style="margin:0"
-                inputmode="numeric" pattern="[0-9]*" placeholder="PIN numérico">
+            <textarea id="swal-motivo-anulacion" class="swal2-textarea custom-swal-textarea" style="width:100%; margin:0 0 4px; box-sizing:border-box; font-size: 14px;"
+                placeholder="Ej: Se registró el pago con el monto incorrecto, se corrige y se vuelve a registrar."
+                oninput="window.validarFormAnulacionIndem()"></textarea>
+            <div id="error-motivo" style="display:none; color:#dc2626; font-size:12px; text-align:left; margin-bottom:12px;">El motivo debe tener al menos 10 caracteres.</div>
+
+            <label style="display:block; text-align:left; font-size:13px; font-weight:600; margin-bottom:4px; margin-top:8px;">PIN de autorización *</label>
+            <input type="password" id="swal-pin-anulacion" class="swal2-input custom-swal-input" style="width:100%; margin:0 0 4px; box-sizing:border-box; font-size: 14px;"
+                inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4 dígitos"
+                oninput="this.value = this.value.replace(/[^0-9]/g, '').substring(0, 4); window.validarFormAnulacionIndem()">
+            <div id="error-pin" style="display:none; color:#dc2626; font-size:12px; text-align:left; margin-bottom:12px;">PIN de autorización incorrecto.</div>
+
+            <style>
+                .custom-swal-textarea::placeholder { color: #94a3b8 !important; font-size: 14px !important; }
+                .custom-swal-input::placeholder { color: #94a3b8 !important; font-size: 14px !important; }
+            </style>
         `,
         focusConfirm: false,
         showCancelButton: true,
@@ -1129,51 +1148,97 @@ async function confirmarAnularPago(idPago) {
         cancelButtonColor: '#64748b',
         confirmButtonText: 'Sí, anular',
         cancelButtonText: 'Cancelar',
+        showLoaderOnConfirm: true,
+        allowOutsideClick: () => !Swal.isLoading(),
+        didOpen: () => {
+            Swal.getConfirmButton().disabled = true;
+            window.validarFormAnulacionIndem = function() {
+                const motivo = document.getElementById('swal-motivo-anulacion').value.trim();
+                const pin = document.getElementById('swal-pin-anulacion').value.trim();
+                const motivoValido = motivo.length >= 10 && /^[a-zA-Z0-9À-ÿ\s.,\-¿?¡!:;'"()/#]+$/.test(motivo);
+                const pinValido = /^[0-9]{4}$/.test(pin);
+                Swal.getConfirmButton().disabled = !(motivoValido && pinValido);
+            };
+        },
+        willClose: () => {
+            delete window.validarFormAnulacionIndem;
+        },
         preConfirm: () => {
-            const motivo = document.getElementById('swal-motivo-anulacion').value.trim();
-            const pin = document.getElementById('swal-pin-anulacion').value.trim();
+            const motivoInput = document.getElementById('swal-motivo-anulacion');
+            const pinInput = document.getElementById('swal-pin-anulacion');
+            const errorMotivo = document.getElementById('error-motivo');
+            const errorPin = document.getElementById('error-pin');
+            
+            const motivo = motivoInput.value.trim();
+            const pin = pinInput.value.trim();
+            
+            // Reset errors
+            motivoInput.style.borderColor = '';
+            pinInput.style.borderColor = '';
+            errorMotivo.style.display = 'none';
+            errorPin.style.display = 'none';
+
+            let isValid = true;
             if (motivo.length < 10) {
-                Swal.showValidationMessage('El motivo debe tener al menos 10 caracteres.');
-                return false;
+                motivoInput.style.borderColor = '#dc2626';
+                errorMotivo.innerText = 'El motivo debe tener al menos 10 caracteres.';
+                errorMotivo.style.display = 'block';
+                isValid = false;
+            } else if (!/^[a-zA-Z0-9À-ÿ\s.,\-¿?¡!:;'"()/#]+$/.test(motivo)) {
+                motivoInput.style.borderColor = '#dc2626';
+                errorMotivo.innerText = 'El motivo tiene caracteres no permitidos.';
+                errorMotivo.style.display = 'block';
+                isValid = false;
             }
-            if (!/^[a-zA-Z0-9À-ÿ\s.,\-¿?¡!:;'"()/#]+$/.test(motivo)) {
-                Swal.showValidationMessage('El motivo tiene caracteres no permitidos.');
-                return false;
+
+            if (!/^[0-9]{4}$/.test(pin)) {
+                pinInput.style.borderColor = '#dc2626';
+                errorPin.innerText = 'El PIN debe tener exactamente 4 dígitos numéricos.';
+                errorPin.style.display = 'block';
+                isValid = false;
             }
-            if (!/^[0-9]+$/.test(pin)) {
-                Swal.showValidationMessage('Ingrese un PIN numérico válido.');
+
+            if (!isValid) return false;
+
+            const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+            
+            return fetch(`/api/indemnizaciones/anular/${idPago}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-user-profile': sessionData.id_perfil,
+                    'x-user-id': sessionData.id_usuario
+                },
+                body: JSON.stringify({ motivo, pin })
+            })
+            .then(response => {
+                if (!response.ok && response.status !== 400 && response.status !== 401 && response.status !== 403) {
+                    throw new Error(response.statusText);
+                }
+                return response.json();
+            })
+            .then(result => {
+                if (!result.success) {
+                    // Mostrar error inline para pin si es posible, o genérico.
+                    pinInput.value = ''; // Resetear PIN para que lo vuelva a ingresar
+                    pinInput.style.borderColor = '#dc2626';
+                    errorPin.innerText = result.message || 'Error al autorizar anulación.';
+                    errorPin.style.display = 'block';
+                    return false; // Evita cerrar el modal
+                }
+                return result;
+            })
+            .catch(error => {
+                Swal.showValidationMessage(`Error de conexión: ${error}`);
                 return false;
-            }
-            return { motivo, pin };
+            });
         }
-    });
-    if (!formValues) {
-        return;
-    }
-
-    try {
-        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
-        const response = await fetch(`/api/indemnizaciones/anular/${idPago}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-user-profile': sessionData.id_perfil,
-                'x-user-id': sessionData.id_usuario
-            },
-            body: JSON.stringify(formValues)
-        });
-        const result = await response.json();
-
-        if (result.success) {
+    }).then((result) => {
+        if (result.isConfirmed && result.value) {
             Swal.fire({ icon: 'success', title: 'Pago Anulado', text: 'El pago se anuló correctamente.' });
             cargarHistorialPagos(); // Recargar historial
-        } else {
-            Swal.fire({ icon: 'error', title: 'Error', text: result.message || 'Error al anular pago' });
         }
-    } catch (error) {
-        console.error('Error:', error);
-        Swal.fire({ icon: 'error', title: 'Error de conexión', text: 'No se pudo anular el pago. Revisa la consola.' });
-    }
+    });
 }
 
 // Utilidad

@@ -12,6 +12,7 @@ router.get('/billeteras/:id/movimientos', dashboardFinancieroController.obtenerM
 router.get('/flujo-diario', dashboardFinancieroController.obtenerFlujoDiario);
 router.get('/distribucion-gastos', dashboardFinancieroController.obtenerDistribucionGastos);
 router.get('/ultimos-movimientos', dashboardFinancieroController.obtenerUltimosMovimientos);
+router.get('/todos-movimientos', dashboardFinancieroController.obtenerTodosMovimientos);
 router.post('/ingreso-manual', dashboardFinancieroController.registrarIngresoManual);
 router.post('/egreso-manual', dashboardFinancieroController.registrarEgresoManual);
 router.post('/transferencia-interna', dashboardFinancieroController.registrarTransferenciaInterna);

@@ -117,7 +117,7 @@
     </div>
     
     <div class="tabla-scroll">
-        <table class="tabla-modulo">
+        <table class="tabla-modulo" style="font-size: 13px; width: 100%;">
             <thead>
                 <tr>
                     <th class="tabla-th">Tipo</th>
@@ -129,11 +129,12 @@
                     <th class="tabla-th">N° Operación</th>
                     <th class="tabla-th">Fecha</th>
                     <th class="tabla-th">Usuario</th>
+                    <th class="tabla-th" style="text-align: center;">Estado</th>
                 </tr>
             </thead>
             <tbody id="tbodyUltimosMovimientos">
                 <tr class="tabla-estado-fila">
-                    <td colspan="9">
+                    <td colspan="10">
                         <i class="fas fa-spinner fa-spin fa-2x"></i>
                         <p style="margin-top: 10px;">Cargando movimientos...</p>
                     </td>
@@ -270,6 +271,130 @@
             <button class="btn-primary" id="btnGuardarTransferenciaInterna" onclick="guardarTransferenciaInterna()" style="background: #3b82f6;">
                 <i class="fas fa-exchange-alt"></i> Transferir
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Historial Completo de Movimientos -->
+<div id="modalHistorialMovimientos" class="modal-overlay" style="display: none; align-items: center;">
+    <div class="modal-container" style="max-width: none; width: 90vw;">
+        <div class="modal-header">
+            <h3><i class="fas fa-history" style="color: var(--brand-blue); margin-right: 8px;"></i>Historial Completo de Movimientos</h3>
+            <button class="btn-close" onclick="cerrarModalHistorialMovimientos()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body" style="padding: 0; max-height: 85vh; overflow-y: auto;">
+            <div style="padding: 20px 24px 0 24px; display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: flex-end;">
+                <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+                    <div>
+                        <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Desde:</label>
+                        <input type="date" id="filtro-fecha-desde-mov" class="form-control" style="font-size: 13px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-light); height: 38px;">
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Hasta:</label>
+                        <input type="date" id="filtro-fecha-hasta-mov" class="form-control" style="font-size: 13px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-light); height: 38px;">
+                    </div>
+                    <button onclick="limpiarFiltroFechasMovimientos()" class="btn-secondary" style="padding: 8px 12px; font-size: 13px; height: 38px;" title="Limpiar Fechas"><i class="fas fa-eraser"></i></button>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label style="font-weight: 600; color: var(--text-secondary); font-size: 13px; margin: 0;">Buscar:</label>
+                    <input type="text" id="buscador-historial-movimientos" placeholder="Buscar concepto, cuenta, op...">
+                </div>
+            </div>
+
+            <div class="tabla-scroll" style="padding: 0 24px; margin-top: 16px;">
+                <table class="tabla-modulo" id="tabla-historial-movimientos" style="font-size: 13px; width: 100%;">
+                    <thead>
+                        <tr>
+                            <th class="tabla-th">Tipo</th>
+                            <th class="tabla-th">Concepto</th>
+                            <th class="tabla-th">Monto</th>
+                            <th class="tabla-th">Método de Pago</th>
+                            <th class="tabla-th">Cuenta Afectada</th>
+                            <th class="tabla-th">Origen</th>
+                            <th class="tabla-th">N° Operación</th>
+                            <th class="tabla-th">Fecha</th>
+                            <th class="tabla-th">Usuario</th>
+                            <th class="tabla-th" style="text-align: center;">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyHistorialMovimientos">
+                        <tr class="tabla-estado-fila">
+                            <td colspan="10">
+                                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                                <p style="margin-top: 10px;">Cargando movimientos...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Buscador propio del historial de movimientos (mismo patrón que el historial de
+       pagos de Indemnizaciones: input estático conectado vía API .search().draw(),
+       para no depender de reparentar el buscador que genera DataTables). */
+    #buscador-historial-movimientos {
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-size: 13px;
+        outline: none;
+        transition: all 0.2s;
+        background: white;
+        width: 300px;
+        height: 38px;
+    }
+    #buscador-historial-movimientos:focus {
+        border-color: var(--brand-blue);
+        box-shadow: 0 0 0 3px rgba(15, 76, 129, 0.1);
+    }
+
+    #tabla-historial-movimientos_wrapper {
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+    }
+
+    #tabla-historial-movimientos tbody tr:hover {
+        background-color: #f8fafc;
+    }
+
+    #modalHistorialMovimientos .bottom-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 24px;
+        flex-wrap: wrap;
+        gap: 12px;
+        border-top: 1px solid var(--border-light);
+    }
+    #modalHistorialMovimientos .dt-length-bottom select {
+        border: 1px solid var(--border-light);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 13px;
+        outline: none;
+        margin: 0 6px;
+    }
+</style>
+
+<!-- Modal Detalle de Anulación (auditoría). Va al final del documento a propósito:
+     se puede abrir desde dentro del modal de Historial Completo, y como ambos
+     .modal-overlay comparten el mismo z-index, el orden en el DOM es lo único que
+     decide cuál queda encima — este debe ser siempre el último. -->
+<div id="modalAuditoriaAnulacion" class="modal-overlay" style="display: none; align-items: center;">
+    <div class="modal-container" style="max-width: 460px; width: 100%;">
+        <div class="modal-header">
+            <h3><i class="fas fa-user-shield" style="color: #ef4444; margin-right: 8px;"></i>Detalle de la Anulación</h3>
+            <button class="btn-close" onclick="cerrarModalAuditoriaAnulacion()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div id="contenidoAuditoriaAnulacion"></div>
+        </div>
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border-light); text-align: right;">
+            <button class="btn-secondary" onclick="cerrarModalAuditoriaAnulacion()">Cerrar</button>
         </div>
     </div>
 </div>

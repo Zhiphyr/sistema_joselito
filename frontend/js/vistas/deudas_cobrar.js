@@ -978,97 +978,144 @@ async function abrirHistorial(idCarga, fleteOriginal, saldoPendiente, estadoActu
                 if (btnAnular) {
                     const idPago = btnAnular.dataset.id;
                     const idCargaActual = btnAnular.dataset.carga;
+                    const pagoInfo = pagos.find(x => String(x.id_pago) === String(idPago));
+                    if (!pagoInfo) return;
 
-                    const { value: formValues } = await Swal.fire({
-                        title: 'Autorización Requerida',
+                    const fechaResumen = new Date(pagoInfo.fecha_pago);
+                    const strFechaResumen = fechaResumen.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+                        + ' - ' + fechaResumen.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+                    const result = await Swal.fire({
+                        title: '¿Anular este pago?',
+                        icon: 'warning',
+                        reverseButtons: true,
                         html: `
+                            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 16px; text-align: left;">
+                                <div style="font-size: 13px; font-weight: 700; color: #1e293b;">Carga ${idCargaActual} &bull; S/ ${Number(pagoInfo.monto_pagado).toFixed(2)}</div>
+                                <div style="font-size: 12px; color: #64748b;">${strFechaResumen} &middot; ${pagoInfo.tipo_pago}</div>
+                            </div>
                             <p style="text-align:left; font-size:13px; color:#64748b; margin-bottom:12px;">
                                 Esta acción revertirá la deuda de la carga y el movimiento de caja asociado.
                             </p>
                             <label style="display:block; text-align:left; font-size:13px; font-weight:600; margin-bottom:4px;">Motivo de la anulación *</label>
-                            <textarea id="swal-motivo-anulacion" class="swal2-textarea" style="margin:0 0 12px;"
-                                placeholder="Ej: Se registró el cobro con el monto incorrecto, se corrige y se vuelve a registrar."></textarea>
-                            <label style="display:block; text-align:left; font-size:13px; font-weight:600; margin-bottom:4px;">PIN de autorización *</label>
-                            <input type="password" id="swal-pin-anulacion" class="swal2-input" style="margin:0"
-                                inputmode="numeric" pattern="[0-9]*" placeholder="PIN numérico">
+                            <textarea id="swal-motivo-anulacion" class="swal2-textarea custom-swal-textarea" style="width:100%; margin:0 0 4px; box-sizing:border-box; font-size: 14px;"
+                                placeholder="Ej: Se registró el cobro con el monto incorrecto, se corrige y se vuelve a registrar."
+                                oninput="window.validarFormAnulacionDeuda()"></textarea>
+                            <div id="error-motivo" style="display:none; color:#dc2626; font-size:12px; text-align:left; margin-bottom:12px;">El motivo debe tener al menos 10 caracteres.</div>
+
+                            <label style="display:block; text-align:left; font-size:13px; font-weight:600; margin-bottom:4px; margin-top:8px;">PIN de autorización *</label>
+                            <input type="password" id="swal-pin-anulacion" class="swal2-input custom-swal-input" style="width:100%; margin:0 0 4px; box-sizing:border-box; font-size: 14px;"
+                                inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4 dígitos"
+                                oninput="this.value = this.value.replace(/[^0-9]/g, '').substring(0, 4); window.validarFormAnulacionDeuda()">
+                            <div id="error-pin" style="display:none; color:#dc2626; font-size:12px; text-align:left; margin-bottom:12px;">PIN de autorización incorrecto.</div>
+
+                            <style>
+                                .custom-swal-textarea::placeholder { color: #94a3b8 !important; font-size: 14px !important; }
+                                .custom-swal-input::placeholder { color: #94a3b8 !important; font-size: 14px !important; }
+                            </style>
                         `,
                         focusConfirm: false,
                         showCancelButton: true,
-                        confirmButtonText: 'Anular Pago',
-                        cancelButtonText: 'Cancelar',
                         confirmButtonColor: '#ef4444',
+                        cancelButtonColor: '#64748b',
+                        confirmButtonText: 'Sí, anular',
+                        cancelButtonText: 'Cancelar',
+                        showLoaderOnConfirm: true,
+                        allowOutsideClick: () => !Swal.isLoading(),
+                        didOpen: () => {
+                            Swal.getConfirmButton().disabled = true;
+                            window.validarFormAnulacionDeuda = function() {
+                                const motivo = document.getElementById('swal-motivo-anulacion').value.trim();
+                                const pin = document.getElementById('swal-pin-anulacion').value.trim();
+                                const motivoValido = motivo.length >= 10 && /^[a-zA-Z0-9À-ÿ\s.,\-¿?¡!:;'"()/#]+$/.test(motivo);
+                                const pinValido = /^[0-9]{4}$/.test(pin);
+                                Swal.getConfirmButton().disabled = !(motivoValido && pinValido);
+                            };
+                        },
+                        willClose: () => {
+                            delete window.validarFormAnulacionDeuda;
+                        },
                         preConfirm: () => {
-                            const motivo = document.getElementById('swal-motivo-anulacion').value.trim();
-                            const pin = document.getElementById('swal-pin-anulacion').value.trim();
-                            if (motivo.length < 10) {
-                                Swal.showValidationMessage('El motivo debe tener al menos 10 caracteres.');
-                                return false;
-                            }
-                            if (!/^[a-zA-Z0-9À-ÿ\s.,\-¿?¡!:;'"()/#]+$/.test(motivo)) {
-                                Swal.showValidationMessage('El motivo tiene caracteres no permitidos.');
-                                return false;
-                            }
-                            if (!/^[0-9]+$/.test(pin)) {
-                                Swal.showValidationMessage('Ingrese un PIN numérico válido.');
-                                return false;
-                            }
-                            return { motivo, pin };
-                        }
-                    });
+                            const motivoInput = document.getElementById('swal-motivo-anulacion');
+                            const pinInput = document.getElementById('swal-pin-anulacion');
+                            const errorMotivo = document.getElementById('error-motivo');
+                            const errorPin = document.getElementById('error-pin');
 
-                    if (formValues) {
-                        try {
-                            // Mostrar loading
-                            Swal.fire({
-                                title: 'Procesando...',
-                                text: 'Anulando el pago y recalculando deuda',
-                                allowOutsideClick: false,
-                                didOpen: () => {
-                                    Swal.showLoading();
-                                }
-                            });
+                            const motivo = motivoInput.value.trim();
+                            const pin = pinInput.value.trim();
+
+                            // Reset errores
+                            motivoInput.style.borderColor = '';
+                            pinInput.style.borderColor = '';
+                            errorMotivo.style.display = 'none';
+                            errorPin.style.display = 'none';
+
+                            let isValid = true;
+                            if (motivo.length < 10) {
+                                motivoInput.style.borderColor = '#dc2626';
+                                errorMotivo.innerText = 'El motivo debe tener al menos 10 caracteres.';
+                                errorMotivo.style.display = 'block';
+                                isValid = false;
+                            } else if (!/^[a-zA-Z0-9À-ÿ\s.,\-¿?¡!:;'"()/#]+$/.test(motivo)) {
+                                motivoInput.style.borderColor = '#dc2626';
+                                errorMotivo.innerText = 'El motivo tiene caracteres no permitidos.';
+                                errorMotivo.style.display = 'block';
+                                isValid = false;
+                            }
+
+                            if (!/^[0-9]{4}$/.test(pin)) {
+                                pinInput.style.borderColor = '#dc2626';
+                                errorPin.innerText = 'El PIN debe tener exactamente 4 dígitos numéricos.';
+                                errorPin.style.display = 'block';
+                                isValid = false;
+                            }
+
+                            if (!isValid) return false;
 
                             const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
-                            const resAnular = await fetch('/api/deudas/anular-pago', {
+
+                            return fetch('/api/deudas/anular-pago', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
                                     'x-user-profile': sessionData.id_perfil,
                                     'x-user-id': sessionData.id_usuario
                                 },
-                                body: JSON.stringify({ id_pago: idPago, pin: formValues.pin, motivo: formValues.motivo })
-                            });
-
-                            const dataAnular = await resAnular.json();
-
-                            if (dataAnular.success) {
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: 'Pago Anulado',
-                                    text: 'La deuda ha sido recalculada con éxito.',
-                                    timer: 2000,
-                                    showConfirmButton: false
-                                });
-                                // Refrescar la tabla de atrás y el modal actual
-                                cargarDeudas();
-                                const estadoNuevo = dataAnular.nuevo_estado;
-                                const saldoNuevo = dataAnular.nuevo_saldo;
-                                abrirHistorial(idCargaActual, fleteOriginal, saldoNuevo, estadoNuevo);
-                            } else {
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'Error de Autorización',
-                                    text: dataAnular.message || 'No se pudo anular el pago.'
-                                });
-                            }
-                        } catch (err) {
-                            console.error(err);
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Error',
-                                text: 'Error de conexión con el servidor.'
+                                body: JSON.stringify({ id_pago: idPago, pin, motivo })
+                            })
+                            .then(response => {
+                                if (!response.ok && response.status !== 400 && response.status !== 401 && response.status !== 403) {
+                                    throw new Error(response.statusText);
+                                }
+                                return response.json();
+                            })
+                            .then(dataAnular => {
+                                if (!dataAnular.success) {
+                                    pinInput.value = '';
+                                    pinInput.style.borderColor = '#dc2626';
+                                    errorPin.innerText = dataAnular.message || 'Error al autorizar anulación.';
+                                    errorPin.style.display = 'block';
+                                    return false;
+                                }
+                                return dataAnular;
+                            })
+                            .catch(error => {
+                                Swal.showValidationMessage(`Error de conexión: ${error}`);
+                                return false;
                             });
                         }
+                    });
+
+                    if (result.isConfirmed && result.value) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Pago Anulado',
+                            text: 'La deuda ha sido recalculada con éxito.',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                        cargarDeudas();
+                        abrirHistorial(idCargaActual, fleteOriginal, result.value.nuevo_saldo, result.value.nuevo_estado);
                     }
                 }
             });
