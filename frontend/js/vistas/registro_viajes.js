@@ -527,7 +527,16 @@ function activarPestania(id) {
  */
 function cerrarPestania(id, btnElement) {
     const eraActiva = btnElement.classList.contains('activa');
-    
+
+    // Liberar cualquier reserva de carga de almacén que tuviera esta pestaña, tanto si
+    // se cierra porque el viaje ya se registró como si el usuario simplemente abandona
+    // el borrador sin registrarlo.
+    (window.cargasPorViaje[id] || []).forEach(c => {
+        if (c.es_carga_existente) {
+            liberarCargaAlmacen(c.id_carga_real);
+        }
+    });
+
     // Limpiar memoria
     delete window.cargasPorViaje[id];
 
@@ -618,6 +627,179 @@ function cerrarModalNuevaCarga() {
     document.getElementById('modalNuevaCarga').style.display = 'none';
     window.idViajeModalActivo = null;
     window.idCargaEditandoActiva = null;
+}
+
+/* ==========================================================
+   CARGAS PENDIENTES EN ALMACÉN (cotizaciones aprobadas sin viaje)
+
+   Reserva "tentativa" compartida vía localStorage (clave
+   joselito_cargas_reservadas): evita que la misma carga de almacén
+   se tome desde dos pestañas de viaje a la vez (funciona tanto para
+   las pestañas dentro de esta misma página como si el usuario abre
+   una segunda ventana real del navegador, porque localStorage es
+   compartido por origen). Es una capa de UX; la garantía real
+   anti-doble-asignación es el "WHERE id_viaje IS NULL" que hace
+   registrarViaje en el backend al confirmar el viaje.
+   ========================================================== */
+
+const RESERVA_ALMACEN_TTL_MS = 12 * 60 * 60 * 1000; // 12 horas
+window.cargasAlmacenCache = [];
+window.idViajeModalAlmacenActivo = null;
+
+function leerReservasAlmacen() {
+    let reservas = {};
+    try {
+        reservas = JSON.parse(localStorage.getItem('joselito_cargas_reservadas') || '{}');
+    } catch (e) {
+        reservas = {};
+    }
+
+    const ahora = Date.now();
+    let cambiaron = false;
+    Object.keys(reservas).forEach(idCarga => {
+        if (!reservas[idCarga] || (ahora - reservas[idCarga].ts) > RESERVA_ALMACEN_TTL_MS) {
+            delete reservas[idCarga];
+            cambiaron = true;
+        }
+    });
+
+    if (cambiaron) {
+        localStorage.setItem('joselito_cargas_reservadas', JSON.stringify(reservas));
+    }
+    return reservas;
+}
+
+function reservarCargaAlmacen(idCarga, idViaje) {
+    const reservas = leerReservasAlmacen();
+    reservas[idCarga] = { idViaje, ts: Date.now() };
+    localStorage.setItem('joselito_cargas_reservadas', JSON.stringify(reservas));
+}
+
+function liberarCargaAlmacen(idCarga) {
+    const reservas = leerReservasAlmacen();
+    delete reservas[idCarga];
+    localStorage.setItem('joselito_cargas_reservadas', JSON.stringify(reservas));
+}
+
+async function abrirModalCargasPendientes(btnElement) {
+    const vistaViaje = btnElement.closest('.vista-viaje');
+    if (!vistaViaje) return;
+
+    window.idViajeModalAlmacenActivo = vistaViaje.id;
+
+    const tbody = document.getElementById('tbody-cargas-pendientes-almacen');
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px;"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
+    document.getElementById('modalCargasPendientes').style.display = 'flex';
+
+    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+
+    try {
+        const response = await fetch('http://localhost:3000/api/viajes/cargas/pendientes', {
+            headers: { 'x-user-profile': sessionData.id_perfil || 1 }
+        });
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Error al obtener las cargas pendientes');
+        }
+
+        // Se excluyen las cargas ya "reservadas" por cualquier otra pestaña/ventana en curso.
+        const reservas = leerReservasAlmacen();
+        const disponibles = result.data.filter(c => !reservas[c.id_carga]);
+        window.cargasAlmacenCache = disponibles;
+
+        renderizarTablaCargasPendientes(disponibles);
+    } catch (error) {
+        console.error('Error al cargar cargas pendientes:', error);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color:#ef4444;">Error al cargar las cargas pendientes</td></tr>';
+    }
+}
+
+function cerrarModalCargasPendientes() {
+    document.getElementById('modalCargasPendientes').style.display = 'none';
+    window.idViajeModalAlmacenActivo = null;
+}
+
+function renderizarTablaCargasPendientes(cargas) {
+    const tbody = document.getElementById('tbody-cargas-pendientes-almacen');
+
+    if (!cargas || cargas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);">No hay cargas pendientes disponibles en almacén</td></tr>';
+        return;
+    }
+
+    let filas = '';
+    cargas.forEach(c => {
+        const pesoTotal = c.productos.reduce((s, p) => s + Number(p.peso_total), 0);
+        filas += `
+            <tr class="tabla-tr">
+                <td class="tabla-td tabla-id">${c.id_carga}</td>
+                <td class="tabla-td">${c.nombre_remitente} &rarr; ${c.nombre_destinatario}</td>
+                <td class="tabla-td">${c.productos.length} producto(s)</td>
+                <td class="tabla-td">${pesoTotal.toFixed(2)} kg</td>
+                <td class="tabla-td">S/ ${Number(c.flete_total).toFixed(2)}</td>
+                <td class="tabla-td">
+                    <button class="btn-primary" style="width:auto; padding: 6px 14px; font-size: 13px;" onclick="seleccionarCargaAlmacen(${c.id_carga})">Agregar</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = filas;
+}
+
+function seleccionarCargaAlmacen(idCarga) {
+    const idViaje = window.idViajeModalAlmacenActivo;
+    if (!idViaje) return;
+
+    const carga = window.cargasAlmacenCache.find(c => c.id_carga === idCarga);
+    if (!carga) return;
+
+    // Misma forma que una carga armada a mano en el modal "Registrar Carga": así
+    // renderizarCargasViaje(), guardarEstadoEnLocalStorage() y la restauración al
+    // recargar la página funcionan sin necesidad de tocarlos. Las dos propiedades
+    // extra (es_carga_existente / id_carga_real) son las que usa el backend para
+    // reasignar en vez de insertar, y las que gatillan la reserva/liberación aquí.
+    const nuevaCarga = {
+        id_carga_temp: 'almacen-' + carga.id_carga,
+        es_carga_existente: true,
+        id_carga_real: carga.id_carga,
+        id_remitente: carga.id_remitente,
+        nombre_remitente: carga.nombre_remitente,
+        id_destinatario: carga.id_destinatario,
+        nombre_destinatario: carga.nombre_destinatario,
+        productos: carga.productos.map(p => ({
+            id_producto: p.id_producto,
+            nombre_producto: p.nombre_producto,
+            marca_visual: p.marca_visual || '',
+            cantidad: p.cantidad_sacos,
+            peso_unidad: Number(p.peso_unitario),
+            peso_total: Number(p.peso_total),
+            tarifa_flete: Number(p.precio_peso),
+            flete_total: Number(p.flete_subtotal),
+            es_personalizado: false
+        })),
+        resumen: {
+            total_peso: carga.productos.reduce((s, p) => s + Number(p.peso_total), 0),
+            total_flete: Number(carga.flete_total)
+        }
+    };
+
+    if (!window.cargasPorViaje[idViaje]) {
+        window.cargasPorViaje[idViaje] = [];
+    }
+    window.cargasPorViaje[idViaje].push(nuevaCarga);
+
+    reservarCargaAlmacen(carga.id_carga, idViaje);
+
+    renderizarCargasViaje(idViaje);
+    guardarEstadoEnLocalStorage(idViaje);
+
+    cerrarModalCargasPendientes();
+
+    if (window.Swal) {
+        Swal.fire({ icon: 'success', title: 'Carga añadida', timer: 1200, showConfirmButton: false });
+    }
 }
 
 function agregarBloqueProducto(prodInicial = null) {
@@ -940,9 +1122,10 @@ function renderizarCargasViaje(idViaje) {
                     <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center;">
                         <span style="background-color: #e0f2fe; color: var(--brand-blue); padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 12px;">Carga ${index + 1}</span>
                         ${carga.nombre_remitente} <span style="color: var(--text-muted); margin: 0 12px;">&rarr;</span> ${carga.nombre_destinatario}
+                        ${carga.es_carga_existente ? '<span class="badge-desde-almacen">Desde Almacén</span>' : ''}
                     </div>
                     <div>
-                        <button class="btn-action btn-edit" onclick="editarCargaDeMemoria('${idViaje}', '${carga.id_carga_temp}')" title="Editar" style="color: var(--text-muted); cursor: pointer;"><i class="fas fa-pencil-alt"></i></button>
+                        ${carga.es_carga_existente ? '' : `<button class="btn-action btn-edit" onclick="editarCargaDeMemoria('${idViaje}', '${carga.id_carga_temp}')" title="Editar" style="color: var(--text-muted); cursor: pointer;"><i class="fas fa-pencil-alt"></i></button>`}
                         <button class="btn-action btn-delete" onclick="eliminarCargaDeMemoria('${idViaje}', '${carga.id_carga_temp}')" title="Eliminar" style="color: var(--text-muted); cursor: pointer;"><i class="fas fa-trash-alt"></i></button>
                     </div>
                 </div>
@@ -1019,6 +1202,21 @@ function actualizarTotalesGenerales(vista, listaCargas) {
 }
 
 function eliminarCargaDeMemoria(idViaje, idCargaTemp) {
+    const cargaAEliminar = (window.cargasPorViaje[idViaje] || []).find(c => c.id_carga_temp === idCargaTemp);
+
+    const ejecutarEliminacion = () => {
+        if (window.cargasPorViaje[idViaje]) {
+            window.cargasPorViaje[idViaje] = window.cargasPorViaje[idViaje].filter(c => c.id_carga_temp !== idCargaTemp);
+            // Si era una carga de almacén, se libera la reserva de inmediato para que
+            // vuelva a estar disponible para cualquier otra pestaña/ventana.
+            if (cargaAEliminar && cargaAEliminar.es_carga_existente) {
+                liberarCargaAlmacen(cargaAEliminar.id_carga_real);
+            }
+            renderizarCargasViaje(idViaje);
+            guardarEstadoEnLocalStorage(idViaje);
+        }
+    };
+
     if (window.Swal) {
         Swal.fire({
             title: '¿Eliminar carga?',
@@ -1031,20 +1229,12 @@ function eliminarCargaDeMemoria(idViaje, idCargaTemp) {
             cancelButtonText: 'Cancelar'
         }).then((result) => {
             if (result.isConfirmed) {
-                if (window.cargasPorViaje[idViaje]) {
-                    window.cargasPorViaje[idViaje] = window.cargasPorViaje[idViaje].filter(c => c.id_carga_temp !== idCargaTemp);
-                    renderizarCargasViaje(idViaje);
-                    guardarEstadoEnLocalStorage(idViaje);
-                }
+                ejecutarEliminacion();
             }
         });
     } else {
         if (confirm("¿Estás seguro de eliminar esta carga?")) {
-            if (window.cargasPorViaje[idViaje]) {
-                window.cargasPorViaje[idViaje] = window.cargasPorViaje[idViaje].filter(c => c.id_carga_temp !== idCargaTemp);
-                renderizarCargasViaje(idViaje);
-                guardarEstadoEnLocalStorage(idViaje);
-            }
+            ejecutarEliminacion();
         }
     }
 }
@@ -1307,3 +1497,6 @@ window.eliminarBloqueProducto = eliminarBloqueProducto;
 window.guardarCargaEnMemoria = guardarCargaEnMemoria;
 window.eliminarCargaDeMemoria = eliminarCargaDeMemoria;
 window.editarCargaDeMemoria = editarCargaDeMemoria;
+window.abrirModalCargasPendientes = abrirModalCargasPendientes;
+window.cerrarModalCargasPendientes = cerrarModalCargasPendientes;
+window.seleccionarCargaAlmacen = seleccionarCargaAlmacen;

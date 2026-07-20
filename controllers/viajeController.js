@@ -128,6 +128,28 @@ const registrarViaje = async (req, res) => {
         // 2. Insertar Cargas
         if (cargas && cargas.length > 0) {
             for (const carga of cargas) {
+                // Carga ya existente en almacén (nacida de una cotización aprobada): solo se
+                // reasigna al viaje, no se vuelve a insertar ni se duplica su Detalle_Carga.
+                // El guard "id_viaje IS NULL" es la garantía real anti-doble-asignación:
+                // si otra pestaña/ventana ya se la llevó primero, affectedRows viene en 0.
+                if (carga.es_carga_existente && carga.id_carga_real) {
+                    const [resultReasignar] = await connection.query(
+                        `UPDATE Carga SET id_viaje = ?, estado_entrega = 'En ruta' WHERE id_carga = ? AND id_viaje IS NULL`,
+                        [idViajeInsertado, carga.id_carga_real]
+                    );
+
+                    if (resultReasignar.affectedRows === 0) {
+                        await connection.rollback();
+                        connection.release();
+                        return res.status(409).json({
+                            success: false,
+                            message: `La carga #${carga.id_carga_real} ya fue asignada a otro viaje. Actualiza la lista de cargas pendientes e inténtalo de nuevo.`
+                        });
+                    }
+
+                    continue;
+                }
+
                 const sqlCarga = `
                     INSERT INTO Carga (id_viaje, id_remitente, id_destinatario, flete_total, estado_entrega, id_usuario)
                     VALUES (?, ?, ?, ?, 'En ruta', ?)
@@ -387,6 +409,51 @@ const obtenerCargasPorViaje = async (req, res) => {
     } catch (error) {
         console.error('Error en obtenerCargasPorViaje:', error);
         return res.status(500).json({ success: false, message: 'Error al obtener las cargas del viaje' });
+    }
+};
+
+const obtenerCargasPendientesAlmacen = async (req, res) => {
+    try {
+        // Cargas que ya existen en BD (nacidas de una cotización aprobada) pero que aún
+        // no tienen camión/viaje asignado - siguen físicamente en el almacén de origen.
+        const sqlCargas = `
+            SELECT
+                c.id_carga, c.id_cotizacion_origen, c.flete_total, c.fecha_registro,
+                rem.id_cliente AS id_remitente, rem.nombre_razon_social AS nombre_remitente,
+                dest.id_cliente AS id_destinatario, dest.nombre_razon_social AS nombre_destinatario
+            FROM Carga c
+            JOIN clientes rem ON c.id_remitente = rem.id_cliente
+            JOIN clientes dest ON c.id_destinatario = dest.id_cliente
+            WHERE c.id_viaje IS NULL AND c.estado_entrega = 'En Almacen de Origen' AND c.estado != 2
+            ORDER BY c.fecha_registro ASC
+        `;
+        const [cargas] = await db.query(sqlCargas);
+
+        if (cargas.length === 0) {
+            return res.status(200).json({ success: true, data: [] });
+        }
+
+        const idsCargas = cargas.map(c => c.id_carga);
+
+        const sqlDetalles = `
+            SELECT
+                dc.id_carga, dc.id_producto, p.nombre AS nombre_producto, dc.marca_visual,
+                dc.cantidad_sacos, dc.peso_unitario, dc.peso_total, dc.precio_peso, dc.flete_subtotal
+            FROM Detalle_Carga dc
+            JOIN productos p ON dc.id_producto = p.id_producto
+            WHERE dc.id_carga IN (?) AND dc.estado != 2
+        `;
+        const [detalles] = await db.query(sqlDetalles, [idsCargas]);
+
+        const dataFinal = cargas.map(carga => ({
+            ...carga,
+            productos: detalles.filter(d => d.id_carga === carga.id_carga)
+        }));
+
+        return res.status(200).json({ success: true, data: dataFinal });
+    } catch (error) {
+        console.error('Error en obtenerCargasPendientesAlmacen:', error);
+        return res.status(500).json({ success: false, message: 'Error al obtener las cargas pendientes en almacén' });
     }
 };
 
@@ -1735,6 +1802,7 @@ module.exports = {
     registrarViaje,
     obtenerHistorialViajes,
     obtenerCargasPorViaje,
+    obtenerCargasPendientesAlmacen,
     obtenerViajesRecepcion,
     marcarLlegadaViaje,
     entregarCarga,

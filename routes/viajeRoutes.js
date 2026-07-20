@@ -13,6 +13,7 @@ router.put('/:id/llegada', viajeController.marcarLlegadaViaje);
 router.put('/cargas/:id/entregar', viajeController.entregarCarga);
 router.put('/cargas/:id/rechazar', viajeController.rechazarCarga);
 router.post('/cargas/:id/entrega-parcial', viajeController.entregaParcialCarga);
+router.get('/cargas/pendientes', viajeController.obtenerCargasPendientesAlmacen);
 router.get('/:id/cargas', viajeController.obtenerCargasPorViaje);
 router.post('/transbordo', viajeController.confirmarTransbordo);
 router.get('/:id/incidencias', viajeController.obtenerIncidenciasViaje);

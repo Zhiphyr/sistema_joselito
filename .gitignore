@@ -42,3 +42,7 @@ ehthumbs_vista.db
 
 # Agregando claude.md
 CLAUDE.md
+.claude/
+
+# Agregando la carpeta docs
+docs/
