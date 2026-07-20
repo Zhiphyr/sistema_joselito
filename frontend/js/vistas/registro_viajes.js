@@ -687,9 +687,26 @@ async function abrirModalCargasPendientes(btnElement) {
 
     window.idViajeModalAlmacenActivo = vistaViaje.id;
 
-    const tbody = document.getElementById('tbody-cargas-pendientes-almacen');
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px;"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
+    const contenedor = document.getElementById('contenedor-cargas-pendientes');
+    contenedor.innerHTML = '<div style="text-align:center; padding:32px; color:var(--text-secondary);"><i class="fas fa-spinner fa-spin fa-2x mb-3"></i><br>Cargando cargas pendientes...</div>';
     document.getElementById('modalCargasPendientes').style.display = 'flex';
+
+    const inputBuscar = document.getElementById('input-buscar-cargas-pendientes');
+    if (inputBuscar) {
+        inputBuscar.value = '';
+        if (!inputBuscar.hasAttribute('data-listener')) {
+            inputBuscar.setAttribute('data-listener', 'true');
+            inputBuscar.addEventListener('input', (e) => {
+                const termino = e.target.value.toLowerCase();
+                const filtradas = (window.cargasAlmacenCache || []).filter(c => {
+                    return c.id_carga.toString().includes(termino) ||
+                           (c.nombre_remitente || '').toLowerCase().includes(termino) ||
+                           (c.nombre_destinatario || '').toLowerCase().includes(termino);
+                });
+                renderizarTablaCargasPendientes(filtradas);
+            });
+        }
+    }
 
     const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
 
@@ -711,7 +728,8 @@ async function abrirModalCargasPendientes(btnElement) {
         renderizarTablaCargasPendientes(disponibles);
     } catch (error) {
         console.error('Error al cargar cargas pendientes:', error);
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color:#ef4444;">Error al cargar las cargas pendientes</td></tr>';
+        const contenedor = document.getElementById('contenedor-cargas-pendientes');
+        contenedor.innerHTML = '<div style="text-align:center; padding:32px; color:#ef4444;"><i class="fas fa-exclamation-triangle fa-2x mb-3"></i><br>Error al cargar las cargas pendientes</div>';
     }
 }
 
@@ -721,31 +739,120 @@ function cerrarModalCargasPendientes() {
 }
 
 function renderizarTablaCargasPendientes(cargas) {
-    const tbody = document.getElementById('tbody-cargas-pendientes-almacen');
+    const contenedor = document.getElementById('contenedor-cargas-pendientes');
 
     if (!cargas || cargas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);">No hay cargas pendientes disponibles en almacén</td></tr>';
+        contenedor.innerHTML = `
+            <div style="text-align:center; padding:48px 24px; border: 1px dashed var(--border-light); border-radius: var(--radius-md); background: var(--surface-bg);">
+                <i class="fas fa-box-open" style="font-size: 32px; color: var(--border-light); margin-bottom: 16px;"></i>
+                <p style="margin: 0; color: var(--text-secondary); font-size: 14px; font-weight: 500;">No se encontraron cargas pendientes</p>
+                <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 12px;">Intenta ajustando tu búsqueda o revisa el almacén.</p>
+            </div>
+        `;
         return;
     }
 
-    let filas = '';
+    let html = '';
     cargas.forEach(c => {
         const pesoTotal = c.productos.reduce((s, p) => s + Number(p.peso_total), 0);
-        filas += `
-            <tr class="tabla-tr">
-                <td class="tabla-td tabla-id">${c.id_carga}</td>
-                <td class="tabla-td">${c.nombre_remitente} &rarr; ${c.nombre_destinatario}</td>
-                <td class="tabla-td">${c.productos.length} producto(s)</td>
-                <td class="tabla-td">${pesoTotal.toFixed(2)} kg</td>
-                <td class="tabla-td">S/ ${Number(c.flete_total).toFixed(2)}</td>
-                <td class="tabla-td">
-                    <button class="btn-primary" style="width:auto; padding: 6px 14px; font-size: 13px;" onclick="seleccionarCargaAlmacen(${c.id_carga})">Agregar</button>
-                </td>
-            </tr>
+
+        let filasProductos = '';
+        c.productos.forEach(p => {
+            filasProductos += `
+                <tr style="border-top: 1px solid var(--border-light);">
+                    <td style="padding: 8px; font-weight: 600; color: var(--text-primary);">${p.nombre_producto}</td>
+                    <td style="padding: 8px; color: var(--text-secondary);">${p.marca_visual || '-'}</td>
+                    <td style="padding: 8px; text-align: center; color: var(--text-secondary);">${p.cantidad_sacos}</td>
+                    <td style="padding: 8px; text-align: right; color: var(--text-secondary);">${Number(p.peso_unitario).toFixed(2)} kg</td>
+                    <td style="padding: 8px; text-align: right; font-weight: 600; color: var(--text-primary);">${Number(p.peso_total).toFixed(2)} kg</td>
+                    <td style="padding: 8px; text-align: right; color: var(--text-secondary);">S/ ${Number(p.precio_peso).toFixed(2)}</td>
+                    <td style="padding: 8px; text-align: right; font-weight: 700; color: var(--brand-blue);">S/ ${Number(p.flete_subtotal).toFixed(2)}</td>
+                </tr>
+            `;
+        });
+
+        html += `
+            <div class="carga-card-wrapper" style="border: 1px solid var(--border-light); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <div class="carga-card" style="display: flex; align-items: center; background: #ffffff; padding: 16px; transition: transform 0.2s, box-shadow 0.2s;">
+
+                    <!-- Zona Izquierda: ID y Ruta (50%) -->
+                    <div style="flex: 2; padding-right: 16px; min-width: 0;">
+                        <div style="display: inline-block; background: var(--surface-bg); color: var(--text-muted); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; margin-bottom: 8px;">
+                            ID #${c.id_carga}
+                        </div>
+                        <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">
+                            ${c.nombre_remitente}
+                        </div>
+                        <div style="font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            <i class="fas fa-level-down-alt fa-rotate-270" style="margin-right: 4px; color: var(--border-light);"></i>
+                            ${c.nombre_destinatario}
+                        </div>
+                    </div>
+
+                    <!-- Zona Central: Métricas (35%) -->
+                    <div style="flex: 1.5; display: flex; gap: 16px; border-left: 1px solid var(--border-light); padding-left: 16px; padding-right: 16px;">
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <div style="font-size: 13px; color: var(--text-secondary); font-weight: 600;">
+                                <i class="fas fa-box" style="display: inline-block; width: 16px; color: var(--text-muted); margin-right: 4px;"></i> ${c.productos.length}
+                            </div>
+                            <div style="font-size: 13px; color: var(--text-secondary); font-weight: 600;">
+                                <i class="fas fa-weight-hanging" style="display: inline-block; width: 16px; color: var(--text-muted); margin-right: 4px;"></i> ${pesoTotal.toFixed(2)} kg
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                            <div style="font-size: 14px; color: #b45309; font-weight: 800; background: #fef3c7; padding: 4px 8px; border-radius: 6px;">
+                                <i class="fas fa-coins" style="font-size: 11px; margin-right: 4px;"></i><span style="font-size: 11px; margin-right: 2px;">S/</span>${Number(c.flete_total).toFixed(2)}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Zona Derecha: Acción (15%) -->
+                    <div style="flex: 0.7; display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-left: 16px;">
+                        <button class="btn-secondary btn-toggle-detalle-carga" title="Ver detalle de productos" onclick="toggleDetalleCargaPendiente(${c.id_carga})" style="width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fas fa-chevron-down" id="chevron-carga-${c.id_carga}" style="transition: transform 0.2s;"></i>
+                        </button>
+                        <button class="btn-primary" style="padding: 8px 12px; font-size: 13px;" onclick="seleccionarCargaAlmacen(${c.id_carga})">Agregar</button>
+                    </div>
+                </div>
+
+                <!-- Detalle de productos (acordeón, oculto por defecto) -->
+                <div class="carga-card-detalle" id="detalle-carga-${c.id_carga}" style="display: none; background: var(--surface-bg); border-top: 1px solid var(--border-light); padding: 4px 16px;">
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0;">
+                            <thead>
+                                <tr style="text-align: left; color: var(--text-muted); text-transform: uppercase; font-size: 10px; font-weight: 700;">
+                                    <th style="padding: 8px;">Producto</th>
+                                    <th style="padding: 8px;">Marca Visual</th>
+                                    <th style="padding: 8px; text-align: center;">Cant.</th>
+                                    <th style="padding: 8px; text-align: right;">Peso Unit.</th>
+                                    <th style="padding: 8px; text-align: right;">Peso Total</th>
+                                    <th style="padding: 8px; text-align: right;">Tarifa</th>
+                                    <th style="padding: 8px; text-align: right;">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${filasProductos}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         `;
     });
 
-    tbody.innerHTML = filas;
+    contenedor.innerHTML = html;
+}
+
+function toggleDetalleCargaPendiente(idCarga) {
+    const detalle = document.getElementById(`detalle-carga-${idCarga}`);
+    const chevron = document.getElementById(`chevron-carga-${idCarga}`);
+    if (!detalle) return;
+
+    const estaAbierto = detalle.style.display !== 'none';
+    detalle.style.display = estaAbierto ? 'none' : 'block';
+    if (chevron) {
+        chevron.style.transform = estaAbierto ? 'rotate(0deg)' : 'rotate(180deg)';
+    }
 }
 
 function seleccionarCargaAlmacen(idCarga) {
@@ -1499,4 +1606,5 @@ window.eliminarCargaDeMemoria = eliminarCargaDeMemoria;
 window.editarCargaDeMemoria = editarCargaDeMemoria;
 window.abrirModalCargasPendientes = abrirModalCargasPendientes;
 window.cerrarModalCargasPendientes = cerrarModalCargasPendientes;
+window.toggleDetalleCargaPendiente = toggleDetalleCargaPendiente;
 window.seleccionarCargaAlmacen = seleccionarCargaAlmacen;

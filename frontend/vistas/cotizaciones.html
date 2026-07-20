@@ -30,52 +30,40 @@
             </div>
         </div>
 
-        <div class="welcome-card sin-padding">
-            <div class="tabla-scroll" style="margin-top: 15px;">
-                <table id="tabla-cotizaciones" class="tabla-modulo display hover stripe" style="width:100%">
-                    <thead>
-                        <tr>
-                            <th class="tabla-th" style="width: 60px;">ID</th>
-                            <th class="tabla-th">Nombre</th>
-                            <th class="tabla-th" style="width: 140px;">Estado</th>
-                            <th class="tabla-th" style="width: 120px;">Fecha</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-cotizaciones"></tbody>
-                </table>
+        <div class="welcome-card sin-padding" style="display: flex; flex-direction: column; height: 100%;">
+            <div id="lista-cotizaciones" style="flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                <!-- Tarjetas inyectadas via JS -->
+            </div>
+            <div style="padding: 12px; border-top: 1px solid var(--border-light); text-align: center;">
+                <button id="btnCargarMasCotizaciones" class="btn-secondary" style="width: 100%; display: none;">Cargar más</button>
             </div>
         </div>
     </div>
 
     <!-- Columna derecha: detalle -->
     <div class="cotizaciones-col-detalle">
-        <div class="welcome-card" id="detalle-cotizacion-vacio">
+        <div class="welcome-card" id="detalle-cotizacion-vacio" style="height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center;">
             <div style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
                 <i class="fas fa-file-invoice-dollar" style="font-size: 48px; margin-bottom: 16px; display: block;"></i>
-                <h2 style="color: var(--text-muted);">Ninguna cotización seleccionada</h2>
-                <p>Elige una cotización de la lista para ver toda su información aquí.</p>
+                <h2 style="color: var(--text-muted); margin-bottom: 8px;">Ninguna cotización seleccionada</h2>
+                <p style="margin: 0;">Elige una cotización de la lista para ver toda su información aquí.</p>
             </div>
         </div>
 
-        <div class="welcome-card" id="detalle-cotizacion-card" style="display: none;">
-            <div class="detalle-cotizacion-header">
-                <h2 id="detalle-titulo">Cotización #0</h2>
-                <span id="detalle-badge-estado"></span>
-            </div>
-
-            <div class="detalle-cotizacion-acciones">
-                <button type="button" class="btn-accion-whatsapp" id="btnAccionWhatsapp" title="Contactar por WhatsApp" style="display: none;">
-                    <i class="fa-brands fa-whatsapp"></i>
-                </button>
-                <button type="button" class="btn-accion-correo" id="btnAccionCorreo" title="Contactar por correo" style="display: none;">
-                    <i class="fas fa-envelope"></i>
-                </button>
-                <button type="button" class="btn-primary" id="btnAprobarCotizacion" style="width: auto; margin-left: auto;" title="Aprobar y registrar carga">
-                    <i class="fas fa-check"></i> Aprobar
-                </button>
-                <button type="button" class="btn-secondary" id="btnRechazarCotizacion" style="width: auto; color: #ef4444;" title="Rechazar cotización">
-                    <i class="fas fa-times"></i> Rechazar
-                </button>
+        <div class="welcome-card fade-in-transition" id="detalle-cotizacion-card" style="display: none; height: 100%; overflow-y: auto;">
+            <div class="detalle-cotizacion-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-light); padding-bottom: 16px; margin-bottom: 24px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <h2 id="detalle-titulo" style="margin: 0; font-size: 20px;">Cotización #0</h2>
+                    <span id="detalle-badge-estado"></span>
+                </div>
+                <div class="detalle-cotizacion-acciones" style="display: flex; gap: 12px;">
+                    <button type="button" class="btn-primary" id="btnAprobarCotizacion" style="width: auto;" title="Aprobar y registrar carga">
+                        <i class="fas fa-check"></i> Aprobar
+                    </button>
+                    <button type="button" class="btn-secondary" id="btnRechazarCotizacion" style="width: auto; color: #ef4444; border-color: #fca5a5; background-color: #fffaf9;" title="Rechazar cotización">
+                        <i class="fas fa-times"></i> Rechazar
+                    </button>
+                </div>
             </div>
 
             <div class="detalle-cotizacion-grid">
@@ -85,11 +73,21 @@
                 </div>
                 <div>
                     <span class="detalle-label">Teléfono</span>
-                    <span class="detalle-valor" id="detalle-telefono">-</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="detalle-valor" id="detalle-telefono">-</span>
+                        <button type="button" class="btn-accion-whatsapp" id="btnAccionWhatsapp" title="Contactar por WhatsApp" style="display: none; width: 24px; height: 24px; padding: 0; border-radius: 50%; font-size: 12px;">
+                            <i class="fa-brands fa-whatsapp"></i>
+                        </button>
+                    </div>
                 </div>
                 <div>
                     <span class="detalle-label">Correo</span>
-                    <span class="detalle-valor" id="detalle-correo">-</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="detalle-valor" id="detalle-correo">-</span>
+                        <button type="button" class="btn-accion-correo" id="btnAccionCorreo" title="Contactar por correo" style="display: none; width: 24px; height: 24px; padding: 0; border-radius: 50%; font-size: 10px;">
+                            <i class="fas fa-envelope"></i>
+                        </button>
+                    </div>
                 </div>
                 <div>
                     <span class="detalle-label">Fecha de registro</span>
@@ -101,21 +99,21 @@
                 </div>
                 <div>
                     <span class="detalle-label">Flete estimado</span>
-                    <span class="detalle-valor" id="detalle-flete">-</span>
+                    <span class="detalle-valor" id="detalle-flete" style="font-size: 18px; font-weight: 800; color: black;">-</span>
                 </div>
             </div>
 
-            <h3 class="detalle-subtitulo">Productos cotizados</h3>
+            <h3 class="detalle-subtitulo" style="margin-top: 32px;">Productos cotizados</h3>
             <div class="tabla-scroll">
-                <table class="tabla-modulo" style="width:100%">
+                <table class="tabla-modulo tabla-limpia" style="width:100%">
                     <thead>
                         <tr>
-                            <th class="tabla-th">Producto</th>
-                            <th class="tabla-th">Cantidad</th>
-                            <th class="tabla-th">Peso Unit.</th>
-                            <th class="tabla-th">Peso Total</th>
-                            <th class="tabla-th">Características</th>
-                            <th class="tabla-th">Subtotal</th>
+                            <th class="tabla-th" style="background: transparent; color: var(--text-secondary); border-bottom: 2px solid var(--border-light);">Producto</th>
+                            <th class="tabla-th" style="background: transparent; color: var(--text-secondary); border-bottom: 2px solid var(--border-light); text-align: right;">Cantidad</th>
+                            <th class="tabla-th" style="background: transparent; color: var(--text-secondary); border-bottom: 2px solid var(--border-light); text-align: right;">Peso Unit.</th>
+                            <th class="tabla-th" style="background: transparent; color: var(--text-secondary); border-bottom: 2px solid var(--border-light); text-align: right;">Peso Total</th>
+                            <th class="tabla-th" style="background: transparent; color: var(--text-secondary); border-bottom: 2px solid var(--border-light);">Características</th>
+                            <th class="tabla-th" style="background: transparent; color: var(--text-secondary); border-bottom: 2px solid var(--border-light); text-align: right;">Subtotal</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-detalle-cotizacion"></tbody>
@@ -127,58 +125,65 @@
 
 <!-- Modal: Aprobar cotización -> Formulario de Recepción de Carga -->
 <div id="modalAprobarCotizacion" class="modal-overlay" style="display: none;">
-    <div class="modal-container" style="max-width: 920px;">
+    <div class="modal-container" style="max-width: 1200px; width: 95%;">
         <div class="modal-header">
             <h3>Aprobar Cotización — Registrar Carga</h3>
             <button class="btn-close" id="btnCerrarModalAprobar"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
-            <div class="aprobar-resumen-cotizacion" id="aprobar-resumen-cotizacion">-</div>
+            <div id="aprobar-resumen-cotizacion" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--border-light); margin-bottom: 24px;">-</div>
 
             <div class="aprobar-clientes-grid">
                 <div class="aprobar-cliente-bloque">
-                    <label>Remitente <span class="required">*</span></label>
-                    <div style="display: flex; gap: 8px;">
-                        <select id="aprobar-select-remitente" class="form-control" required>
-                            <option value="">Seleccione un cliente remitente...</option>
-                        </select>
-                        <button type="button" class="btn-secondary" id="btnNuevoRemitente" style="width: auto;" title="Nuevo cliente">
-                            <i class="fas fa-plus"></i>
-                        </button>
+                    <div id="wrapper-select-remitente">
+                        <label>Remitente <span class="required">*</span></label>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="aprobar-select-remitente" class="form-control" required>
+                                <option value="">Seleccione un cliente remitente...</option>
+                            </select>
+                            <button type="button" class="btn-secondary" id="btnNuevoRemitente" style="width: auto;" title="Nuevo cliente">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
                     </div>
 
-                    <div class="aprobar-nuevo-cliente-panel" id="panelNuevoRemitente" style="display: none;">
-                        <div class="form-group">
-                            <label>Tipo de Documento</label>
-                            <select id="nc-remitente-tipo_documento" class="form-control">
-                                <option value="DNI">DNI (8 dígitos)</option>
-                                <option value="RUC">RUC (11 dígitos)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Número de Documento</label>
-                            <div style="display: flex; gap: 8px;">
-                                <input type="text" id="nc-remitente-numero_documento" class="form-control" placeholder="Ingrese documento" style="flex: 1;">
-                                <button type="button" class="btn-primary" id="nc-remitente-btnBuscar" style="width: auto; padding: 0 16px;" title="Consultar en RENIEC/SUNAT">
-                                    <i class="fas fa-search"></i>
-                                </button>
+                    <div class="aprobar-nuevo-cliente-panel" id="panelNuevoRemitente" style="display: none; background: #f8fafc; border: 1px solid var(--border-light); border-radius: 8px; padding: 16px; margin-top: 8px;">
+                        <h4 style="margin-top: 0; margin-bottom: 16px; font-size: 14px; color: var(--text-primary);">👤 Registrar Nuevo Remitente</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 12px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Tipo de Documento</label>
+                                <select id="nc-remitente-tipo_documento" class="form-control">
+                                    <option value="DNI">DNI (8 dígitos)</option>
+                                    <option value="RUC">RUC (11 dígitos)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Número de Documento</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="text" id="nc-remitente-numero_documento" class="form-control" placeholder="Ingrese documento" style="flex: 1;">
+                                    <button type="button" class="btn-primary" id="nc-remitente-btnBuscar" style="width: auto; padding: 0 16px;" title="Consultar en RENIEC/SUNAT">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" style="margin-bottom: 12px;">
                             <label>Nombre o Razón Social</label>
                             <input type="text" id="nc-remitente-nombre_razon_social" class="form-control" readonly placeholder="Autocompletado al buscar..." style="background-color: #f1f5f9;">
                         </div>
-                        <div class="form-group">
-                            <label>Dirección</label>
-                            <input type="text" id="nc-remitente-direccion" class="form-control" maxlength="150" placeholder="Opcional">
-                        </div>
-                        <div class="form-group">
-                            <label>Teléfono</label>
-                            <input type="text" id="nc-remitente-telefono" class="form-control" maxlength="9" placeholder="N° de contacto">
-                        </div>
-                        <div class="form-group">
-                            <label>Correo Electrónico</label>
-                            <input type="email" id="nc-remitente-correo" class="form-control" placeholder="Opcional">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Teléfono</label>
+                                <input type="text" id="nc-remitente-telefono" class="form-control" maxlength="9" placeholder="N° de contacto">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Correo Electrónico</label>
+                                <input type="email" id="nc-remitente-correo" class="form-control" placeholder="Opcional">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Dirección</label>
+                                <input type="text" id="nc-remitente-direccion" class="form-control" maxlength="150" placeholder="Opcional">
+                            </div>
                         </div>
                         <div style="display: flex; justify-content: flex-end; gap: 10px;">
                             <button type="button" class="btn-secondary" id="nc-remitente-btnCancelar" style="width: auto;">Cancelar</button>
@@ -188,48 +193,55 @@
                 </div>
 
                 <div class="aprobar-cliente-bloque">
-                    <label>Destinatario <span class="required">*</span></label>
-                    <div style="display: flex; gap: 8px;">
-                        <select id="aprobar-select-destinatario" class="form-control" required>
-                            <option value="">Seleccione un cliente destinatario...</option>
-                        </select>
-                        <button type="button" class="btn-secondary" id="btnNuevoDestinatario" style="width: auto;" title="Nuevo cliente">
-                            <i class="fas fa-plus"></i>
-                        </button>
+                    <div id="wrapper-select-destinatario">
+                        <label>Destinatario <span class="required">*</span></label>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="aprobar-select-destinatario" class="form-control" required>
+                                <option value="">Seleccione un cliente destinatario...</option>
+                            </select>
+                            <button type="button" class="btn-secondary" id="btnNuevoDestinatario" style="width: auto;" title="Nuevo cliente">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
                     </div>
 
-                    <div class="aprobar-nuevo-cliente-panel" id="panelNuevoDestinatario" style="display: none;">
-                        <div class="form-group">
-                            <label>Tipo de Documento</label>
-                            <select id="nc-destinatario-tipo_documento" class="form-control">
-                                <option value="DNI">DNI (8 dígitos)</option>
-                                <option value="RUC">RUC (11 dígitos)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Número de Documento</label>
-                            <div style="display: flex; gap: 8px;">
-                                <input type="text" id="nc-destinatario-numero_documento" class="form-control" placeholder="Ingrese documento" style="flex: 1;">
-                                <button type="button" class="btn-primary" id="nc-destinatario-btnBuscar" style="width: auto; padding: 0 16px;" title="Consultar en RENIEC/SUNAT">
-                                    <i class="fas fa-search"></i>
-                                </button>
+                    <div class="aprobar-nuevo-cliente-panel" id="panelNuevoDestinatario" style="display: none; background: #f8fafc; border: 1px solid var(--border-light); border-radius: 8px; padding: 16px; margin-top: 8px;">
+                        <h4 style="margin-top: 0; margin-bottom: 16px; font-size: 14px; color: var(--text-primary);">👤 Registrar Nuevo Destinatario</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 12px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Tipo de Documento</label>
+                                <select id="nc-destinatario-tipo_documento" class="form-control">
+                                    <option value="DNI">DNI (8 dígitos)</option>
+                                    <option value="RUC">RUC (11 dígitos)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Número de Documento</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="text" id="nc-destinatario-numero_documento" class="form-control" placeholder="Ingrese documento" style="flex: 1;">
+                                    <button type="button" class="btn-primary" id="nc-destinatario-btnBuscar" style="width: auto; padding: 0 16px;" title="Consultar en RENIEC/SUNAT">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" style="margin-bottom: 12px;">
                             <label>Nombre o Razón Social</label>
                             <input type="text" id="nc-destinatario-nombre_razon_social" class="form-control" readonly placeholder="Autocompletado al buscar..." style="background-color: #f1f5f9;">
                         </div>
-                        <div class="form-group">
-                            <label>Dirección</label>
-                            <input type="text" id="nc-destinatario-direccion" class="form-control" maxlength="150" placeholder="Opcional">
-                        </div>
-                        <div class="form-group">
-                            <label>Teléfono</label>
-                            <input type="text" id="nc-destinatario-telefono" class="form-control" maxlength="9" placeholder="N° de contacto">
-                        </div>
-                        <div class="form-group">
-                            <label>Correo Electrónico</label>
-                            <input type="email" id="nc-destinatario-correo" class="form-control" placeholder="Opcional">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Teléfono</label>
+                                <input type="text" id="nc-destinatario-telefono" class="form-control" maxlength="9" placeholder="N° de contacto">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Correo Electrónico</label>
+                                <input type="email" id="nc-destinatario-correo" class="form-control" placeholder="Opcional">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Dirección</label>
+                                <input type="text" id="nc-destinatario-direccion" class="form-control" maxlength="150" placeholder="Opcional">
+                            </div>
                         </div>
                         <div style="display: flex; justify-content: flex-end; gap: 10px;">
                             <button type="button" class="btn-secondary" id="nc-destinatario-btnCancelar" style="width: auto;">Cancelar</button>
@@ -244,13 +256,12 @@
                 <table class="tabla-modulo" style="width:100%">
                     <thead>
                         <tr>
-                            <th class="tabla-th">Producto cotizado</th>
-                            <th class="tabla-th">Producto (catálogo)</th>
-                            <th class="tabla-th">Marca visual</th>
-                            <th class="tabla-th">Cant. / Peso unit.</th>
-                            <th class="tabla-th">Tarifa S//kg</th>
-                            <th class="tabla-th">Peso total</th>
-                            <th class="tabla-th">Flete subtotal</th>
+                            <th class="tabla-th" style="background: #f8fafc; border-bottom: 2px solid var(--border-light); color: var(--text-secondary); text-transform: uppercase; font-size: 12px;">Detalle del Producto</th>
+                            <th class="tabla-th" style="background: #f8fafc; border-bottom: 2px solid var(--border-light); color: var(--text-secondary); text-transform: uppercase; font-size: 12px; text-align: center;">Marca visual</th>
+                            <th class="tabla-th" style="background: #f8fafc; border-bottom: 2px solid var(--border-light); color: var(--text-secondary); text-transform: uppercase; font-size: 12px; text-align: right;">Cant. / Peso unit.</th>
+                            <th class="tabla-th" style="background: #f8fafc; border-bottom: 2px solid var(--border-light); color: var(--text-secondary); text-transform: uppercase; font-size: 12px; text-align: right; width: 140px;">Tarifa S//kg</th>
+                            <th class="tabla-th" style="background: #f8fafc; border-bottom: 2px solid var(--border-light); color: var(--text-secondary); text-transform: uppercase; font-size: 12px; text-align: right;">Peso total</th>
+                            <th class="tabla-th" style="background: #f8fafc; border-bottom: 2px solid var(--border-light); color: var(--text-secondary); text-transform: uppercase; font-size: 12px; text-align: right;">Flete subtotal</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-aprobar-productos"></tbody>
@@ -447,13 +458,49 @@
         margin-bottom: 2px;
     }
 
-    /* Fila seleccionada en el listado */
-    #tabla-cotizaciones tbody tr.fila-seleccionada {
-        background-color: var(--brand-blue-light) !important;
+    .cotizacion-list-card {
+        background: white;
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 12px 16px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border-left: 4px solid transparent;
     }
 
-    #tabla-cotizaciones tbody tr {
-        cursor: pointer;
+    .cotizacion-list-card:hover {
+        background: #f8fafc;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .cotizacion-list-card.active {
+        background: #eff6ff; /* bg-blue-50 equivalent */
+        border-color: #bfdbfe;
+        border-left: 4px solid var(--accent-bronze);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .fade-in-transition {
+        transition: opacity 0.3s ease-in-out;
+    }
+
+    .detalle-label {
+        color: black !important;
+        font-weight: bold !important;
+    }
+
+    .tabla-limpia th {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .tabla-limpia td {
+        border-bottom: 1px solid var(--border-light);
+        padding: 12px 8px;
+        vertical-align: middle;
     }
 
     /* Estilos modernos para los controles del DataTable */

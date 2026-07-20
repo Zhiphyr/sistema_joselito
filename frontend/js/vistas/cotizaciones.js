@@ -91,58 +91,115 @@ function formatearFecha(fecha) {
     return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-function inicializarTablaCotizaciones() {
-    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+let currentStart = 0;
+const currentLength = 15;
+let todasCargadas = false;
 
-    if ($.fn.DataTable.isDataTable('#tabla-cotizaciones')) {
-        $('#tabla-cotizaciones').DataTable().destroy();
-        $('#tabla-cotizaciones tbody').empty();
+function inicializarTablaCotizaciones() {
+    // Simulamos tablaCotizaciones para que tablaCotizaciones.ajax.reload() no rompa nada
+    window.tablaCotizaciones = {
+        ajax: {
+            reload: function() {
+                currentStart = 0;
+                todasCargadas = false;
+                document.getElementById('lista-cotizaciones').innerHTML = '';
+                cargarCotizaciones();
+            }
+        }
+    };
+
+    const btnCargarMas = document.getElementById('btnCargarMasCotizaciones');
+    if (btnCargarMas) {
+        btnCargarMas.addEventListener('click', () => {
+            currentStart += currentLength;
+            cargarCotizaciones();
+        });
     }
 
-    tablaCotizaciones = $('#tabla-cotizaciones').DataTable({
-        serverSide: true,
-        processing: true,
-        searching: false,
-        language: {
-            url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
-        },
-        pageLength: 15,
-        lengthMenu: [[15, 25, 50, 100], [15, 25, 50, 100]],
-        order: [[3, 'desc']],
-        dom: '<"dt-top-controls"<"dt-left-controls"l>>rt<"bottom-controls"ip>',
-        ajax: (data, callback) => {
-            data.idBusqueda = document.getElementById('buscador-id-cotizacion').value.trim();
-            data.fechaDesde = document.getElementById('filtro-fecha-desde').value;
-            data.fechaHasta = document.getElementById('filtro-fecha-hasta').value;
+    cargarCotizaciones();
+}
 
-            $.ajax({
-                url: 'http://localhost:3000/api/cotizaciones',
-                data,
-                headers: { 'x-user-profile': sessionData.id_perfil },
-                success: callback,
-                error: () => {
-                    callback({ draw: data.draw, recordsTotal: 0, recordsFiltered: 0, data: [] });
-                    Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo cargar el listado de cotizaciones.' });
-                }
-            });
-        },
-        columns: [
-            { data: 'id_cotizacion', className: 'tabla-td tabla-id' },
-            { data: 'nombres', className: 'tabla-td tabla-nombre' },
-            { data: 'estado', className: 'tabla-td', render: (estado) => badgeEstadoCotizacion(estado) },
-            { data: 'fecha_registro', className: 'tabla-td tabla-secundario', render: (fecha) => formatearFecha(fecha) }
-        ]
-    });
+async function cargarCotizaciones() {
+    if (todasCargadas) return;
 
-    $('#tabla-cotizaciones tbody').on('click', 'tr', function () {
-        const fila = tablaCotizaciones.row(this).data();
-        if (!fila) return;
+    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+    const idBusqueda = document.getElementById('buscador-id-cotizacion').value.trim();
+    const fechaDesde = document.getElementById('filtro-fecha-desde').value;
+    const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
 
-        $('#tabla-cotizaciones tbody tr').removeClass('fila-seleccionada');
-        $(this).addClass('fila-seleccionada');
+    const url = new URL('http://localhost:3000/api/cotizaciones');
+    url.searchParams.append('start', currentStart);
+    url.searchParams.append('length', currentLength);
+    if (idBusqueda) url.searchParams.append('idBusqueda', idBusqueda);
+    if (fechaDesde) url.searchParams.append('fechaDesde', fechaDesde);
+    if (fechaHasta) url.searchParams.append('fechaHasta', fechaHasta);
 
-        cargarDetalleCotizacion(fila.id_cotizacion);
-    });
+    try {
+        const btnCargarMas = document.getElementById('btnCargarMasCotizaciones');
+        if(btnCargarMas) btnCargarMas.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cargando...';
+
+        const response = await fetch(url.toString(), {
+            headers: { 'x-user-profile': sessionData.id_perfil || 1 }
+        });
+        const result = await response.json();
+
+        const lista = document.getElementById('lista-cotizaciones');
+        if (currentStart === 0 && (!result.data || result.data.length === 0)) {
+            lista.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">No se encontraron cotizaciones.</div>';
+            if(btnCargarMas) btnCargarMas.style.display = 'none';
+            return;
+        }
+
+        let html = '';
+        (result.data || []).forEach(c => {
+            const fechaStr = formatearFecha(c.fecha_registro);
+            html += `
+                <div class="cotizacion-list-card" data-id="${c.id_cotizacion}" onclick="seleccionarTarjetaCotizacion(this, ${c.id_cotizacion})">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
+                        <span style="font-weight: 700; color: var(--text-primary); font-size: 14px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;">${c.nombres}</span>
+                        ${badgeEstadoCotizacion(c.estado)}
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary); display: flex; gap: 8px;">
+                        <span style="font-weight: 600;">ID #${c.id_cotizacion}</span>
+                        <span>&bull;</span>
+                        <span>${fechaStr}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        if (currentStart === 0) {
+            lista.innerHTML = html;
+        } else {
+            lista.insertAdjacentHTML('beforeend', html);
+        }
+
+        if (btnCargarMas) {
+            btnCargarMas.innerHTML = 'Cargar más';
+            if (result.data.length < currentLength) {
+                btnCargarMas.style.display = 'none';
+                todasCargadas = true;
+            } else {
+                btnCargarMas.style.display = 'block';
+            }
+        }
+    } catch (error) {
+        console.error("Error al cargar cotizaciones:", error);
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo cargar el listado de cotizaciones.' });
+    }
+}
+
+function seleccionarTarjetaCotizacion(elemento, idCotizacion) {
+    document.querySelectorAll('.cotizacion-list-card').forEach(el => el.classList.remove('active'));
+    elemento.classList.add('active');
+    
+    // Smooth transition
+    const detalle = document.getElementById('detalle-cotizacion-card');
+    detalle.style.opacity = '0';
+    setTimeout(() => {
+        cargarDetalleCotizacion(idCotizacion);
+        detalle.style.opacity = '1';
+    }, 150);
 }
 
 async function cargarDetalleCotizacion(id) {
@@ -217,11 +274,11 @@ function renderDetalleCotizacion(cotizacion, detalles) {
         filasHTML += `
             <tr class="tabla-tr">
                 <td class="tabla-td">${d.producto}</td>
-                <td class="tabla-td">${d.cantidad}</td>
-                <td class="tabla-td">${Number(d.peso_unitario).toFixed(2)} kg</td>
-                <td class="tabla-td">${Number(d.peso_total).toFixed(2)} kg</td>
+                <td class="tabla-td" style="text-align: right; white-space: nowrap;">${d.cantidad}</td>
+                <td class="tabla-td" style="text-align: right; white-space: nowrap;">${Number(d.peso_unitario).toFixed(2)} kg</td>
+                <td class="tabla-td" style="text-align: right; white-space: nowrap;">${Number(d.peso_total).toFixed(2)} kg</td>
                 <td class="tabla-td">${caracteristicas}</td>
-                <td class="tabla-td">S/ ${Number(d.subtotal_calculado).toFixed(2)}</td>
+                <td class="tabla-td" style="text-align: right; white-space: nowrap;">S/ ${Number(d.subtotal_calculado).toFixed(2)}</td>
             </tr>
         `;
     });
@@ -278,14 +335,23 @@ async function rechazarCotizacionActual() {
 async function abrirModalAprobar() {
     if (!cotizacionActual) return;
 
-    document.getElementById('aprobar-resumen-cotizacion').textContent =
-        `${cotizacionActual.nombres} · ${cotizacionActual.ciudad_origen} → ${cotizacionActual.ciudad_destino} · ` +
-        `Flete estimado: S/ ${Number(cotizacionActual.flete_estimado_min).toFixed(2)} - S/ ${Number(cotizacionActual.flete_estimado_max).toFixed(2)}`;
+    document.getElementById('aprobar-resumen-cotizacion').innerHTML =
+        `<div style="font-size: 16px;">
+            <strong style="color: var(--accent-bronze); margin-right: 8px;">Cotización #${cotizacionActual.id_cotizacion}</strong>
+            <span style="color: var(--text-secondary);">&bull; ${cotizacionActual.nombres}</span>
+        </div>
+        <div style="font-weight: 500; display: flex; align-items: center; gap: 6px;">
+            <i class="fas fa-map-marker-alt" style="color: #ef4444;"></i> ${cotizacionActual.ciudad_origen} &rarr; ${cotizacionActual.ciudad_destino}
+        </div>
+        <div style="font-size: 16px;">
+            <span style="color: var(--text-secondary);">Flete estimado:</span>
+            <strong style="color: black;">S/ ${Number(cotizacionActual.flete_estimado_min).toFixed(2)} - S/ ${Number(cotizacionActual.flete_estimado_max).toFixed(2)}</strong>
+        </div>`;
 
     cerrarPanelesNuevoCliente();
 
     document.getElementById('tbody-aprobar-productos').innerHTML =
-        '<tr><td colspan="7" style="text-align:center; padding:16px;"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
+        '<tr><td colspan="6" style="text-align:center; padding:16px;"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
     document.getElementById('modalAprobarCotizacion').style.display = 'flex';
 
     await Promise.all([poblarSelectsClientes(), cargarProductosDisponibles()]);
@@ -350,7 +416,7 @@ function construirFilasProductosAprobar() {
     const tbody = document.getElementById('tbody-aprobar-productos');
 
     if (!detallesActual || detallesActual.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:16px; color: var(--text-muted);">Sin productos registrados</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:16px; color: var(--text-muted);">Sin productos registrados</td></tr>';
         return;
     }
 
@@ -369,13 +435,20 @@ function construirFilasProductosAprobar() {
 
         filas += `
             <tr class="tabla-tr">
-                <td class="tabla-td">${d.producto}</td>
-                <td class="tabla-td"><select class="form-control aprobar-select-producto" id="aprobar-prod-${d.id_cotizacion_detalle}">${opciones}</select></td>
-                <td class="tabla-td"><input type="text" class="form-control aprobar-input-marca" id="aprobar-marca-${d.id_cotizacion_detalle}" placeholder="Opcional"></td>
-                <td class="tabla-td tabla-secundario">${cantidad} / ${pesoUnitario.toFixed(2)} kg</td>
-                <td class="tabla-td"><input type="number" min="0.01" step="0.01" class="form-control aprobar-input-tarifa" id="aprobar-tarifa-${d.id_cotizacion_detalle}" placeholder="0.00"></td>
-                <td class="tabla-td" id="aprobar-pesototal-${d.id_cotizacion_detalle}">${(cantidad * pesoUnitario).toFixed(2)} kg</td>
-                <td class="tabla-td" id="aprobar-subtotal-${d.id_cotizacion_detalle}">S/ 0.00</td>
+                <td class="tabla-td" style="min-width: 250px;">
+                    <div style="font-weight: 600; margin-bottom: 6px; color: var(--text-primary); font-size: 13px;">${d.producto}</div>
+                    <select class="form-control aprobar-select-producto" id="aprobar-prod-${d.id_cotizacion_detalle}" style="width: 100%;">${opciones}</select>
+                </td>
+                <td class="tabla-td" style="text-align: center;"><input type="text" class="form-control aprobar-input-marca" id="aprobar-marca-${d.id_cotizacion_detalle}" placeholder="Opcional" style="text-align: center;"></td>
+                <td class="tabla-td" style="text-align: right; white-space: nowrap; color: var(--text-secondary);">${cantidad} / ${pesoUnitario.toFixed(2)} kg</td>
+                <td class="tabla-td" style="text-align: right;">
+                    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+                        <span style="color: var(--text-secondary); font-weight: 600;">S/</span>
+                        <input type="number" min="0.01" step="0.01" class="form-control aprobar-input-tarifa" id="aprobar-tarifa-${d.id_cotizacion_detalle}" placeholder="0.00" style="width: 90px; text-align: right;">
+                    </div>
+                </td>
+                <td class="tabla-td" id="aprobar-pesototal-${d.id_cotizacion_detalle}" style="text-align: right; white-space: nowrap;">${(cantidad * pesoUnitario).toFixed(2)} kg</td>
+                <td class="tabla-td" id="aprobar-subtotal-${d.id_cotizacion_detalle}" style="text-align: right; white-space: nowrap; font-weight: 600;">S/ 0.00</td>
             </tr>
         `;
     });
@@ -486,7 +559,10 @@ async function confirmarAprobarCotizacion() {
 
 function togglePanelNuevoCliente(rol, mostrar) {
     const panel = document.getElementById(`panelNuevo${capitalizar(rol)}`);
+    const wrapper = document.getElementById(`wrapper-select-${rol}`);
+    
     panel.style.display = mostrar ? 'block' : 'none';
+    if(wrapper) wrapper.style.display = mostrar ? 'none' : 'block';
 
     if (mostrar) {
         document.getElementById(`nc-${rol}-tipo_documento`).value = 'DNI';
