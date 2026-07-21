@@ -50,6 +50,20 @@ class ClienteModel {
         const [result] = await db.query(query, [estado, id_cliente]);
         return result.affectedRows;
     }
+
+    static async tieneViajesActivos(id_cliente) {
+        const query = `
+            SELECT COUNT(*) as activeCount 
+            FROM viaje v
+            JOIN carga c ON v.id_viaje = c.id_viaje
+            WHERE (c.id_remitente = ? OR c.id_destinatario = ?)
+            AND v.estado_operativo IN ('En Ruta', 'Llegó a Destino', 'Descargado', 'Incidencia')
+            AND v.estado = 1
+            AND c.estado = 1
+        `;
+        const [rows] = await db.query(query, [id_cliente, id_cliente]);
+        return rows[0].activeCount > 0;
+    }
 }
 
 module.exports = ClienteModel;

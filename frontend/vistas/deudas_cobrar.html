@@ -1,0 +1,322 @@
+<div class="module-header">
+    <div>
+        <h2>Deudas por Cobrar</h2>
+        <p>Módulo para gestionar las deudas pendientes de cobro y pagos realizados.</p>
+    </div>
+</div>
+
+<!-- Dashboard de Recaudación del Día -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 20px;">
+    <!-- Total Recaudado -->
+    <div style="background: linear-gradient(135deg, #1e3a8a, #3b82f6); border-radius: 12px; padding: 20px; color: white; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div>
+            <p style="margin: 0; font-size: 13px; opacity: 0.9; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Recaudación Hoy</p>
+            <h3 id="cardTotalRecaudado" style="margin: 4px 0 0; font-size: 28px; font-weight: 700;">S/ 0.00</h3>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.2); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+            <i class="fas fa-cash-register"></i>
+        </div>
+    </div>
+
+    <!-- Efectivo -->
+    <div style="background: linear-gradient(135deg, #065f46, #10b981); border-radius: 12px; padding: 20px; color: white; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div>
+            <p style="margin: 0; font-size: 13px; opacity: 0.9; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Efectivo</p>
+            <h3 id="cardEfectivo" style="margin: 4px 0 0; font-size: 24px; font-weight: 700;">S/ 0.00</h3>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.2); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+            <i class="fas fa-money-bill-wave"></i>
+        </div>
+    </div>
+
+    <!-- Billeteras Digitales -->
+    <div style="background: linear-gradient(135deg, #581c87, #8b5cf6); border-radius: 12px; padding: 20px; color: white; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div>
+            <p style="margin: 0; font-size: 13px; opacity: 0.9; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Billeteras Digitales</p>
+            <h3 id="cardBilleteras" style="margin: 4px 0 0; font-size: 24px; font-weight: 700;">S/ 0.00</h3>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.2); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+            <i class="fas fa-mobile-alt"></i>
+        </div>
+    </div>
+
+    <!-- Bancos -->
+    <div style="background: linear-gradient(135deg, #9a3412, #f59e0b); border-radius: 12px; padding: 20px; color: white; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div>
+            <p style="margin: 0; font-size: 13px; opacity: 0.9; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Bancos</p>
+            <h3 id="cardBancos" style="margin: 4px 0 0; font-size: 24px; font-weight: 700;">S/ 0.00</h3>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.2); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+            <i class="fas fa-university"></i>
+        </div>
+    </div>
+</div>
+<style>
+    /* Estilos modernos para los controles del DataTable */
+    #tabla-deudas-cobrar_wrapper {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    /* Contenedor superior para los controles (Filtro, Mostrar, Buscar) */
+    .dt-top-controls {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+        background: #f8fafc;
+        padding: 16px 20px;
+        border-radius: 12px;
+        border: 1px solid var(--border-light);
+    }
+
+    /* Agrupador izquierdo (Estado + Length) */
+    .dt-left-controls {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        flex-wrap: wrap;
+    }
+
+    /* Estilos específicos para inputs y selects del datatable */
+    #tabla-deudas-cobrar_wrapper .dataTables_length,
+    #tabla-deudas-cobrar_wrapper .dataTables_filter {
+        margin: 0 !important;
+        float: none !important;
+        text-align: left !important;
+    }
+
+    #tabla-deudas-cobrar_wrapper .dataTables_length label,
+    #tabla-deudas-cobrar_wrapper .dataTables_filter label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        font-weight: 600;
+        color: var(--text-secondary);
+        font-size: 13px;
+    }
+
+    #tabla-deudas-cobrar_wrapper .dataTables_length select,
+    #tabla-deudas-cobrar_wrapper .dataTables_filter input {
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 13px;
+        outline: none;
+        transition: all 0.2s;
+        background: white;
+    }
+
+    #tabla-deudas-cobrar_wrapper .dataTables_filter input {
+        width: 250px;
+    }
+
+    #tabla-deudas-cobrar_wrapper .dataTables_length select:focus,
+    #tabla-deudas-cobrar_wrapper .dataTables_filter input:focus {
+        border-color: var(--brand-blue);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+</style>
+<div class="welcome-card sin-padding">
+    <div style="padding: 24px; width: 100%; box-sizing: border-box;">
+    <div class="tabla-scroll">
+        <table class="tabla-modulo" id="tabla-deudas-cobrar" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th class="tabla-th" style="width: 100px;">Carga / Viaje</th>
+                    <th class="tabla-th" style="width: 120px;">Fecha Llegada</th>
+                    <th class="tabla-th">Remitente</th>
+                    <th class="tabla-th">Deudor</th>
+                    <th class="tabla-th" style="width: 140px;">Estado Entrega</th>
+                    <th class="tabla-th" style="width: 130px;">Deuda</th>
+                    <th class="tabla-th" style="width: 130px;">Saldo Pendiente</th>
+                    <th class="tabla-th" style="width: 140px;">Estado Cobro</th>
+                    <th class="tabla-th" style="width: 160px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-deudas">
+            </tbody>
+        </table>
+    </div>
+    </div>
+</div>
+
+<!-- Modal Registrar Cobro -->
+<div id="modalCobro" class="modal-overlay" style="display: none;">
+    <div class="modal-container" style="max-width: 500px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden;">
+        <div class="modal-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="background: #dcfce7; color: #16a34a; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+                    <i class="fas fa-dollar-sign"></i>
+                </div>
+                <div>
+                    <h2 id="modalCobroTitle" style="margin: 0; font-size: 18px; color: var(--text-primary);">Registrar Cobro</h2>
+                    <span id="modalCobroBadge" style="background: #eff6ff; color: #3b82f6; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">Carga 000</span>
+                </div>
+            </div>
+            <button class="btn-close" id="btnCerrarModalCobro"><i class="fas fa-times"></i></button>
+        </div>
+
+        <form id="formCobro" style="display: flex; flex-direction: column; overflow: hidden;">
+            <div class="modal-body-scroll" style="overflow-y: auto; flex: 1;">
+                <input type="hidden" id="cobro_id_carga">
+            
+            <!-- Zona de Contexto -->
+            <div style="padding: 20px 24px; display: flex; gap: 16px;">
+                <div style="flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+                    <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Deuda</div>
+                    <div id="cobro_deuda_original" style="font-size: 18px; color: #475569; margin-top: 4px;">S/ 0.00</div>
+                </div>
+                <div style="flex: 1; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px;">
+                    <div style="font-size: 11px; color: #dc2626; font-weight: 700; text-transform: uppercase;">Saldo Pendiente</div>
+                    <div id="cobro_saldo_pendiente" style="font-size: 22px; color: #b91c1c; font-weight: 800; margin-top: 4px;">S/ 0.00</div>
+                </div>
+            </div>
+
+            <!-- Zona de Captura Rápida -->
+            <div style="padding: 0 24px 20px 24px;">
+                <div style="margin-bottom: 16px;">
+                    <label style="font-weight: 700; color: #334155; font-size: 13px; display: block; margin-bottom: 8px;">Monto Recibido Total</label>
+                    <div style="position: relative; display: flex; align-items: center;">
+                        <span style="position: absolute; left: 16px; font-size: 20px; font-weight: 700; color: #94a3b8;">S/</span>
+                        <input type="number" id="cobro_monto_total" class="form-control" step="0.01" min="0.01" required style="font-size: 24px; font-weight: 700; color: #1e293b; height: 60px; padding-left: 48px; text-align: right; border: 1px solid #cbd5e1; border-radius: 8px;">
+                    </div>
+                    <small id="cobro_monto_total_error" style="display: none; color: #ef4444; font-size: 12px; font-weight: 600; margin-top: 6px;"></small>
+                </div>
+            </div>
+
+            <!-- Carrito de Pagos (Pagos Mixtos) -->
+            <div style="border-top: 1px solid var(--border-light); padding: 20px 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <label style="font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-wallet" style="color: #3b82f6;"></i> Pagos a Realizar
+                    </label>
+                    <div id="modalCobroFaltaPagar" style="font-size: 13px; font-weight: 700; color: #ef4444; background: #fee2e2; padding: 4px 10px; border-radius: 6px;">
+                        Falta Distribuir: S/ 0.00
+                    </div>
+                </div>
+
+                <!-- Lista de Pagos Agregados -->
+                <div id="contenedorListaPagosCobro" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+                    <!-- Los bloques de pago se insertan dinámicamente aquí -->
+                </div>
+
+                <button type="button" id="btnAgregarPagoCobro" style="width: 100%; padding: 12px; border: 1px dashed #3b82f6; border-radius: 8px; background: #eff6ff; color: #3b82f6; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; transition: all 0.2s ease;">
+                    <i class="fas fa-plus-circle"></i> Añadir Método de Pago
+                </button>
+            </div>
+
+            <!-- Zona de Notas -->
+            <div style="padding: 0 24px 24px 24px;">
+                <label style="font-weight: 700; color: #334155; font-size: 13px; display: block; margin-bottom: 8px;">Observaciones (Opcional)</label>
+                <textarea id="cobro_observacion" class="form-control" rows="2" placeholder="Anota cualquier detalle relevante sobre este pago..." style="resize: none; font-size: 13px;"></textarea>
+            </div>
+            </div> <!-- End modal-body-scroll -->
+
+            <!-- Footer / Botones -->
+            <div class="modal-footer" style="display: flex; gap: 16px; padding: 20px 24px; background: white; border-top: 1px solid var(--border-light); border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; flex-shrink: 0;">
+                <button type="button" class="btn-cancelar" id="btnCancelarCobro" style="flex: 1; padding: 14px; background: #f8fafc; color: #334155; border: none; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer;">Cancelar</button>
+                <button type="submit" class="btn-guardar" style="flex: 1; padding: 14px; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">
+                    <i class="fas fa-check"></i> Guardar Cobro
+                </button>
+            </div>
+        </form>
+    </div>
+    </div>
+</div>
+
+<!-- Modal Historial de Pagos -->
+<div id="modalHistorial" class="modal-overlay" style="display: none;">
+    <div class="modal-container" style="max-width: 600px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; background: white;">
+        
+        <!-- Cabecera -->
+        <div class="modal-header" style="border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; padding: 20px 24px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="background: #eff6ff; color: #3b82f6; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                    <i class="fas fa-history"></i>
+                </div>
+                <div>
+                    <h2 style="margin: 0; font-size: 18px; color: var(--text-primary);">Historial de Pagos</h2>
+                    <span id="modalHistorialBadge" style="background: #eff6ff; color: #3b82f6; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">Carga 000</span>
+                </div>
+            </div>
+            <button class="btn-close" id="btnCerrarHistorial"><i class="fas fa-times"></i></button>
+        </div>
+
+        <!-- Panel Financiero -->
+        <div style="padding: 16px 24px; background: white; border-bottom: 1px solid var(--border-light); flex-shrink: 0;">
+            <div style="display: flex; justify-content: space-between; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; background: #f8fafc;">
+                <div>
+                    <span style="display: block; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;">Deuda</span>
+                    <span id="historialDeuda" style="font-size: 16px; font-weight: 600; color: #64748b; margin-top: 4px; display: block;">S/ 0.00</span>
+                </div>
+                <div>
+                    <span style="display: block; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;">Saldo Pendiente</span>
+                    <span id="historialSaldo" style="font-size: 18px; font-weight: 800; margin-top: 4px; display: block;">S/ 0.00</span>
+                </div>
+                <div style="text-align: right;">
+                    <span style="display: block; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase; margin-bottom: 6px;">Estado Actual</span>
+                    <span id="historialEstado" style="padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 700;">ESTADO</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista de Pagos -->
+        <div id="historialPagosLista" style="overflow-y: auto; flex: 1; padding: 24px; background: white;">
+            <!-- Inyectado por JS -->
+            <div style="text-align: center; color: #94a3b8; padding: 40px 0;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
+                <p>Cargando pagos...</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="modal-footer" style="display: flex; gap: 16px; padding: 20px 24px; background: white; border-top: 1px solid var(--border-light); flex-shrink: 0;">
+            <button type="button" id="btnCerrarHistorialFooter" style="flex: 1; padding: 14px; background: #ffffff; color: #334155; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer;">Cerrar</button>
+            <button type="button" id="btnWhatsApp" style="flex: 1; padding: 14px; background: #22c55e; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s;" onmouseover="this.style.background='#16a34a'" onmouseout="this.style.background='#22c55e'">
+                <i class="fab fa-whatsapp"></i> Enviar por WhatsApp
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detalles de Carga -->
+<div id="modalDetallesCarga" class="modal-overlay" style="display: none;">
+    <div class="modal-container" style="max-width: 800px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; background: white;">
+        
+        <!-- Cabecera -->
+        <div class="modal-header" style="border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; padding: 20px 24px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="background: #e0f2fe; color: #0284c7; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                    <i class="fas fa-box-open"></i>
+                </div>
+                <div>
+                    <h2 style="margin: 0; font-size: 18px; color: var(--text-primary);">Detalles de la Carga</h2>
+                    <span id="modalDetallesBadge" style="background: #e0f2fe; color: #0284c7; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">Carga 000</span>
+                </div>
+            </div>
+            <button class="btn-close" id="btnCerrarDetalles"><i class="fas fa-times"></i></button>
+        </div>
+
+        <!-- Lista de Detalles -->
+        <div id="detallesCargaLista" style="overflow-y: auto; flex: 1; padding: 24px; background: #f8fafc;">
+            <!-- Inyectado por JS -->
+            <div style="text-align: center; color: #94a3b8; padding: 40px 0;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
+                <p>Cargando detalles...</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="modal-footer" style="display: flex; gap: 16px; padding: 20px 24px; background: white; border-top: 1px solid var(--border-light); flex-shrink: 0; justify-content: space-between; align-items: center;">
+            <div>
+                <span style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; display: block;">Total a Cobrar</span>
+                <span id="sumaTotalCobrar" style="font-size: 18px; color: #10b981; font-weight: 800;">S/ 0.00</span>
+            </div>
+            <button type="button" id="btnCerrarDetallesFooter" style="padding: 12px 24px; background: #ffffff; color: #334155; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer;">Cerrar</button>
+        </div>
+    </div>
+</div>

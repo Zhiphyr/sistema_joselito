@@ -10,18 +10,15 @@
 
 <div class="welcome-card sin-padding">
 
-    <div class="tabla-toolbar">
-        <label for="inputBuscarRuta">Buscar:</label>
-        <input type="text" id="inputBuscarRuta" class="form-control" placeholder="Buscar por origen o destino...">
-    </div>
-
-    <div class="tabla-scroll">
-        <table class="tabla-modulo">
+    <div class="tabla-scroll" style="margin-top: 15px;">
+        <table id="tabla-rutas" class="tabla-modulo display hover" style="width:100%">
             <thead>
                 <tr>
                     <th class="tabla-th" style="width: 60px;">ID</th>
-                    <th class="tabla-th">Trayecto</th>
+                    <th class="tabla-th">Origen</th>
+                    <th class="tabla-th">Destino</th>
                     <th class="tabla-th">Descripción</th>
+                    <th class="tabla-th">Fecha Registro</th>
                     <th class="tabla-th" style="width: 120px;">Estado</th>
                     <th class="tabla-th" style="width: 160px;">Acciones</th>
                 </tr>
@@ -43,29 +40,122 @@
                 <input type="hidden" id="id_ruta" name="id_ruta">
 
                 <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <div>
+                    <div style="position: relative;">
                         <label for="ciudad_origen_ruta">Ciudad de Origen <span class="required">*</span></label>
                         <input type="text" id="ciudad_origen_ruta" name="ciudad_origen_ruta" class="form-control" required
-                            autocomplete="off" placeholder="Ej. Lima">
+                            autocomplete="off" placeholder="Ej. Lima" maxlength="50" minlength="3">
+                        <ul id="autocomplete_origen" class="autocomplete-list" style="display: none; position: absolute; z-index: 1000; background: white; border: 1px solid #ccc; width: 100%; max-height: 150px; overflow-y: auto; padding: 0; margin: 0; list-style: none; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></ul>
                     </div>
-                    <div>
+                    <div style="position: relative;">
                         <label for="ciudad_destino_ruta">Ciudad de Destino <span class="required">*</span></label>
                         <input type="text" id="ciudad_destino_ruta" name="ciudad_destino_ruta" class="form-control" required
-                            autocomplete="off" placeholder="Ej. Arequipa">
+                            autocomplete="off" placeholder="Ej. Arequipa" maxlength="50" minlength="3">
+                        <ul id="autocomplete_destino" class="autocomplete-list" style="display: none; position: absolute; z-index: 1000; background: white; border: 1px solid #ccc; width: 100%; max-height: 150px; overflow-y: auto; padding: 0; margin: 0; list-style: none; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></ul>
                     </div>
                 </div>
 
                 <div class="form-group">
                     <label for="descripcion_ruta">Descripción / Puntos de Control</label>
                     <textarea id="descripcion_ruta" name="descripcion_ruta" class="form-control" rows="3"
-                        placeholder="Ej. Ruta Panamericana Sur, paradas en Ica y Nazca."></textarea>
+                        maxlength="300" placeholder="Ej. Ruta Panamericana Sur, paradas en Ica y Nazca."></textarea>
                 </div>
 
                 <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
                     <button type="button" class="btn-secondary" id="btnCancelarModalRuta">Cancelar</button>
-                    <button type="submit" class="btn-primary" style="width: auto; padding: 10px 24px;">Guardar</button>
+                    <button type="submit" class="btn-primary" id="btnGuardarRuta" style="width: auto; padding: 10px 24px;" disabled>Guardar</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+<style>
+    /* Estilos modernos para los controles del DataTable */
+    #tabla-rutas_wrapper {
+        display: flex;
+        flex-direction: column;
+        padding: 24px 24px 0 24px; /* Padding superior y lateral para separar de la card */
+    }
+    
+    .dt-top-controls {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+        background: #f8fafc;
+        padding: 16px 20px;
+        border-radius: 12px;
+        border: 1px solid var(--border-light);
+    }
+
+    .dt-left-controls {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        flex-wrap: wrap;
+    }
+
+    #tabla-rutas_wrapper .dataTables_length,
+    #tabla-rutas_wrapper .dataTables_filter {
+        margin: 0 !important;
+        float: none !important;
+        text-align: left !important;
+    }
+
+    #tabla-rutas_wrapper .dataTables_length label,
+    #tabla-rutas_wrapper .dataTables_filter label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        font-weight: 600;
+        color: var(--text-secondary);
+        font-size: 13px;
+    }
+
+    #tabla-rutas_wrapper .dataTables_length select,
+    #tabla-rutas_wrapper .dataTables_filter input {
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 13px;
+        outline: none;
+        transition: all 0.2s;
+        background: white;
+    }
+
+    #tabla-rutas_wrapper .dataTables_filter input {
+        width: 220px;
+    }
+
+    #tabla-rutas_wrapper .dataTables_length select:focus,
+    #tabla-rutas_wrapper .dataTables_filter input:focus {
+        border-color: var(--brand-blue);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    /* Paginación y info inferior con padding */
+    .bottom-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 24px;
+        border-top: 1px solid var(--border-light);
+        margin-top: auto;
+    }
+    
+    .autocomplete-list li {
+        padding: 8px 12px;
+        cursor: pointer;
+        font-size: 14px;
+        color: var(--text-primary);
+        border-bottom: 1px solid #f1f5f9;
+    }
+    
+    .autocomplete-list li:hover {
+        background-color: #f8fafc;
+        color: var(--brand-blue);
+    }
+</style>

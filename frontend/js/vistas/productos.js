@@ -10,25 +10,19 @@ window.init_productos = function () {
     document.getElementById('btnCancelarModal').addEventListener('click', cerrarModalProducto);
     document.getElementById('formProducto').addEventListener('submit', guardarProducto);
 
-    // Buscador en tiempo real
-    document.getElementById('inputBuscarProducto').addEventListener('keyup', function (e) {
-        const text = e.target.value.toLowerCase();
-        const filas = document.querySelectorAll('#tbody-productos tr');
-        filas.forEach(fila => {
-            if (fila.textContent.toLowerCase().includes(text)) {
-                fila.style.display = '';
-            } else {
-                fila.style.display = 'none';
-            }
-        });
-    });
+    configurarValidacionesProducto();
 };
 
 async function cargarTablaProductos() {
     const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
     const tbody = document.getElementById('tbody-productos');
 
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Cargando productos...</td></tr>';
+    // Destruir instancia anterior si existe para evitar problemas de re-renderizado
+    if ($.fn.DataTable.isDataTable('#tabla-productos')) {
+        $('#tabla-productos').DataTable().destroy();
+    }
+
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">Cargando productos...</td></tr>';
 
     try {
         const response = await fetch('http://localhost:3000/api/productos', {
@@ -42,7 +36,7 @@ async function cargarTablaProductos() {
             window.productosCache = result.data;
 
             if (result.data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color: var(--text-muted);">No se encontraron productos</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color: var(--text-muted);">No se encontraron productos</td></tr>';
                 return;
             }
 
@@ -56,6 +50,8 @@ async function cargarTablaProductos() {
                     ? p.descripcion
                     : '<span style="color:#aaa; font-style:italic;">Sin descripción</span>';
 
+                const fechaFormateada = p.fecha_creacion ? new Date(p.fecha_creacion).toLocaleDateString('es-ES') : '-';
+
                 const iconToggle = p.estado === 1 ? 'fa-ban' : 'fa-check';
                 const titleToggle = p.estado === 1 ? 'Desactivar' : 'Activar';
 
@@ -64,6 +60,7 @@ async function cargarTablaProductos() {
                         <td class="tabla-td tabla-id">${p.id_producto}</td>
                         <td class="tabla-td tabla-nombre">${p.nombre}</td>
                         <td class="tabla-td tabla-secundario">${descripcion}</td>
+                        <td class="tabla-td">${fechaFormateada}</td>
                         <td class="tabla-td">${badgeEstado}</td>
                         <td class="tabla-td">
                             <button class="btn-action btn-edit" onclick="abrirModalEditarProducto(${p.id_producto})" title="Editar">
@@ -81,8 +78,23 @@ async function cargarTablaProductos() {
             });
 
             tbody.innerHTML = filasHTML;
+
+            $('#tabla-productos').DataTable({
+                language: {
+                    url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
+                },
+                order: [[0, 'desc']], // Ordenar por ID descendente
+                pageLength: 15,
+                lengthMenu: [[15, 25, 50, -1], [15, 25, 50, "Todos"]],
+                dom: '<"dt-top-controls"<"dt-left-controls"l>f>rt<"bottom-controls"ip>',
+                columnDefs: [
+                    { orderable: false, targets: 5 } // La columna de acciones no es ordenable
+                ],
+                destroy: true
+            });
+
         } else {
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color: red;">Error: ${result.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color: red;">Error: ${result.message}</td></tr>`;
         }
     } catch (error) {
         console.error("Error al cargar productos:", error);
@@ -132,8 +144,8 @@ async function guardarProducto(e) {
     const descripcionInput = document.getElementById('descripcion_producto');
 
     const datos = {
-        nombre: nombreInput.value,
-        descripcion: descripcionInput.value
+        nombre: nombreInput.value.trim(),
+        descripcion: descripcionInput.value.trim()
     };
 
     const method = id ? 'PUT' : 'POST';
@@ -251,6 +263,16 @@ window.cambiarEstadoProducto = async function (id, estado, silent = false) {
         const result = await response.json();
 
         if (!silent) {
+            if (response.status === 409 && result.status === 'active_trips') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Acción Bloqueada',
+                    text: result.message,
+                    confirmButtonColor: '#eab308' // Amarillo advertencia
+                });
+                return;
+            }
+
             if (response.ok && result.success) {
                 Swal.fire({ icon: 'success', title: 'Éxito', text: result.message, timer: 1500, showConfirmButton: false });
                 cargarTablaProductos();
@@ -267,4 +289,55 @@ window.cambiarEstadoProducto = async function (id, estado, silent = false) {
             Swal.fire({ icon: 'error', title: 'Error', text: 'Problema de conexión con el servidor.' });
         }
     }
+}
+
+function configurarValidacionesProducto() {
+    const nombreInput = document.getElementById('nombre_producto');
+    const descInput = document.getElementById('descripcion_producto');
+    const btnGuardar = document.getElementById('btnGuardarProducto');
+
+    function validarFormulario() {
+        let esValido = true;
+
+        // Nombre
+        let nombreVal = nombreInput.value;
+        // Quitar espacios extra y mayusculas en tiempo real
+        nombreVal = nombreVal.toUpperCase().replace(/\s{2,}/g, ' ');
+        if (nombreInput.value !== nombreVal) {
+            const start = nombreInput.selectionStart;
+            const end = nombreInput.selectionEnd;
+            nombreInput.value = nombreVal;
+            nombreInput.setSelectionRange(start, end);
+        }
+
+        const regexNombre = /^[A-Z0-9ÁÉÍÓÚÑ\s\-,.]+$/;
+        if (nombreVal.trim().length < 3 || nombreVal.length > 60 || !regexNombre.test(nombreVal)) {
+            nombreInput.style.borderColor = 'red';
+            esValido = false;
+        } else {
+            nombreInput.style.borderColor = '#e2e8f0';
+        }
+
+        // Descripcion
+        let descVal = descInput.value;
+        const regexDesc = /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s,.\n-]*$/;
+        if (descVal.length > 250 || !regexDesc.test(descVal)) {
+            descInput.style.borderColor = 'red';
+            esValido = false;
+        } else {
+            descInput.style.borderColor = '#e2e8f0';
+        }
+
+        btnGuardar.disabled = !esValido;
+        if (btnGuardar.disabled) {
+            btnGuardar.style.backgroundColor = '#cbd5e1';
+            btnGuardar.style.cursor = 'not-allowed';
+        } else {
+            btnGuardar.style.backgroundColor = '';
+            btnGuardar.style.cursor = 'pointer';
+        }
+    }
+
+    nombreInput.addEventListener('input', validarFormulario);
+    descInput.addEventListener('input', validarFormulario);
 }

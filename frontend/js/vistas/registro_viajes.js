@@ -1,0 +1,1725 @@
+let contadorViajes = 0;
+window.opcionesCamiones = [];
+window.opcionesRutas = [];
+window.opcionesClientes = [];
+window.opcionesProductos = [];
+window.opcionesCuentasBancarias = [];
+window.opcionesBilleterasDigitales = [];
+
+// Estado en memoria de las cargas por cada viaje activo. Formato: { "vista-viaje-1": [ { ...carga1 }, { ...carga2 } ] }
+window.cargasPorViaje = {};
+window.idViajeModalActivo = null;
+window.idCargaEditandoActiva = null;
+
+/**
+ * Inicializador de la vista Registro de Viajes
+ * Es invocado dinámicamente por cargarVistaSPA en dashboard.js
+ */
+async function init_registro_viajes() {
+    contadorViajes = 0; // Resetear al entrar a la vista
+    window.cargasPorViaje = {}; // Limpiar estado de memoria
+    
+    // Cargar catálogos (camiones, rutas, clientes, productos activos)
+    await cargarCatalogosViajes();
+    
+    restaurarEstadoDesdeLocalStorage();
+    
+    const btnCrear = document.getElementById('btnCrearNuevoViaje');
+    if (btnCrear) {
+        btnCrear.addEventListener('click', () => {
+            mostrarPantallaInicioViaje();
+            crearNuevaPestaniaViaje();
+        });
+    }
+
+    const btnAgregarOtro = document.getElementById('btnAgregarOtroViaje');
+    if (btnAgregarOtro) {
+        btnAgregarOtro.addEventListener('click', crearNuevaPestaniaViaje);
+    }
+}
+
+/**
+ * Carga los catálogos necesarios desde el backend para los selectores
+ */
+async function cargarCatalogosViajes() {
+    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+    
+    try {
+        // Camiones (solo activos y sin viaje operativo en curso)
+        const resCamiones = await fetch('http://localhost:3000/api/camiones/disponibles', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const jsonCamiones = await resCamiones.json();
+        if (resCamiones.ok && jsonCamiones.success) {
+            window.opcionesCamiones = jsonCamiones.data;
+        }
+
+        // Rutas
+        const resRutas = await fetch('http://localhost:3000/api/rutas', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const jsonRutas = await resRutas.json();
+        if (resRutas.ok && jsonRutas.success) {
+            window.opcionesRutas = jsonRutas.data.filter(r => r.estado === 1);
+        }
+
+        // Clientes
+        const resClientes = await fetch('http://localhost:3000/api/clientes', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const jsonClientes = await resClientes.json();
+        if (resClientes.ok && jsonClientes.success) {
+            window.opcionesClientes = jsonClientes.data.filter(c => c.estado === 1);
+            poblarSelectoresClientesModal();
+        }
+
+        // Productos
+        const resProductos = await fetch('http://localhost:3000/api/productos', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const jsonProductos = await resProductos.json();
+        if (resProductos.ok && jsonProductos.success) {
+            window.opcionesProductos = jsonProductos.data.filter(p => p.estado === 1);
+        }
+
+        // Cuentas bancarias y billeteras (para resolver el origen del dinero de un adelanto)
+        const resCuentas = await fetch('http://localhost:3000/api/deudas/cuentas-bancarias', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const jsonCuentas = await resCuentas.json();
+        if (resCuentas.ok && jsonCuentas.success) {
+            window.opcionesCuentasBancarias = jsonCuentas.data.cuentas || [];
+            window.opcionesBilleterasDigitales = jsonCuentas.data.billeteras || [];
+        }
+    } catch (error) {
+        console.error("Error al cargar catálogos para viajes:", error);
+    }
+}
+
+/**
+ * Trae el saldo actual de todas las cuentas/billeteras (caja física, cuentas bancarias
+ * y billeteras independientes) para validar fondos suficientes antes de dar un adelanto.
+ * Se pide fresco cada vez que se necesita (no se cachea) porque el saldo cambia constantemente.
+ */
+async function obtenerResumenCuentasFinanciero() {
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const res = await fetch('/api/dashboard-financiero/cuentas-resumen', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const json = await res.json();
+        return json.success ? json.data : null;
+    } catch (error) {
+        console.error('Error al obtener el saldo de las cuentas:', error);
+        return null;
+    }
+}
+
+/**
+ * Resuelve el saldo disponible del método de pago elegido (Efectivo -> Caja Física;
+ * Billetera Digital -> billetera independiente o, si está vinculada a una cuenta, el saldo
+ * combinado de esa cuenta; Transferencia/Depósito -> la cuenta bancaria seleccionada).
+ */
+function resolverSaldoDisponible(resumenCuentas, metodo, idCuentaSeleccionada, idBilleteraSeleccionada) {
+    if (!resumenCuentas) return 0;
+
+    if (metodo === 'Efectivo') {
+        return resumenCuentas.caja_fisica ? Number(resumenCuentas.caja_fisica.saldo) : 0;
+    }
+
+    if (metodo === 'Billetera Digital') {
+        const cuentaVinculada = resumenCuentas.cuentas_bancarias.find(c =>
+            c.billetera_vinculada && String(c.billetera_vinculada.id_billetera) === String(idBilleteraSeleccionada)
+        );
+        if (cuentaVinculada) return Number(cuentaVinculada.saldo);
+
+        const billeteraIndependiente = resumenCuentas.billeteras_independientes.find(b =>
+            String(b.id_billetera) === String(idBilleteraSeleccionada)
+        );
+        return billeteraIndependiente ? Number(billeteraIndependiente.saldo) : 0;
+    }
+
+    // Transferencia / Depósito
+    const cuenta = resumenCuentas.cuentas_bancarias.find(c => String(c.id_cuenta) === String(idCuentaSeleccionada));
+    return cuenta ? Number(cuenta.saldo) : 0;
+}
+
+/**
+ * Llena el select de Cuenta/Billetera de un adelanto según el canal elegido
+ * (Billetera Digital -> billeteras; Transferencia/Depósito -> cuentas bancarias).
+ */
+function poblarSelectCuentaAdelanto(select, canal) {
+    if (!select) return;
+    select.innerHTML = '<option value="">Seleccione...</option>';
+
+    if (canal === 'Billetera Digital') {
+        window.opcionesBilleterasDigitales.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.id_billetera;
+            opt.textContent = `${b.entidad_financiera} - ${b.numero_celular} (${b.titular})`;
+            select.appendChild(opt);
+        });
+    } else {
+        window.opcionesCuentasBancarias.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id_cuenta;
+            opt.textContent = `${c.entidad_financiera} - ${c.nro_cuenta} (${c.titular})`;
+            select.appendChild(opt);
+        });
+    }
+}
+
+function poblarSelectoresClientesModal() {
+    const selectRem = document.getElementById('select-remitente-modal');
+    const selectDest = document.getElementById('select-destinatario-modal');
+    
+    if (!selectRem || !selectDest) return;
+
+    selectRem.innerHTML = '<option value="">Seleccione un cliente remitente...</option>';
+    selectDest.innerHTML = '<option value="">Seleccione un cliente destinatario...</option>';
+
+    window.opcionesClientes.forEach(c => {
+        const optionHTML = `<option value="${c.id_cliente}">${c.nombre_razon_social} (${c.numero_documento})</option>`;
+        selectRem.innerHTML += optionHTML;
+        selectDest.innerHTML += optionHTML;
+    });
+}
+
+/**
+ * Transición de la pantalla de inicio a la interfaz de pestañas
+ */
+function mostrarPantallaInicioViaje() {
+    const pantallaInicio = document.getElementById('pantallaInicioViaje');
+    const interfazTabs = document.getElementById('interfazTabsViaje');
+    
+    if (pantallaInicio && interfazTabs) {
+        // Fade out
+        pantallaInicio.style.opacity = '0';
+        
+        setTimeout(() => {
+            pantallaInicio.style.display = 'none';
+            interfazTabs.style.display = 'flex';
+            
+            // Forzar reflow para aplicar la opacidad
+            void interfazTabs.offsetWidth;
+            
+            // Fade in
+            interfazTabs.style.opacity = '1';
+        }, 300);
+    }
+}
+
+/**
+ * Transición de vuelta a la pantalla vacía
+ */
+function mostrarPantallaVacia() {
+    const pantallaInicio = document.getElementById('pantallaInicioViaje');
+    const interfazTabs = document.getElementById('interfazTabsViaje');
+    
+    if (pantallaInicio && interfazTabs) {
+        interfazTabs.style.opacity = '0';
+        
+        setTimeout(() => {
+            interfazTabs.style.display = 'none';
+            pantallaInicio.style.display = 'flex';
+            
+            void pantallaInicio.offsetWidth;
+            
+            pantallaInicio.style.opacity = '1';
+        }, 300);
+    }
+}
+
+/**
+ * Crea una nueva pestaña y la activa
+ */
+function crearNuevaPestaniaViaje(esRestauracion = false) {
+    contadorViajes++;
+    const idViaje = `vista-viaje-${contadorViajes}`;
+    
+    // Iniciar memoria vacía para este viaje
+    window.cargasPorViaje[idViaje] = [];
+    
+    // 1. Crear el botón de pestaña
+    const contenedorBotones = document.getElementById('contenedor-botones-pestanias');
+    const tabBtn = document.createElement('button');
+    tabBtn.className = 'tab-btn';
+    tabBtn.dataset.targetId = idViaje;
+    
+    tabBtn.innerHTML = `
+        Viaje ${contadorViajes}
+        <span class="tab-close" title="Cerrar pestaña">&times;</span>
+    `;
+    
+    // Activar pestaña al hacer clic
+    tabBtn.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('tab-close')) {
+            activarPestania(idViaje);
+        }
+    });
+
+    // Cerrar pestaña al hacer clic en 'x'
+    const closeBtn = tabBtn.querySelector('.tab-close');
+    closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        cerrarPestania(idViaje, tabBtn);
+    });
+
+    contenedorBotones.appendChild(tabBtn);
+
+    // 2. Clonar el template del formulario
+    const template = document.getElementById('template-viaje');
+    const contenedorPestanias = document.getElementById('contenido-pestanias-viaje');
+    
+    const clone = template.content.cloneNode(true);
+    const divContenido = clone.querySelector('.vista-viaje');
+    divContenido.id = idViaje;
+    
+    // Llenar selectores dinámicamente con los catálogos en caché
+    const selectCamion = divContenido.querySelector('.select-camion');
+    const selectRuta = divContenido.querySelector('.select-ruta');
+    
+    if (selectCamion) {
+        window.opcionesCamiones.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id_camion;
+            opt.textContent = `${c.placa} - Conductor: ${c.conductor}`;
+            selectCamion.appendChild(opt);
+        });
+    }
+
+    if (selectRuta) {
+        window.opcionesRutas.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.id_ruta;
+            opt.textContent = `${r.ciudad_origen} a ${r.ciudad_destino}`;
+            selectRuta.appendChild(opt);
+        });
+    }
+
+    contenedorPestanias.appendChild(clone);
+
+    // Eventos para Validación en Vivo de Tarifas
+    const inputFleteGlobal = divContenido.querySelector('.flete-global-input');
+    const inputTarifa = divContenido.querySelector('.tarifa-transportista-input');
+    const msgError = divContenido.querySelector('.error-tarifa-msg');
+    const btnRegistrarViajeFinal = divContenido.querySelector('.btn-registrar-viaje-final');
+
+    const validarTarifas = () => {
+        const fg = parseFloat(inputFleteGlobal.value);
+        const tt = parseFloat(inputTarifa.value);
+
+        // Actualización reactiva de totales financieros si cambia la tarifa
+        const cargas = window.cargasPorViaje[idViaje] || [];
+        actualizarTotalesGenerales(divContenido, cargas);
+
+        let tieneErrorTarifa = false;
+        if (!isNaN(fg) && !isNaN(tt)) {
+            if (tt >= fg) {
+                tieneErrorTarifa = true;
+                msgError.style.display = 'block';
+            } else {
+                msgError.style.display = 'none';
+            }
+        } else {
+            msgError.style.display = 'none';
+        }
+
+        // Validación de Adelanto
+        let tieneErrorAdelanto = false;
+        const textoPagoTrans = divContenido.querySelector('.texto-pago-transportista');
+        const pagoTrans = textoPagoTrans ? parseFloat(textoPagoTrans.textContent.replace(/,/g, '')) : 0;
+        const montoAdelanto = parseFloat(inputMontoAdelanto.value);
+
+        const existingAlert = divContenido.querySelector('.error-adelanto-msg');
+        if (existingAlert) existingAlert.remove();
+        inputMontoAdelanto.style.borderColor = '';
+
+        if (chkAdelanto && chkAdelanto.checked && !isNaN(montoAdelanto) && pagoTrans > 0) {
+            if (montoAdelanto > pagoTrans) {
+                tieneErrorAdelanto = true;
+                inputMontoAdelanto.style.borderColor = '#ef4444';
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'error-adelanto-msg';
+                alertDiv.style.color = '#ef4444';
+                alertDiv.style.fontSize = '11px';
+                alertDiv.style.marginTop = '15px';
+                alertDiv.style.position = 'absolute';
+                alertDiv.style.top = '100%';
+                alertDiv.style.left = '0';
+                alertDiv.style.whiteSpace = 'nowrap';
+                alertDiv.textContent = 'El adelanto no puede superar el pago del transportista';
+                inputMontoAdelanto.parentElement.appendChild(alertDiv);
+            }
+        }
+
+        if (tieneErrorTarifa || tieneErrorAdelanto) {
+            btnRegistrarViajeFinal.disabled = true;
+            btnRegistrarViajeFinal.style.opacity = '0.5';
+            btnRegistrarViajeFinal.style.cursor = 'not-allowed';
+        } else {
+            btnRegistrarViajeFinal.disabled = false;
+            btnRegistrarViajeFinal.style.opacity = '1';
+            btnRegistrarViajeFinal.style.cursor = 'pointer';
+        }
+    };
+
+    if (inputFleteGlobal) inputFleteGlobal.addEventListener('input', validarTarifas);
+    if (inputTarifa) inputTarifa.addEventListener('input', validarTarifas);
+
+    const chkAdelanto = divContenido.querySelector('.chk-adelanto');
+    const contAdelanto = divContenido.querySelector('.contenedor-campos-adelanto');
+    const inputMontoAdelanto = divContenido.querySelector('.input-monto-adelanto');
+    const selectMetodoAdelanto = divContenido.querySelector('.select-metodo-adelanto');
+    
+    const contCamposExtra = divContenido.querySelector('.cont-campos-extra-adelanto');
+    const selectCuentaAdelanto = divContenido.querySelector('.select-cuenta-adelanto');
+    const inputOperacion = divContenido.querySelector('.input-operacion-adelanto');
+    const inputEvidencia = divContenido.querySelector('.input-evidencia-adelanto');
+    const spanNombreArchivo = divContenido.querySelector('.nombre-archivo-adelanto');
+
+    if (chkAdelanto) {
+        chkAdelanto.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                contAdelanto.style.display = 'flex';
+                inputMontoAdelanto.required = true;
+                if (selectMetodoAdelanto && selectMetodoAdelanto.value !== 'Efectivo') {
+                    contCamposExtra.style.display = 'flex';
+                    poblarSelectCuentaAdelanto(selectCuentaAdelanto, selectMetodoAdelanto.value);
+                    if (selectCuentaAdelanto) selectCuentaAdelanto.required = true;
+                    inputOperacion.required = true;
+                }
+            } else {
+                contAdelanto.style.display = 'none';
+                inputMontoAdelanto.required = false;
+                inputMontoAdelanto.value = '';
+
+                if (contCamposExtra) contCamposExtra.style.display = 'none';
+                if (selectCuentaAdelanto) {
+                    selectCuentaAdelanto.required = false;
+                    selectCuentaAdelanto.value = '';
+                }
+                if (inputOperacion) {
+                    inputOperacion.required = false;
+                    inputOperacion.value = '';
+                }
+                if (inputEvidencia) inputEvidencia.value = '';
+                if (spanNombreArchivo) {
+                    spanNombreArchivo.textContent = '';
+                    spanNombreArchivo.title = '';
+                }
+            }
+            validarTarifas();
+            guardarEstadoEnLocalStorage(idViaje);
+        });
+    }
+
+    if (selectMetodoAdelanto && contCamposExtra) {
+        selectMetodoAdelanto.addEventListener('change', (e) => {
+            if (e.target.value !== 'Efectivo') {
+                contCamposExtra.style.display = 'flex';
+                poblarSelectCuentaAdelanto(selectCuentaAdelanto, e.target.value);
+                if (selectCuentaAdelanto) selectCuentaAdelanto.required = true;
+                inputOperacion.required = true;
+            } else {
+                contCamposExtra.style.display = 'none';
+                if (selectCuentaAdelanto) {
+                    selectCuentaAdelanto.required = false;
+                    selectCuentaAdelanto.value = '';
+                }
+                inputOperacion.required = false;
+                inputOperacion.value = '';
+                inputEvidencia.value = '';
+                spanNombreArchivo.textContent = '';
+                spanNombreArchivo.title = '';
+            }
+            guardarEstadoEnLocalStorage(idViaje);
+        });
+    }
+
+    if (selectCuentaAdelanto) {
+        selectCuentaAdelanto.addEventListener('change', () => guardarEstadoEnLocalStorage(idViaje));
+    }
+
+    if (inputEvidencia && spanNombreArchivo) {
+        inputEvidencia.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                spanNombreArchivo.textContent = e.target.files[0].name;
+                spanNombreArchivo.title = e.target.files[0].name;
+            } else {
+                spanNombreArchivo.textContent = '';
+                spanNombreArchivo.title = '';
+            }
+        });
+    }
+
+    if (inputMontoAdelanto) {
+        inputMontoAdelanto.addEventListener('input', validarTarifas);
+        inputMontoAdelanto.addEventListener('blur', (e) => {
+            const val = parseFloat(e.target.value);
+            if (!isNaN(val) && val > 0) {
+                e.target.value = val.toFixed(2);
+            } else {
+                e.target.value = '';
+            }
+            validarTarifas();
+            guardarEstadoEnLocalStorage(idViaje);
+        });
+    }
+
+    // Eventos para LocalStorage
+    const inputsAEscuchar = [
+        selectCamion, selectRuta, 
+        divContenido.querySelector('.fecha-salida-input'),
+        inputFleteGlobal, inputTarifa,
+        selectMetodoAdelanto, inputOperacion
+    ];
+    inputsAEscuchar.forEach(inp => {
+        if(inp) {
+            inp.addEventListener('change', () => guardarEstadoEnLocalStorage(idViaje));
+            if(inp.type === 'number' || inp.type === 'text' || inp.type === 'datetime-local') {
+                inp.addEventListener('input', () => guardarEstadoEnLocalStorage(idViaje));
+            }
+        }
+    });
+
+    // Un camión elegido en esta pestaña debe dejar de aparecer en las demás
+    if (selectCamion) {
+        selectCamion.addEventListener('change', refrescarSelectsCamionTodasLasPestanias);
+    }
+
+    if (btnRegistrarViajeFinal) {
+        btnRegistrarViajeFinal.addEventListener('click', function() {
+            registrarViajeBackend(this);
+        });
+    }
+
+    // 3. Activar la nueva pestaña
+    activarPestania(idViaje);
+
+    refrescarSelectsCamionTodasLasPestanias();
+
+    if (!esRestauracion) {
+        guardarEstadoEnLocalStorage(idViaje);
+    }
+}
+
+/**
+ * Reconstruye el <select> de camión de TODAS las pestañas abiertas para que un
+ * camión ya elegido en una pestaña no pueda volver a elegirse en otra. Si dos
+ * pestañas terminan con el mismo camión (por ejemplo, estado legado restaurado
+ * desde localStorage antes de esta validación), solo la primera en el DOM lo
+ * conserva y a las demás se les limpia la selección.
+ */
+function refrescarSelectsCamionTodasLasPestanias() {
+    const selects = Array.from(document.querySelectorAll('.select-camion'));
+
+    const yaAsignados = new Set();
+    selects.forEach(select => {
+        if (select.value) {
+            if (yaAsignados.has(select.value)) {
+                select.value = '';
+            } else {
+                yaAsignados.add(select.value);
+            }
+        }
+    });
+
+    selects.forEach(select => {
+        const valorActual = select.value;
+        select.innerHTML = '<option value="">Seleccione un camión...</option>';
+        window.opcionesCamiones.forEach(c => {
+            const idStr = String(c.id_camion);
+            if (idStr === valorActual || !yaAsignados.has(idStr)) {
+                const opt = document.createElement('option');
+                opt.value = c.id_camion;
+                opt.textContent = `${c.placa} - Conductor: ${c.conductor}`;
+                select.appendChild(opt);
+            }
+        });
+        select.value = valorActual;
+    });
+}
+
+/**
+ * Muestra el contenido de la pestaña seleccionada
+ */
+function activarPestania(id) {
+    // Quitar estado activo a todos los botones
+    const botones = document.querySelectorAll('.tab-btn');
+    botones.forEach(btn => btn.classList.remove('activa'));
+
+    // Ocultar todos los formularios (Retención de datos con display: none)
+    const contenidos = document.querySelectorAll('.vista-viaje');
+    contenidos.forEach(div => div.style.display = 'none');
+
+    // Activar el botón seleccionado
+    const btnActivo = document.querySelector(`.tab-btn[data-target-id="${id}"]`);
+    if (btnActivo) {
+        btnActivo.classList.add('activa');
+    }
+
+    // Mostrar el formulario seleccionado
+    const divActivo = document.getElementById(id);
+    if (divActivo) {
+        divActivo.style.display = 'block';
+    }
+}
+
+/**
+ * Cierra y destruye la pestaña especificada
+ */
+function cerrarPestania(id, btnElement) {
+    const eraActiva = btnElement.classList.contains('activa');
+
+    // Liberar cualquier reserva de carga de almacén que tuviera esta pestaña, tanto si
+    // se cierra porque el viaje ya se registró como si el usuario simplemente abandona
+    // el borrador sin registrarlo.
+    (window.cargasPorViaje[id] || []).forEach(c => {
+        if (c.es_carga_existente) {
+            liberarCargaAlmacen(c.id_carga_real);
+        }
+    });
+
+    // Limpiar memoria
+    delete window.cargasPorViaje[id];
+
+    // Limpiar LocalStorage
+    localStorage.removeItem(`joselito_viaje_${id}`);
+    let pestañasActivas = JSON.parse(localStorage.getItem('joselito_pestañas_viajes') || '[]');
+    pestañasActivas = pestañasActivas.filter(p => p !== id);
+    localStorage.setItem('joselito_pestañas_viajes', JSON.stringify(pestañasActivas));
+
+    // Destruir botón y formulario del DOM
+    btnElement.remove();
+    const divContenido = document.getElementById(id);
+    if (divContenido) {
+        divContenido.remove();
+    }
+
+    // El camión que tenía esta pestaña vuelve a estar disponible para las demás
+    refrescarSelectsCamionTodasLasPestanias();
+
+    const botonesRestantes = document.querySelectorAll('.tab-btn');
+    
+    if (botonesRestantes.length === 0) {
+        // Si no quedan pestañas, regresamos a la pantalla de inicio
+        mostrarPantallaVacia();
+        contadorViajes = 0; // Opcional, pero mantiene orden lógico
+    } else if (eraActiva) {
+        // Si cerramos la pestaña activa, activamos la última abierta
+        const ultimoBoton = botonesRestantes[botonesRestantes.length - 1];
+        activarPestania(ultimoBoton.dataset.targetId);
+    }
+}
+
+
+/* ==========================================================
+   LÓGICA DEL MODAL DE CARGAS Y SUB-FORMULARIOS DE PRODUCTOS
+   ========================================================== */
+
+function abrirModalNuevaCarga(btnElement) {
+    // 1. Identificar a qué viaje pertenece este botón
+    const vistaViaje = btnElement.closest('.vista-viaje');
+    if (!vistaViaje) return;
+    
+    window.idViajeModalActivo = vistaViaje.id;
+    window.idCargaEditandoActiva = null; // Modo creación
+
+    // 2. Leer Flete Global
+    const inputFleteGlobal = vistaViaje.querySelector('.flete-global-input');
+    const fleteGlobal = parseFloat(inputFleteGlobal.value);
+
+    if (isNaN(fleteGlobal) || fleteGlobal <= 0) {
+        if (window.Swal) {
+            Swal.fire({ icon: 'warning', title: 'Atención', text: 'Por favor, defina un Precio de Flete Global válido antes de registrar cargas.' });
+        } else {
+            alert('Por favor, defina un Precio de Flete Global válido antes de registrar cargas.');
+        }
+        inputFleteGlobal.focus();
+        return;
+    }
+
+    // 2.5 Leer Tarifa Transportista
+    const inputTarifaTransp = vistaViaje.querySelector('.tarifa-transportista-input');
+    const tarifaTransp = parseFloat(inputTarifaTransp.value);
+
+    if (isNaN(tarifaTransp) || tarifaTransp <= 0) {
+        if (window.Swal) {
+            Swal.fire({ icon: 'warning', title: 'Atención', text: 'Por favor, defina la Tarifa del Transportista antes de registrar cargas.' });
+        } else {
+            alert('Por favor, defina la Tarifa del Transportista antes de registrar cargas.');
+        }
+        inputTarifaTransp.focus();
+        return;
+    }
+
+    // 3. Preparar UI del modal
+    document.querySelector('#modalNuevaCarga h3').textContent = "Registrar Nueva Carga";
+    document.getElementById('texto-flete-global-modal').textContent = `S/ ${fleteGlobal.toFixed(2)}`;
+    document.getElementById('select-remitente-modal').value = '';
+    document.getElementById('select-destinatario-modal').value = '';
+    
+    const contenedorItems = document.getElementById('contenedor-items-carga');
+    contenedorItems.innerHTML = ''; // Limpiar bloques anteriores
+
+    // 4. Agregar un primer bloque por defecto
+    agregarBloqueProducto();
+
+    // 5. Mostrar Modal
+    document.getElementById('modalNuevaCarga').style.display = 'flex';
+}
+
+function cerrarModalNuevaCarga() {
+    document.getElementById('modalNuevaCarga').style.display = 'none';
+    window.idViajeModalActivo = null;
+    window.idCargaEditandoActiva = null;
+}
+
+/* ==========================================================
+   CARGAS PENDIENTES EN ALMACÉN (cotizaciones aprobadas sin viaje)
+
+   Reserva "tentativa" compartida vía localStorage (clave
+   joselito_cargas_reservadas): evita que la misma carga de almacén
+   se tome desde dos pestañas de viaje a la vez (funciona tanto para
+   las pestañas dentro de esta misma página como si el usuario abre
+   una segunda ventana real del navegador, porque localStorage es
+   compartido por origen). Es una capa de UX; la garantía real
+   anti-doble-asignación es el "WHERE id_viaje IS NULL" que hace
+   registrarViaje en el backend al confirmar el viaje.
+   ========================================================== */
+
+const RESERVA_ALMACEN_TTL_MS = 12 * 60 * 60 * 1000; // 12 horas
+window.cargasAlmacenCache = [];
+window.idViajeModalAlmacenActivo = null;
+
+function leerReservasAlmacen() {
+    let reservas = {};
+    try {
+        reservas = JSON.parse(localStorage.getItem('joselito_cargas_reservadas') || '{}');
+    } catch (e) {
+        reservas = {};
+    }
+
+    const ahora = Date.now();
+    let cambiaron = false;
+    Object.keys(reservas).forEach(idCarga => {
+        if (!reservas[idCarga] || (ahora - reservas[idCarga].ts) > RESERVA_ALMACEN_TTL_MS) {
+            delete reservas[idCarga];
+            cambiaron = true;
+        }
+    });
+
+    if (cambiaron) {
+        localStorage.setItem('joselito_cargas_reservadas', JSON.stringify(reservas));
+    }
+    return reservas;
+}
+
+function reservarCargaAlmacen(idCarga, idViaje) {
+    const reservas = leerReservasAlmacen();
+    reservas[idCarga] = { idViaje, ts: Date.now() };
+    localStorage.setItem('joselito_cargas_reservadas', JSON.stringify(reservas));
+}
+
+function liberarCargaAlmacen(idCarga) {
+    const reservas = leerReservasAlmacen();
+    delete reservas[idCarga];
+    localStorage.setItem('joselito_cargas_reservadas', JSON.stringify(reservas));
+}
+
+async function abrirModalCargasPendientes(btnElement) {
+    const vistaViaje = btnElement.closest('.vista-viaje');
+    if (!vistaViaje) return;
+
+    window.idViajeModalAlmacenActivo = vistaViaje.id;
+
+    const contenedor = document.getElementById('contenedor-cargas-pendientes');
+    contenedor.innerHTML = '<div style="text-align:center; padding:32px; color:var(--text-secondary);"><i class="fas fa-spinner fa-spin fa-2x mb-3"></i><br>Cargando cargas pendientes...</div>';
+    document.getElementById('modalCargasPendientes').style.display = 'flex';
+
+    const inputBuscar = document.getElementById('input-buscar-cargas-pendientes');
+    if (inputBuscar) {
+        inputBuscar.value = '';
+        if (!inputBuscar.hasAttribute('data-listener')) {
+            inputBuscar.setAttribute('data-listener', 'true');
+            inputBuscar.addEventListener('input', (e) => {
+                const termino = e.target.value.toLowerCase();
+                const filtradas = (window.cargasAlmacenCache || []).filter(c => {
+                    return c.id_carga.toString().includes(termino) ||
+                           (c.nombre_remitente || '').toLowerCase().includes(termino) ||
+                           (c.nombre_destinatario || '').toLowerCase().includes(termino);
+                });
+                renderizarTablaCargasPendientes(filtradas);
+            });
+        }
+    }
+
+    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+
+    try {
+        const response = await fetch('http://localhost:3000/api/viajes/cargas/pendientes', {
+            headers: { 'x-user-profile': sessionData.id_perfil || 1 }
+        });
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Error al obtener las cargas pendientes');
+        }
+
+        // Se excluyen las cargas ya "reservadas" por cualquier otra pestaña/ventana en curso.
+        const reservas = leerReservasAlmacen();
+        const disponibles = result.data.filter(c => !reservas[c.id_carga]);
+        window.cargasAlmacenCache = disponibles;
+
+        renderizarTablaCargasPendientes(disponibles);
+    } catch (error) {
+        console.error('Error al cargar cargas pendientes:', error);
+        const contenedor = document.getElementById('contenedor-cargas-pendientes');
+        contenedor.innerHTML = '<div style="text-align:center; padding:32px; color:#ef4444;"><i class="fas fa-exclamation-triangle fa-2x mb-3"></i><br>Error al cargar las cargas pendientes</div>';
+    }
+}
+
+function cerrarModalCargasPendientes() {
+    document.getElementById('modalCargasPendientes').style.display = 'none';
+    window.idViajeModalAlmacenActivo = null;
+}
+
+function renderizarTablaCargasPendientes(cargas) {
+    const contenedor = document.getElementById('contenedor-cargas-pendientes');
+
+    if (!cargas || cargas.length === 0) {
+        contenedor.innerHTML = `
+            <div style="text-align:center; padding:48px 24px; border: 1px dashed var(--border-light); border-radius: var(--radius-md); background: var(--surface-bg);">
+                <i class="fas fa-box-open" style="font-size: 32px; color: var(--border-light); margin-bottom: 16px;"></i>
+                <p style="margin: 0; color: var(--text-secondary); font-size: 14px; font-weight: 500;">No se encontraron cargas pendientes</p>
+                <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 12px;">Intenta ajustando tu búsqueda o revisa el almacén.</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+    cargas.forEach(c => {
+        const pesoTotal = c.productos.reduce((s, p) => s + Number(p.peso_total), 0);
+
+        let filasProductos = '';
+        c.productos.forEach(p => {
+            filasProductos += `
+                <tr style="border-top: 1px solid var(--border-light);">
+                    <td style="padding: 8px; font-weight: 600; color: var(--text-primary);">${p.nombre_producto}</td>
+                    <td style="padding: 8px; color: var(--text-secondary);">${p.marca_visual || '-'}</td>
+                    <td style="padding: 8px; text-align: center; color: var(--text-secondary);">${p.cantidad_sacos}</td>
+                    <td style="padding: 8px; text-align: right; color: var(--text-secondary);">${Number(p.peso_unitario).toFixed(2)} kg</td>
+                    <td style="padding: 8px; text-align: right; font-weight: 600; color: var(--text-primary);">${Number(p.peso_total).toFixed(2)} kg</td>
+                    <td style="padding: 8px; text-align: right; color: var(--text-secondary);">S/ ${Number(p.precio_peso).toFixed(2)}</td>
+                    <td style="padding: 8px; text-align: right; font-weight: 700; color: var(--brand-blue);">S/ ${Number(p.flete_subtotal).toFixed(2)}</td>
+                </tr>
+            `;
+        });
+
+        html += `
+            <div class="carga-card-wrapper" style="border: 1px solid var(--border-light); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <div class="carga-card" style="display: flex; align-items: center; background: #ffffff; padding: 16px; transition: transform 0.2s, box-shadow 0.2s;">
+
+                    <!-- Zona Izquierda: ID y Ruta (50%) -->
+                    <div style="flex: 2; padding-right: 16px; min-width: 0;">
+                        <div style="display: inline-block; background: var(--surface-bg); color: var(--text-muted); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; margin-bottom: 8px;">
+                            ID #${c.id_carga}
+                        </div>
+                        <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">
+                            ${c.nombre_remitente}
+                        </div>
+                        <div style="font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            <i class="fas fa-level-down-alt fa-rotate-270" style="margin-right: 4px; color: var(--border-light);"></i>
+                            ${c.nombre_destinatario}
+                        </div>
+                    </div>
+
+                    <!-- Zona Central: Métricas (35%) -->
+                    <div style="flex: 1.5; display: flex; gap: 16px; border-left: 1px solid var(--border-light); padding-left: 16px; padding-right: 16px;">
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <div style="font-size: 13px; color: var(--text-secondary); font-weight: 600;">
+                                <i class="fas fa-box" style="display: inline-block; width: 16px; color: var(--text-muted); margin-right: 4px;"></i> ${c.productos.length}
+                            </div>
+                            <div style="font-size: 13px; color: var(--text-secondary); font-weight: 600;">
+                                <i class="fas fa-weight-hanging" style="display: inline-block; width: 16px; color: var(--text-muted); margin-right: 4px;"></i> ${pesoTotal.toFixed(2)} kg
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                            <div style="font-size: 14px; color: #b45309; font-weight: 800; background: #fef3c7; padding: 4px 8px; border-radius: 6px;">
+                                <i class="fas fa-coins" style="font-size: 11px; margin-right: 4px;"></i><span style="font-size: 11px; margin-right: 2px;">S/</span>${Number(c.flete_total).toFixed(2)}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Zona Derecha: Acción (15%) -->
+                    <div style="flex: 0.7; display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-left: 16px;">
+                        <button class="btn-secondary btn-toggle-detalle-carga" title="Ver detalle de productos" onclick="toggleDetalleCargaPendiente(${c.id_carga})" style="width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fas fa-chevron-down" id="chevron-carga-${c.id_carga}" style="transition: transform 0.2s;"></i>
+                        </button>
+                        <button class="btn-primary" style="padding: 8px 12px; font-size: 13px;" onclick="seleccionarCargaAlmacen(${c.id_carga})">Agregar</button>
+                    </div>
+                </div>
+
+                <!-- Detalle de productos (acordeón, oculto por defecto) -->
+                <div class="carga-card-detalle" id="detalle-carga-${c.id_carga}" style="display: none; background: var(--surface-bg); border-top: 1px solid var(--border-light); padding: 4px 16px;">
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0;">
+                            <thead>
+                                <tr style="text-align: left; color: var(--text-muted); text-transform: uppercase; font-size: 10px; font-weight: 700;">
+                                    <th style="padding: 8px;">Producto</th>
+                                    <th style="padding: 8px;">Marca Visual</th>
+                                    <th style="padding: 8px; text-align: center;">Cant.</th>
+                                    <th style="padding: 8px; text-align: right;">Peso Unit.</th>
+                                    <th style="padding: 8px; text-align: right;">Peso Total</th>
+                                    <th style="padding: 8px; text-align: right;">Tarifa</th>
+                                    <th style="padding: 8px; text-align: right;">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${filasProductos}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    contenedor.innerHTML = html;
+}
+
+function toggleDetalleCargaPendiente(idCarga) {
+    const detalle = document.getElementById(`detalle-carga-${idCarga}`);
+    const chevron = document.getElementById(`chevron-carga-${idCarga}`);
+    if (!detalle) return;
+
+    const estaAbierto = detalle.style.display !== 'none';
+    detalle.style.display = estaAbierto ? 'none' : 'block';
+    if (chevron) {
+        chevron.style.transform = estaAbierto ? 'rotate(0deg)' : 'rotate(180deg)';
+    }
+}
+
+function seleccionarCargaAlmacen(idCarga) {
+    const idViaje = window.idViajeModalAlmacenActivo;
+    if (!idViaje) return;
+
+    const carga = window.cargasAlmacenCache.find(c => c.id_carga === idCarga);
+    if (!carga) return;
+
+    // Misma forma que una carga armada a mano en el modal "Registrar Carga": así
+    // renderizarCargasViaje(), guardarEstadoEnLocalStorage() y la restauración al
+    // recargar la página funcionan sin necesidad de tocarlos. Las dos propiedades
+    // extra (es_carga_existente / id_carga_real) son las que usa el backend para
+    // reasignar en vez de insertar, y las que gatillan la reserva/liberación aquí.
+    const nuevaCarga = {
+        id_carga_temp: 'almacen-' + carga.id_carga,
+        es_carga_existente: true,
+        id_carga_real: carga.id_carga,
+        id_remitente: carga.id_remitente,
+        nombre_remitente: carga.nombre_remitente,
+        id_destinatario: carga.id_destinatario,
+        nombre_destinatario: carga.nombre_destinatario,
+        productos: carga.productos.map(p => ({
+            id_producto: p.id_producto,
+            nombre_producto: p.nombre_producto,
+            marca_visual: p.marca_visual || '',
+            cantidad: p.cantidad_sacos,
+            peso_unidad: Number(p.peso_unitario),
+            peso_total: Number(p.peso_total),
+            tarifa_flete: Number(p.precio_peso),
+            flete_total: Number(p.flete_subtotal),
+            es_personalizado: false
+        })),
+        resumen: {
+            total_peso: carga.productos.reduce((s, p) => s + Number(p.peso_total), 0),
+            total_flete: Number(carga.flete_total)
+        }
+    };
+
+    if (!window.cargasPorViaje[idViaje]) {
+        window.cargasPorViaje[idViaje] = [];
+    }
+    window.cargasPorViaje[idViaje].push(nuevaCarga);
+
+    reservarCargaAlmacen(carga.id_carga, idViaje);
+
+    renderizarCargasViaje(idViaje);
+    guardarEstadoEnLocalStorage(idViaje);
+
+    cerrarModalCargasPendientes();
+
+    if (window.Swal) {
+        Swal.fire({ icon: 'success', title: 'Carga añadida', timer: 1200, showConfirmButton: false });
+    }
+}
+
+function agregarBloqueProducto(prodInicial = null) {
+    const contenedor = document.getElementById('contenedor-items-carga');
+    const idBloque = 'bloque-prod-' + Date.now() + Math.floor(Math.random() * 100);
+
+    // Opciones de productos
+    let optionsProductosHTML = '<option value="">Seleccione producto...</option>';
+    window.opcionesProductos.forEach(p => {
+        optionsProductosHTML += `<option value="${p.id_producto}">${p.nombre}</option>`;
+    });
+
+    const html = `
+        <div id="${idBloque}" class="bloque-producto" style="border: 1px solid var(--border-light); padding: 16px; border-radius: var(--radius-md); background-color: #fafafa; position: relative;">
+            
+            <button type="button" onclick="eliminarBloqueProducto('${idBloque}')" style="position: absolute; top: 12px; right: 12px; background: none; border: none; color: #ef4444; font-size: 16px; cursor: pointer;" title="Eliminar producto">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+
+            <div style="display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 12px;">Producto</label>
+                    <select class="form-control prod-select" required>
+                        ${optionsProductosHTML}
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 12px;">Marca Visual</label>
+                    <input type="text" class="form-control prod-marca" placeholder="Ej. Marca Azul" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 12px;">Cantidad</label>
+                    <input type="number" min="1" step="1" class="form-control prod-cant" placeholder="0" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 12px;">Peso x U. (kg)</label>
+                    <input type="number" min="0.01" step="0.01" class="form-control prod-peso" placeholder="0.00" required>
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px; padding-top: 12px; border-top: 1px dashed var(--border-light);">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer; margin-bottom: 0;">
+                    <input type="checkbox" class="prod-check-flete" style="width: 16px; height: 16px;">
+                    Flete personalizado para este producto
+                </label>
+                <div style="flex: 1; max-width: 200px;">
+                    <div class="input-group" style="display: flex; align-items: center;">
+                        <span style="padding: 0 8px; font-size: 13px; color: var(--text-muted);">S/</span>
+                        <input type="number" step="0.01" class="form-control prod-flete-custom" placeholder="0.00" disabled style="padding-left: 4px;">
+                        <span style="padding: 0 8px; font-size: 13px; color: var(--text-muted);">/ kg</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 24px; padding: 12px; background-color: var(--brand-blue-light); border-radius: var(--radius-md);">
+                <div style="font-size: 13px; color: var(--text-secondary);">
+                    Peso Total: <strong class="texto-peso-total" style="color: var(--text-primary);">0.00 kg</strong>
+                </div>
+                <div style="font-size: 13px; color: var(--text-secondary);">
+                    Flete Calculado: <strong class="texto-flete-calculado" style="color: var(--brand-blue);">S/ 0.00</strong>
+                </div>
+            </div>
+
+        </div>
+    `;
+
+    // Inyectar al final
+    contenedor.insertAdjacentHTML('beforeend', html);
+
+    // Asignar eventos en tiempo real a este nuevo bloque
+    const bloqueEl = document.getElementById(idBloque);
+    
+    const inputCant = bloqueEl.querySelector('.prod-cant');
+    const inputPeso = bloqueEl.querySelector('.prod-peso');
+    const inputMarca = bloqueEl.querySelector('.prod-marca');
+    const checkFlete = bloqueEl.querySelector('.prod-check-flete');
+    const inputFleteCustom = bloqueEl.querySelector('.prod-flete-custom');
+
+    // Poblar si es edición
+    if (prodInicial) {
+        const selectEl = bloqueEl.querySelector('.prod-select');
+        selectEl.value = prodInicial.id_producto;
+        inputMarca.value = prodInicial.marca_visual || '';
+        inputCant.value = prodInicial.cantidad;
+        inputPeso.value = prodInicial.peso_unidad;
+        
+        if (prodInicial.es_personalizado) {
+            checkFlete.checked = true;
+            inputFleteCustom.disabled = false;
+            inputFleteCustom.required = true;
+            inputFleteCustom.value = prodInicial.tarifa_flete;
+        }
+    }
+
+    const inputsReactivoss = [inputCant, inputPeso, inputFleteCustom];
+    inputsReactivoss.forEach(inp => inp.addEventListener('input', () => calcularTotalesBloque(bloqueEl)));
+
+    checkFlete.addEventListener('change', (e) => {
+        if (e.target.checked) {
+            inputFleteCustom.disabled = false;
+            inputFleteCustom.required = true;
+        } else {
+            inputFleteCustom.disabled = true;
+            inputFleteCustom.required = false;
+            inputFleteCustom.value = '';
+        }
+        calcularTotalesBloque(bloqueEl);
+    });
+
+    // Calcular inicial
+    calcularTotalesBloque(bloqueEl);
+}
+
+function eliminarBloqueProducto(idBloque) {
+    const bloque = document.getElementById(idBloque);
+    if (bloque) {
+        bloque.remove();
+    }
+}
+
+function calcularTotalesBloque(bloqueEl) {
+    if (!window.idViajeModalActivo) return;
+
+    const vistaViaje = document.getElementById(window.idViajeModalActivo);
+    const fleteGlobal = parseFloat(vistaViaje.querySelector('.flete-global-input').value) || 0;
+
+    const cant = parseFloat(bloqueEl.querySelector('.prod-cant').value) || 0;
+    const pesoU = parseFloat(bloqueEl.querySelector('.prod-peso').value) || 0;
+    const isCustom = bloqueEl.querySelector('.prod-check-flete').checked;
+    const fleteCustom = parseFloat(bloqueEl.querySelector('.prod-flete-custom').value) || 0;
+
+    // Fórmulas
+    const pesoTotal = cant * pesoU;
+    const tarifaAplicada = isCustom && fleteCustom > 0 ? fleteCustom : fleteGlobal;
+    const fleteCalculado = pesoTotal * tarifaAplicada;
+
+    // Actualizar Textos
+    bloqueEl.querySelector('.texto-peso-total').textContent = `${pesoTotal.toFixed(2)} kg`;
+    bloqueEl.querySelector('.texto-flete-calculado').textContent = `S/ ${fleteCalculado.toFixed(2)}`;
+    
+    // Guardar dataset para acceso rápido después
+    bloqueEl.dataset.pesoTotal = pesoTotal;
+    bloqueEl.dataset.tarifa = tarifaAplicada;
+    bloqueEl.dataset.fleteCalculado = fleteCalculado;
+}
+
+function guardarCargaEnMemoria() {
+    const idRemitente = document.getElementById('select-remitente-modal').value;
+    const idDestinatario = document.getElementById('select-destinatario-modal').value;
+
+    if (!idRemitente || !idDestinatario) {
+        Swal.fire({ icon: 'warning', title: 'Faltan datos', text: 'Seleccione Remitente y Destinatario.' });
+        return;
+    }
+
+    if (idRemitente === idDestinatario) {
+        Swal.fire({ icon: 'warning', title: 'Inconsistencia', text: 'El remitente no puede ser igual al destinatario.' });
+        return;
+    }
+
+    const bloques = document.querySelectorAll('#contenedor-items-carga .bloque-producto');
+    if (bloques.length === 0) {
+        Swal.fire({ icon: 'warning', title: 'Sin productos', text: 'Añada al menos un producto a la carga.' });
+        return;
+    }
+
+    let productos = [];
+    let hayErrores = false;
+    let sumaPesoTotal = 0;
+    let sumaFleteTotal = 0;
+    
+    const vistaViaje = document.getElementById(window.idViajeModalActivo);
+    const tarifaTransportista = parseFloat(vistaViaje.querySelector('.tarifa-transportista-input').value) || 0;
+    let productoConPerdida = null;
+
+    bloques.forEach(b => {
+        const idProd = b.querySelector('.prod-select').value;
+        const nombreProd = b.querySelector('.prod-select').options[b.querySelector('.prod-select').selectedIndex].text;
+        const marca = b.querySelector('.prod-marca').value.trim();
+        const cant = parseFloat(b.querySelector('.prod-cant').value);
+        const pesoU = parseFloat(b.querySelector('.prod-peso').value);
+
+        if (!idProd || !marca || isNaN(cant) || cant <= 0 || isNaN(pesoU) || pesoU <= 0) {
+            hayErrores = true;
+        } else {
+            const pesoTot = parseFloat(b.dataset.pesoTotal || 0);
+            const fleteTot = parseFloat(b.dataset.fleteCalculado || 0);
+            const tarifa = parseFloat(b.dataset.tarifa || 0);
+
+            const isCustom = b.querySelector('.prod-check-flete').checked;
+
+            if (isCustom && tarifa < tarifaTransportista) {
+                productoConPerdida = tarifa;
+            }
+
+            sumaPesoTotal += pesoTot;
+            sumaFleteTotal += fleteTot;
+
+            productos.push({
+                id_producto: idProd,
+                nombre_producto: nombreProd,
+                marca_visual: marca,
+                cantidad: cant,
+                peso_unidad: pesoU,
+                peso_total: pesoTot,
+                tarifa_flete: tarifa,
+                flete_total: fleteTot,
+                es_personalizado: isCustom
+            });
+        }
+    });
+
+    if (hayErrores) {
+        Swal.fire({ icon: 'error', title: 'Datos inválidos', text: 'Revise que todos los productos seleccionados tengan marca visual, cantidad y peso mayor a cero.' });
+        return;
+    }
+
+    const procesarGuardado = () => {
+        const remNombre = document.getElementById('select-remitente-modal').options[document.getElementById('select-remitente-modal').selectedIndex].text;
+        const destNombre = document.getElementById('select-destinatario-modal').options[document.getElementById('select-destinatario-modal').selectedIndex].text;
+
+        const nuevaCarga = {
+            id_carga_temp: 'carga-' + Date.now(),
+            id_remitente: idRemitente,
+            nombre_remitente: remNombre,
+            id_destinatario: idDestinatario,
+            nombre_destinatario: destNombre,
+            productos: productos,
+            resumen: {
+                total_peso: sumaPesoTotal,
+                total_flete: sumaFleteTotal
+            }
+        };
+
+        const idViajeActual = window.idViajeModalActivo;
+        const idCargaEditandoActiva = window.idCargaEditandoActiva;
+
+        // Busca otra carga manual (no las traídas de almacén, que ya están ligadas
+        // a un id_carga real y no se pueden "absorber" productos ajenos) del mismo
+        // viaje con idéntico remitente y destinatario, para ofrecer fusionarla.
+        const cargaDuplicada = (window.cargasPorViaje[idViajeActual] || []).find(c =>
+            !c.es_carga_existente &&
+            c.id_carga_temp !== idCargaEditandoActiva &&
+            String(c.id_remitente) === String(idRemitente) &&
+            String(c.id_destinatario) === String(idDestinatario)
+        );
+
+        const guardarSeparada = () => {
+            if (idCargaEditandoActiva) {
+                const index = window.cargasPorViaje[idViajeActual].findIndex(c => c.id_carga_temp === idCargaEditandoActiva);
+                if (index !== -1) {
+                    nuevaCarga.id_carga_temp = idCargaEditandoActiva;
+                    window.cargasPorViaje[idViajeActual][index] = nuevaCarga;
+                }
+            } else {
+                window.cargasPorViaje[idViajeActual].push(nuevaCarga);
+            }
+
+            cerrarModalNuevaCarga();
+            renderizarCargasViaje(idViajeActual);
+            guardarEstadoEnLocalStorage(idViajeActual);
+        };
+
+        const fusionarConDuplicada = () => {
+            // Si se estaba editando una carga distinta a la duplicada, esa carga
+            // "desaparece" porque sus productos pasan a formar parte de la otra.
+            if (idCargaEditandoActiva) {
+                window.cargasPorViaje[idViajeActual] = window.cargasPorViaje[idViajeActual]
+                    .filter(c => c.id_carga_temp !== idCargaEditandoActiva);
+            }
+
+            cargaDuplicada.productos = cargaDuplicada.productos.concat(productos);
+            cargaDuplicada.resumen.total_peso += sumaPesoTotal;
+            cargaDuplicada.resumen.total_flete += sumaFleteTotal;
+
+            cerrarModalNuevaCarga();
+            renderizarCargasViaje(idViajeActual);
+            guardarEstadoEnLocalStorage(idViajeActual);
+            resaltarCargaFusionada(cargaDuplicada.id_carga_temp);
+        };
+
+        if (cargaDuplicada) {
+            Swal.fire({
+                title: 'Ya existe una carga igual',
+                html: `Se encontró otra carga con el mismo remitente y destinatario:<br><strong>${cargaDuplicada.nombre_remitente} &rarr; ${cargaDuplicada.nombre_destinatario}</strong><br><br>¿Deseas fusionar estos productos en esa carga o mantenerla por separado?`,
+                icon: 'question',
+                showDenyButton: true,
+                showCancelButton: true,
+                confirmButtonColor: '#0f4c81',
+                denyButtonColor: '#64748b',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: 'Fusionar en esa carga',
+                denyButtonText: 'Mantener separado',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fusionarConDuplicada();
+                } else if (result.isDenied) {
+                    guardarSeparada();
+                }
+                // Si cancela, no se hace nada y el modal de la carga sigue abierto.
+            });
+            return;
+        }
+
+        guardarSeparada();
+    };
+
+    if (productoConPerdida !== null) {
+        if (window.Swal) {
+            Swal.fire({
+                title: 'Atención',
+                text: `El flete personalizado (S/ ${productoConPerdida.toFixed(2)}) es menor al costo del transportista (S/ ${tarifaTransportista.toFixed(2)}). Este producto generará pérdidas. ¿Desea registrarlo de todos modos?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Sí, registrar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    procesarGuardado();
+                }
+            });
+        } else {
+            if (confirm(`Atención: El flete personalizado (S/ ${productoConPerdida.toFixed(2)}) es menor al costo del transportista (S/ ${tarifaTransportista.toFixed(2)}). Este producto generará pérdidas. ¿Desea registrarlo de todos modos?`)) {
+                procesarGuardado();
+            }
+        }
+    } else {
+        procesarGuardado();
+    }
+}
+
+function renderizarCargasViaje(idViaje) {
+    const vista = document.getElementById(idViaje);
+    if (!vista) return;
+
+    const contenedorCargas = vista.querySelector('.contenedor-cargas-renderizadas');
+    const estadoVacio = vista.querySelector('.estado-vacio-cargas');
+    const listaCargas = window.cargasPorViaje[idViaje] || [];
+
+    if (listaCargas.length === 0) {
+        contenedorCargas.style.display = 'none';
+        estadoVacio.style.display = 'flex';
+        contenedorCargas.innerHTML = '';
+        actualizarTotalesGenerales(vista, listaCargas);
+        return;
+    }
+
+    // Hay cargas
+    estadoVacio.style.display = 'none';
+    contenedorCargas.style.display = 'flex';
+    contenedorCargas.innerHTML = '';
+
+    listaCargas.forEach((carga, index) => {
+        let tbodyHtml = '';
+        let totalCant = 0;
+        carga.productos.forEach(p => {
+            totalCant += p.cantidad;
+            const badgePersonalizado = p.es_personalizado ? `<span style="background: #fef3c7; color: #b45309; padding: 2px 6px; border-radius: 12px; font-size: 10px; font-weight: 600; margin-left: 8px;">Personalizado</span>` : '';
+            tbodyHtml += `
+                <tr style="border-bottom: 1px solid var(--border-light);">
+                    <td style="padding: 14px 16px; font-size: 13px; font-weight: 600; color: var(--text-primary); text-transform: uppercase;">${p.nombre_producto}${badgePersonalizado}</td>
+                    <td style="padding: 14px 16px; font-size: 13px; color: var(--text-secondary);">${p.marca_visual}</td>
+                    <td style="padding: 14px 16px; font-size: 13px; text-align: center; color: var(--text-secondary);">${p.cantidad}</td>
+                    <td style="padding: 14px 16px; font-size: 13px; text-align: right; color: var(--text-secondary);">${p.peso_unidad.toFixed(0)} kg</td>
+                    <td style="padding: 14px 16px; font-size: 13px; text-align: right; font-weight: 700; color: var(--text-primary);">${p.peso_total.toFixed(2)} kg</td>
+                    <td style="padding: 14px 16px; font-size: 13px; text-align: right; color: var(--text-secondary);">S/ ${p.tarifa_flete.toFixed(2)}</td>
+                    <td style="padding: 14px 16px; font-size: 13px; text-align: right; font-weight: 700; color: var(--brand-blue);">S/ ${p.flete_total.toFixed(2)}</td>
+                </tr>
+            `;
+        });
+
+        const cardHtml = `
+            <div id="carga-card-${carga.id_carga_temp}" style="border: 1px solid var(--border-light); border-radius: var(--radius-lg); background: #fff; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 16px;">
+                <div style="padding: 12px 16px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center;">
+                        <span style="background-color: #e0f2fe; color: var(--brand-blue); padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 12px;">Carga ${index + 1}</span>
+                        ${carga.nombre_remitente} <span style="color: var(--text-muted); margin: 0 12px;">&rarr;</span> ${carga.nombre_destinatario}
+                        ${carga.es_carga_existente ? '<span class="badge-desde-almacen">Desde Almacén</span>' : ''}
+                    </div>
+                    <div>
+                        ${carga.es_carga_existente ? '' : `<button class="btn-action btn-edit" onclick="editarCargaDeMemoria('${idViaje}', '${carga.id_carga_temp}')" title="Editar" style="color: var(--text-muted); cursor: pointer;"><i class="fas fa-pencil-alt"></i></button>`}
+                        <button class="btn-action btn-delete" onclick="eliminarCargaDeMemoria('${idViaje}', '${carga.id_carga_temp}')" title="Eliminar" style="color: var(--text-muted); cursor: pointer;"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                </div>
+                
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead style="border-bottom: 1px solid var(--border-light);">
+                            <tr>
+                                <th style="padding: 12px 16px; text-align: left; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Producto</th>
+                                <th style="padding: 12px 16px; text-align: left; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Marca Visual</th>
+                                <th style="padding: 12px 16px; text-align: center; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Cant.</th>
+                                <th style="padding: 12px 16px; text-align: right; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Peso (u)</th>
+                                <th style="padding: 12px 16px; text-align: right; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Kilos Tot.</th>
+                                <th style="padding: 12px 16px; text-align: right; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Flete x Kg</th>
+                                <th style="padding: 12px 16px; text-align: right; font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Flete Tot.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tbodyHtml}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="2" style="padding: 16px; text-align: left; font-size: 14px; font-weight: 700; color: var(--text-primary);">Totales de Carga</td>
+                                <td style="padding: 16px; text-align: center; font-size: 14px; font-weight: 700; color: var(--brand-blue);">${totalCant} und</td>
+                                <td></td>
+                                <td style="padding: 16px; text-align: right; font-size: 14px; font-weight: 700; color: var(--brand-blue);">${carga.resumen.total_peso.toFixed(2)} kg</td>
+                                <td></td>
+                                <td style="padding: 16px; text-align: right; font-size: 15px; font-weight: 700; color: #16a34a;">S/ ${carga.resumen.total_flete.toFixed(2)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        `;
+        
+        contenedorCargas.insertAdjacentHTML('beforeend', cardHtml);
+    });
+
+    actualizarTotalesGenerales(vista, listaCargas);
+}
+
+function resaltarCargaFusionada(idCargaTemp) {
+    const el = document.getElementById(`carga-card-${idCargaTemp}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('carga-fusion-destacada');
+    setTimeout(() => el.classList.remove('carga-fusion-destacada'), 3000);
+}
+
+function actualizarTotalesGenerales(vista, listaCargas) {
+    let pesoTotalViaje = 0;
+    let fleteTotalViaje = 0;
+    
+    listaCargas.forEach(c => {
+        pesoTotalViaje += c.resumen.total_peso;
+        fleteTotalViaje += c.resumen.total_flete;
+    });
+
+    const tarifaTransp = parseFloat(vista.querySelector('.tarifa-transportista-input').value) || 0;
+    const pagoTransportista = pesoTotalViaje * tarifaTransp;
+    const ganancia = fleteTotalViaje - pagoTransportista;
+
+    const spanPeso = vista.querySelector('.texto-peso-total-viaje');
+    const spanFlete = vista.querySelector('.texto-flete-total-viaje');
+    const spanPago = vista.querySelector('.texto-pago-transportista');
+    const spanGanancia = vista.querySelector('.texto-ganancia-proyectada');
+    
+    if (spanPeso) spanPeso.textContent = pesoTotalViaje.toFixed(2);
+    if (spanFlete) spanFlete.textContent = fleteTotalViaje.toFixed(2);
+    if (spanPago) spanPago.textContent = pagoTransportista.toFixed(2);
+    if (spanGanancia) spanGanancia.textContent = ganancia.toFixed(2);
+
+    const badgeContador = vista.querySelector('.badge-contador-cargas');
+    if (badgeContador) {
+        if (listaCargas.length > 0) {
+            badgeContador.textContent = listaCargas.length;
+            badgeContador.style.display = 'inline-block';
+        } else {
+            badgeContador.style.display = 'none';
+        }
+    }
+}
+
+function eliminarCargaDeMemoria(idViaje, idCargaTemp) {
+    const cargaAEliminar = (window.cargasPorViaje[idViaje] || []).find(c => c.id_carga_temp === idCargaTemp);
+
+    const ejecutarEliminacion = () => {
+        if (window.cargasPorViaje[idViaje]) {
+            window.cargasPorViaje[idViaje] = window.cargasPorViaje[idViaje].filter(c => c.id_carga_temp !== idCargaTemp);
+            // Si era una carga de almacén, se libera la reserva de inmediato para que
+            // vuelva a estar disponible para cualquier otra pestaña/ventana.
+            if (cargaAEliminar && cargaAEliminar.es_carga_existente) {
+                liberarCargaAlmacen(cargaAEliminar.id_carga_real);
+            }
+            renderizarCargasViaje(idViaje);
+            guardarEstadoEnLocalStorage(idViaje);
+        }
+    };
+
+    if (window.Swal) {
+        Swal.fire({
+            title: '¿Eliminar carga?',
+            text: "Se quitará esta carga del viaje actual",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                ejecutarEliminacion();
+            }
+        });
+    } else {
+        if (confirm("¿Estás seguro de eliminar esta carga?")) {
+            ejecutarEliminacion();
+        }
+    }
+}
+
+function editarCargaDeMemoria(idViaje, idCargaTemp) {
+    const vistaViaje = document.getElementById(idViaje);
+    if (!vistaViaje) return;
+
+    // Buscar la carga en memoria
+    const listaCargas = window.cargasPorViaje[idViaje] || [];
+    const cargaAEditar = listaCargas.find(c => c.id_carga_temp === idCargaTemp);
+    if (!cargaAEditar) return;
+
+    // Preparar estado
+    window.idViajeModalActivo = idViaje;
+    window.idCargaEditandoActiva = idCargaTemp; 
+
+    // Leer Flete Global
+    const inputFleteGlobal = vistaViaje.querySelector('.flete-global-input');
+    const fleteGlobal = parseFloat(inputFleteGlobal.value) || 0;
+
+    // Preparar UI del modal
+    document.querySelector('#modalNuevaCarga h3').textContent = "Editar Carga";
+    document.getElementById('texto-flete-global-modal').textContent = `S/ ${fleteGlobal.toFixed(2)}`;
+    document.getElementById('select-remitente-modal').value = cargaAEditar.id_remitente;
+    document.getElementById('select-destinatario-modal').value = cargaAEditar.id_destinatario;
+    
+    const contenedorItems = document.getElementById('contenedor-items-carga');
+    contenedorItems.innerHTML = ''; // Limpiar bloques anteriores
+
+    // Inyectar bloques con los datos existentes
+    cargaAEditar.productos.forEach(prod => {
+        agregarBloqueProducto(prod);
+    });
+
+    // Mostrar Modal
+    document.getElementById('modalNuevaCarga').style.display = 'flex';
+}
+
+/* ==========================================================
+   PERSISTENCIA (LOCALSTORAGE) Y BACKEND (REGISTRO FINAL)
+   ========================================================== */
+
+function guardarEstadoEnLocalStorage(idViaje) {
+    const vista = document.getElementById(idViaje);
+    if (!vista) return;
+
+    const data = {
+        idViaje: idViaje,
+        camion: vista.querySelector('.select-camion') ? vista.querySelector('.select-camion').value : '',
+        ruta: vista.querySelector('.select-ruta') ? vista.querySelector('.select-ruta').value : '',
+        fecha_salida: vista.querySelector('.fecha-salida-input') ? vista.querySelector('.fecha-salida-input').value : '',
+        flete_global: vista.querySelector('.flete-global-input') ? vista.querySelector('.flete-global-input').value : '',
+        tarifa_transportista: vista.querySelector('.tarifa-transportista-input') ? vista.querySelector('.tarifa-transportista-input').value : '',
+        tiene_adelanto: vista.querySelector('.chk-adelanto') ? vista.querySelector('.chk-adelanto').checked : false,
+        monto_adelanto: vista.querySelector('.input-monto-adelanto') ? vista.querySelector('.input-monto-adelanto').value : '',
+        metodo_adelanto: vista.querySelector('.select-metodo-adelanto') ? vista.querySelector('.select-metodo-adelanto').value : 'Efectivo',
+        id_cuenta_adelanto: vista.querySelector('.select-cuenta-adelanto') ? vista.querySelector('.select-cuenta-adelanto').value : '',
+        numero_operacion: vista.querySelector('.input-operacion-adelanto') ? vista.querySelector('.input-operacion-adelanto').value : '',
+        cargas: window.cargasPorViaje[idViaje] || []
+    };
+
+    localStorage.setItem(`joselito_viaje_${idViaje}`, JSON.stringify(data));
+    
+    let pestañasActivas = JSON.parse(localStorage.getItem('joselito_pestañas_viajes') || '[]');
+    if (!pestañasActivas.includes(idViaje)) {
+        pestañasActivas.push(idViaje);
+        localStorage.setItem('joselito_pestañas_viajes', JSON.stringify(pestañasActivas));
+    }
+}
+
+function restaurarEstadoDesdeLocalStorage() {
+    const pestañasActivas = JSON.parse(localStorage.getItem('joselito_pestañas_viajes') || '[]');
+    
+    if (pestañasActivas.length > 0) {
+        mostrarPantallaInicioViaje();
+        
+        let maxContador = 0;
+        
+        pestañasActivas.forEach(idViaje => {
+            const dataStr = localStorage.getItem(`joselito_viaje_${idViaje}`);
+            if (dataStr) {
+                const data = JSON.parse(dataStr);
+                
+                const num = parseInt(idViaje.replace('vista-viaje-', ''));
+                if (num > maxContador) maxContador = num;
+                
+                contadorViajes = num - 1; 
+                crearNuevaPestaniaViaje(true); 
+                
+                const vista = document.getElementById(idViaje);
+                if (vista) {
+                    if(data.camion) vista.querySelector('.select-camion').value = data.camion;
+                    if(data.ruta) vista.querySelector('.select-ruta').value = data.ruta;
+                    if(data.fecha_salida) vista.querySelector('.fecha-salida-input').value = data.fecha_salida;
+                    if(data.flete_global) vista.querySelector('.flete-global-input').value = data.flete_global;
+                    if(data.tarifa_transportista) vista.querySelector('.tarifa-transportista-input').value = data.tarifa_transportista;
+                    
+                    if(data.tiene_adelanto) {
+                        const chk = vista.querySelector('.chk-adelanto');
+                        if (chk) {
+                            chk.checked = true;
+                            vista.querySelector('.contenedor-campos-adelanto').style.display = 'flex';
+                            vista.querySelector('.input-monto-adelanto').required = true;
+                            if (data.monto_adelanto) vista.querySelector('.input-monto-adelanto').value = data.monto_adelanto;
+                            if (data.metodo_adelanto) {
+                                vista.querySelector('.select-metodo-adelanto').value = data.metodo_adelanto;
+                                if (data.metodo_adelanto !== 'Efectivo') {
+                                    vista.querySelector('.cont-campos-extra-adelanto').style.display = 'flex';
+                                    vista.querySelector('.input-operacion-adelanto').required = true;
+                                    if (data.numero_operacion) {
+                                        vista.querySelector('.input-operacion-adelanto').value = data.numero_operacion;
+                                    }
+                                    const selectCuentaAdelanto = vista.querySelector('.select-cuenta-adelanto');
+                                    if (selectCuentaAdelanto) {
+                                        selectCuentaAdelanto.required = true;
+                                        poblarSelectCuentaAdelanto(selectCuentaAdelanto, data.metodo_adelanto);
+                                        if (data.id_cuenta_adelanto) selectCuentaAdelanto.value = data.id_cuenta_adelanto;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    window.cargasPorViaje[idViaje] = data.cargas || [];
+                    renderizarCargasViaje(idViaje);
+                    
+                    if (data.flete_global) {
+                        vista.querySelector('.flete-global-input').dispatchEvent(new Event('input'));
+                    }
+                }
+            }
+        });
+        
+        refrescarSelectsCamionTodasLasPestanias();
+
+        contadorViajes = maxContador;
+        activarPestania(pestañasActivas[pestañasActivas.length - 1]);
+    }
+}
+
+async function registrarViajeBackend(btn) {
+    const idViaje = btn.closest('.vista-viaje').id;
+    const vista = document.getElementById(idViaje);
+    
+    const camion = vista.querySelector('.select-camion').value;
+    const ruta = vista.querySelector('.select-ruta').value;
+    const fecha_salida = vista.querySelector('.fecha-salida-input').value;
+    const flete_global = vista.querySelector('.flete-global-input').value;
+    const tarifa_transportista = vista.querySelector('.tarifa-transportista-input').value;
+    const tiene_adelanto = vista.querySelector('.chk-adelanto') ? vista.querySelector('.chk-adelanto').checked : false;
+    const monto_adelanto = vista.querySelector('.input-monto-adelanto') ? vista.querySelector('.input-monto-adelanto').value : '';
+    const metodo_adelanto = vista.querySelector('.select-metodo-adelanto') ? vista.querySelector('.select-metodo-adelanto').value : '';
+    const id_cuenta_adelanto = vista.querySelector('.select-cuenta-adelanto') ? vista.querySelector('.select-cuenta-adelanto').value : '';
+    const numero_operacion = vista.querySelector('.input-operacion-adelanto') ? vista.querySelector('.input-operacion-adelanto').value : '';
+    const fileEvidencia = vista.querySelector('.input-evidencia-adelanto');
+    const cargas = window.cargasPorViaje[idViaje] || [];
+
+    if (!camion || !ruta || !fecha_salida || !flete_global || !tarifa_transportista) {
+        Swal.fire({ icon: 'warning', title: 'Datos incompletos', text: 'Por favor, llene todos los campos de Detalles del Viaje.' });
+        return;
+    }
+
+    if (tiene_adelanto && metodo_adelanto !== 'Efectivo' && !numero_operacion) {
+        Swal.fire({ icon: 'warning', title: 'Datos incompletos', text: 'Por favor, ingrese el N° de Operación para el adelanto.' });
+        return;
+    }
+
+    if (tiene_adelanto && metodo_adelanto !== 'Efectivo' && !id_cuenta_adelanto) {
+        Swal.fire({ icon: 'warning', title: 'Datos incompletos', text: 'Por favor, seleccione la cuenta o billetera desde donde sale el adelanto.' });
+        return;
+    }
+    
+    if (cargas.length === 0) {
+        Swal.fire({ icon: 'warning', title: 'Sin cargas', text: 'Agregue al menos una carga al viaje.' });
+        return;
+    }
+    
+    const textoOriginalBtn = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i> Procesando...';
+
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+
+        if (tiene_adelanto && Number(monto_adelanto) > 0) {
+            const resumenCuentas = await obtenerResumenCuentasFinanciero();
+            const saldoDisponible = resolverSaldoDisponible(resumenCuentas, metodo_adelanto, id_cuenta_adelanto, id_cuenta_adelanto);
+
+            if (Number(monto_adelanto) > saldoDisponible) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Fondos Insuficientes',
+                    text: `El método de pago seleccionado para el adelanto solo tiene S/ ${saldoDisponible.toFixed(2)} disponible.`
+                });
+                btn.disabled = false;
+                btn.innerHTML = textoOriginalBtn;
+                return;
+            }
+        }
+
+        const formData = new FormData();
+        formData.append('camion', camion);
+        formData.append('ruta', ruta);
+        formData.append('fecha_salida', fecha_salida);
+        formData.append('flete_global', flete_global);
+        formData.append('tarifa_transportista', tarifa_transportista);
+        formData.append('tiene_adelanto', tiene_adelanto);
+        formData.append('monto_adelanto', monto_adelanto);
+        formData.append('metodo_adelanto', metodo_adelanto);
+        formData.append('cargas', JSON.stringify(cargas));
+        
+        if (tiene_adelanto && metodo_adelanto !== 'Efectivo') {
+            formData.append('numero_operacion', numero_operacion);
+            if (metodo_adelanto === 'Billetera Digital') {
+                formData.append('id_billetera_adelanto', id_cuenta_adelanto);
+            } else {
+                formData.append('id_cuenta_adelanto', id_cuenta_adelanto);
+            }
+            if (fileEvidencia && fileEvidencia.files.length > 0) {
+                formData.append('evidencia', fileEvidencia.files[0]);
+            }
+        }
+
+        const res = await fetch('/api/viajes', {
+            method: 'POST',
+            headers: {
+                'x-user-profile': sessionData.id_perfil || 1
+            },
+            body: formData
+        });
+        
+        const data = await res.json();
+        if (res.ok && data.success) {
+            Swal.fire({ icon: 'success', title: 'Viaje Registrado', text: 'El viaje ha sido guardado exitosamente en el sistema.' }).then(() => {
+                const tabBtn = document.querySelector(`.tab-btn[data-target-id="${idViaje}"]`);
+                if(tabBtn) cerrarPestania(idViaje, tabBtn);
+            });
+        } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: data.message || 'Error al registrar el viaje.' });
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check" style="margin-right: 8px;"></i> Registrar Viaje';
+        }
+    } catch (error) {
+        console.error('Error al registrar viaje:', error);
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo comunicar con el servidor.' });
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check" style="margin-right: 8px;"></i> Registrar Viaje';
+    }
+}
+
+// Hacer disponible globalmente
+window.init_registro_viajes = init_registro_viajes;
+window.mostrarPantallaInicioViaje = mostrarPantallaInicioViaje;
+window.crearNuevaPestaniaViaje = crearNuevaPestaniaViaje;
+window.activarPestania = activarPestania;
+window.cerrarPestania = cerrarPestania;
+window.abrirModalNuevaCarga = abrirModalNuevaCarga;
+window.cerrarModalNuevaCarga = cerrarModalNuevaCarga;
+window.agregarBloqueProducto = agregarBloqueProducto;
+window.eliminarBloqueProducto = eliminarBloqueProducto;
+window.guardarCargaEnMemoria = guardarCargaEnMemoria;
+window.eliminarCargaDeMemoria = eliminarCargaDeMemoria;
+window.editarCargaDeMemoria = editarCargaDeMemoria;
+window.abrirModalCargasPendientes = abrirModalCargasPendientes;
+window.cerrarModalCargasPendientes = cerrarModalCargasPendientes;
+window.toggleDetalleCargaPendiente = toggleDetalleCargaPendiente;
+window.seleccionarCargaAlmacen = seleccionarCargaAlmacen;

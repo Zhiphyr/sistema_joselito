@@ -23,6 +23,8 @@
                     <th class="tabla-th" style="width: 70px;">Ícono</th>
                     <th class="tabla-th">Nombre</th>
                     <th class="tabla-th">Ruta (SPA)</th>
+                    <th class="tabla-th" style="width: 130px;">Categoría</th>
+                    <th class="tabla-th" style="width: 70px;">Orden</th>
                     <th class="tabla-th" style="width: 120px;">Estado</th>
                     <th class="tabla-th" style="width: 160px;">Acciones</th>
                 </tr>
@@ -69,6 +71,26 @@
                     <small style="color: var(--text-secondary); font-size: 11px; margin-top: 6px; display: block;">
                         Busca íconos gratis en <a href="https://fontawesome.com/v6/search?o=r&m=free" target="_blank"
                             style="color: var(--brand-blue); text-decoration: none; font-weight: 600;">FontAwesome</a>.
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="categoria_opcion">Categoría</label>
+                    <input type="text" id="categoria_opcion" name="categoria_opcion" class="form-control"
+                        autocomplete="off" placeholder="Ej. Administración" list="listaCategorias">
+                    <datalist id="listaCategorias"></datalist>
+                    <small style="color: var(--text-secondary); font-size: 11px; margin-top: 6px; display: block;">
+                        Déjalo vacío para que la opción quede a nivel superior en el menú (como Dashboard). Escribe
+                        exactamente el mismo nombre para agrupar varias opciones bajo la misma categoría.
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="orden_opcion">Orden</label>
+                    <input type="number" id="orden_opcion" name="orden_opcion" class="form-control" value="0" step="10">
+                    <small style="color: var(--text-secondary); font-size: 11px; margin-top: 6px; display: block;">
+                        Controla la posición dentro de su categoría y entre categorías en el menú. Usa saltos de 10
+                        (10, 20, 30...) para poder insertar opciones nuevas después sin renumerar todo.
                     </small>
                 </div>
 

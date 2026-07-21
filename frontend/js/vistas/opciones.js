@@ -32,7 +32,7 @@ async function cargarTablaOpciones() {
     const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
     const tbody = document.getElementById('tbody-opciones');
 
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--text-muted);"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
 
     try {
         const response = await fetch('http://localhost:3000/api/opciones', {
@@ -42,9 +42,10 @@ async function cargarTablaOpciones() {
 
         if (response.ok && result.success) {
             window.opcionesCache = result.data;
+            poblarDatalistCategorias();
 
             if (result.data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color: var(--text-muted);">No se encontraron opciones</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--text-muted);">No se encontraron opciones</td></tr>';
                 return;
             }
 
@@ -65,6 +66,8 @@ async function cargarTablaOpciones() {
                         </td>
                         <td class="tabla-td tabla-nombre">${op.nombre}</td>
                         <td class="tabla-td"><span class="tabla-mono">/${op.ruta}</span></td>
+                        <td class="tabla-td">${op.categoria ? op.categoria : '<span style="color: var(--text-muted);">—</span>'}</td>
+                        <td class="tabla-td tabla-mono">${op.orden}</td>
                         <td class="tabla-td">${badgeEstado}</td>
                         <td class="tabla-td">
                             <button class="btn-action btn-edit" onclick="abrirModalEditarOpcion(${op.id_opcion})" title="Editar">
@@ -83,12 +86,23 @@ async function cargarTablaOpciones() {
 
             tbody.innerHTML = filasHTML;
         } else {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:24px; color: #ef4444;">Error: ${result.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color: #ef4444;">Error: ${result.message}</td></tr>`;
         }
     } catch (error) {
         console.error("Error al cargar opciones:", error);
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px; color: #ef4444;">Error de conexión con el servidor</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: #ef4444;">Error de conexión con el servidor</td></tr>';
     }
+}
+
+function poblarDatalistCategorias() {
+    const datalist = document.getElementById('listaCategorias');
+    const categorias = [...new Set(
+        window.opcionesCache
+            .map(op => op.categoria)
+            .filter(c => c && c.trim() !== '')
+    )].sort();
+
+    datalist.innerHTML = categorias.map(c => `<option value="${c}"></option>`).join('');
 }
 
 function abrirModalCrearOpcion() {
@@ -97,6 +111,8 @@ function abrirModalCrearOpcion() {
     document.getElementById('modalTitle').textContent = 'Nueva Opción';
     document.getElementById('previewIcono').innerHTML = '<i class="fas fa-cube"></i>';
     document.getElementById('icono_opcion').value = 'fas fa-cube';
+    document.getElementById('categoria_opcion').value = '';
+    document.getElementById('orden_opcion').value = 0;
     document.getElementById('modalOpcion').style.display = 'flex';
 }
 
@@ -113,6 +129,8 @@ window.abrirModalEditarOpcion = function (id) {
     document.getElementById('ruta_opcion').value = data.ruta;
     document.getElementById('icono_opcion').value = data.icono;
     document.getElementById('previewIcono').innerHTML = `<i class="${data.icono}"></i>`;
+    document.getElementById('categoria_opcion').value = data.categoria || '';
+    document.getElementById('orden_opcion').value = data.orden ?? 0;
 
     document.getElementById('modalTitle').textContent = 'Editar Opción';
     document.getElementById('modalOpcion').style.display = 'flex';
@@ -126,7 +144,9 @@ async function guardarOpcion(e) {
     const datos = {
         nombre: document.getElementById('nombre_opcion').value,
         ruta: document.getElementById('ruta_opcion').value,
-        icono: document.getElementById('icono_opcion').value
+        icono: document.getElementById('icono_opcion').value,
+        categoria: document.getElementById('categoria_opcion').value,
+        orden: parseInt(document.getElementById('orden_opcion').value, 10) || 0
     };
 
     const method = id ? 'PUT' : 'POST';

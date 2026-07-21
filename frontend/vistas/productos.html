@@ -10,18 +10,14 @@
 
 <div class="welcome-card sin-padding">
 
-    <div class="tabla-toolbar">
-        <label for="inputBuscarProducto">Buscar:</label>
-        <input type="text" id="inputBuscarProducto" class="form-control" placeholder="Nombre o descripción...">
-    </div>
-
-    <div class="tabla-scroll">
-        <table class="tabla-modulo">
+    <div class="tabla-scroll" style="margin-top: 15px;">
+        <table id="tabla-productos" class="tabla-modulo display hover" style="width:100%">
             <thead>
                 <tr>
                     <th class="tabla-th" style="width: 60px;">ID</th>
                     <th class="tabla-th">Nombre</th>
                     <th class="tabla-th">Descripción</th>
+                    <th class="tabla-th" style="width: 140px;">Fecha Registro</th>
                     <th class="tabla-th" style="width: 120px;">Estado</th>
                     <th class="tabla-th" style="width: 160px;">Acciones</th>
                 </tr>
@@ -45,20 +41,97 @@
                 <div class="form-group">
                     <label for="nombre_producto">Nombre del Producto <span class="required">*</span></label>
                     <input type="text" id="nombre_producto" name="nombre_producto" class="form-control" required
-                        placeholder="Ej. Cajas estándar">
+                        minlength="3" maxlength="60" placeholder="Ej. CAJA DE MANZANAS">
                 </div>
 
                 <div class="form-group">
                     <label for="descripcion_producto">Descripción</label>
                     <textarea id="descripcion_producto" name="descripcion_producto" class="form-control" rows="3"
-                        placeholder="Detalles opcionales..." style="resize: vertical;"></textarea>
+                        maxlength="250" placeholder="Ej: Saco de 50kg, embalaje de cartón..." style="resize: vertical;"></textarea>
                 </div>
 
                 <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
                     <button type="button" class="btn-secondary" id="btnCancelarModal">Cancelar</button>
-                    <button type="submit" class="btn-primary" style="width: auto; padding: 10px 24px;">Guardar</button>
+                    <button type="submit" class="btn-primary" id="btnGuardarProducto" style="width: auto; padding: 10px 24px;">Guardar</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+<style>
+    /* Estilos modernos para los controles del DataTable */
+    #tabla-productos_wrapper {
+        display: flex;
+        flex-direction: column;
+        padding: 24px 24px 0 24px;
+    }
+    
+    .dt-top-controls {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+        background: #f8fafc;
+        padding: 16px 20px;
+        border-radius: 12px;
+        border: 1px solid var(--border-light);
+    }
+
+    .dt-left-controls {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        flex-wrap: wrap;
+    }
+
+    #tabla-productos_wrapper .dataTables_length,
+    #tabla-productos_wrapper .dataTables_filter {
+        margin: 0 !important;
+        float: none !important;
+        text-align: left !important;
+    }
+
+    #tabla-productos_wrapper .dataTables_length label,
+    #tabla-productos_wrapper .dataTables_filter label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        font-weight: 600;
+        color: var(--text-secondary);
+        font-size: 13px;
+    }
+
+    #tabla-productos_wrapper .dataTables_length select,
+    #tabla-productos_wrapper .dataTables_filter input {
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 13px;
+        outline: none;
+        transition: all 0.2s;
+        background: white;
+    }
+
+    #tabla-productos_wrapper .dataTables_filter input {
+        width: 220px;
+    }
+
+    #tabla-productos_wrapper .dataTables_length select:focus,
+    #tabla-productos_wrapper .dataTables_filter input:focus {
+        border-color: var(--brand-blue);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    /* Paginación y info inferior con padding */
+    .bottom-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 24px;
+        border-top: 1px solid var(--border-light);
+        margin-top: auto;
+    }
+</style>

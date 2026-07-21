@@ -14,18 +14,42 @@ const registrar = async (req, res) => {
     try {
         const { tipo_documento, numero_documento, nombre_razon_social, direccion, telefono, correo } = req.body;
 
-        if (!tipo_documento || !numero_documento || !nombre_razon_social || !direccion || !telefono) {
-            return res.status(400).json({ success: false, message: 'Los campos marcados con * son obligatorios' });
+        if (!tipo_documento || !numero_documento || !nombre_razon_social || !telefono) {
+            return res.status(400).json({ success: false, message: 'Faltan campos obligatorios' });
         }
 
-        if (tipo_documento === 'DNI' && numero_documento.length !== 8) {
-            return res.status(400).json({ success: false, message: 'El DNI debe tener 8 dígitos' });
+        const numDocStr = String(numero_documento).trim();
+        if (tipo_documento === 'DNI' && !/^\d{8}$/.test(numDocStr)) {
+            return res.status(400).json({ success: false, message: 'El DNI debe tener exactamente 8 dígitos numéricos' });
         }
-        if (tipo_documento === 'RUC' && numero_documento.length !== 11) {
-            return res.status(400).json({ success: false, message: 'El RUC debe tener 11 dígitos' });
+        if (tipo_documento === 'RUC' && !/^(10|15|17|20)\d{9}$/.test(numDocStr)) {
+            return res.status(400).json({ success: false, message: 'El RUC debe tener 11 dígitos y comenzar por 10, 15, 17 o 20' });
         }
 
-        const existe = await ClienteModel.findByDocumento(numero_documento);
+        const telefonoStr = String(telefono).trim();
+        if (!/^9\d{8}$/.test(telefonoStr)) {
+            return res.status(400).json({ success: false, message: 'El teléfono debe tener 9 dígitos y empezar con 9' });
+        }
+
+        let dirClean = null;
+        if (direccion && String(direccion).trim() !== '') {
+            dirClean = String(direccion).trim();
+            if (dirClean.length > 150) {
+                return res.status(400).json({ success: false, message: 'La dirección excede los 150 caracteres' });
+            }
+        }
+
+        let correoClean = null;
+        if (correo && String(correo).trim() !== '') {
+            correoClean = String(correo).trim();
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoClean)) {
+                return res.status(400).json({ success: false, message: 'Formato de correo inválido' });
+            }
+        }
+
+        const nombreClean = String(nombre_razon_social).trim();
+
+        const existe = await ClienteModel.findByDocumento(numDocStr);
 
         if (existe) {
             if (existe.estado === 0 || existe.estado === 2) {
@@ -41,7 +65,12 @@ const registrar = async (req, res) => {
         }
 
         const id = await ClienteModel.registrarCliente({
-            tipo_documento, numero_documento, nombre_razon_social, direccion, telefono, correo
+            tipo_documento, 
+            numero_documento: numDocStr, 
+            nombre_razon_social: nombreClean, 
+            direccion: dirClean, 
+            telefono: telefonoStr, 
+            correo: correoClean
         });
 
         return res.status(201).json({ success: true, message: 'Cliente registrado exitosamente', id });
@@ -56,7 +85,7 @@ const actualizar = async (req, res) => {
         const { id } = req.params;
         const { nombre_razon_social, direccion, telefono, correo } = req.body;
 
-        if (!nombre_razon_social || !direccion || !telefono) {
+        if (!telefono) {
             return res.status(400).json({ success: false, message: 'Faltan campos obligatorios' });
         }
 
@@ -65,7 +94,37 @@ const actualizar = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Cliente no encontrado' });
         }
 
-        await ClienteModel.actualizarCliente(id, { nombre_razon_social, direccion, telefono, correo });
+        const telefonoStr = String(telefono).trim();
+        if (!/^9\d{8}$/.test(telefonoStr)) {
+            return res.status(400).json({ success: false, message: 'El teléfono debe tener 9 dígitos y empezar con 9' });
+        }
+
+        let dirClean = null;
+        if (direccion && String(direccion).trim() !== '') {
+            dirClean = String(direccion).trim();
+            if (dirClean.length > 150) {
+                return res.status(400).json({ success: false, message: 'La dirección excede los 150 caracteres' });
+            }
+        }
+
+        let correoClean = null;
+        if (correo && String(correo).trim() !== '') {
+            correoClean = String(correo).trim();
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoClean)) {
+                return res.status(400).json({ success: false, message: 'Formato de correo inválido' });
+            }
+        }
+
+        // El nombre no debería ser modificable, pero si se envía lo limpiamos o simplemente guardamos el original
+        const nombreClean = nombre_razon_social ? String(nombre_razon_social).trim() : cliente.nombre_razon_social;
+
+        await ClienteModel.actualizarCliente(id, { 
+            nombre_razon_social: nombreClean, 
+            direccion: dirClean, 
+            telefono: telefonoStr, 
+            correo: correoClean 
+        });
+        
         return res.status(200).json({ success: true, message: 'Cliente actualizado exitosamente' });
     } catch (error) {
         console.error('Error en actualizar cliente:', error);
@@ -83,6 +142,17 @@ const cambiarEstado = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Cliente no encontrado' });
         }
 
+        if (estado === 0 || estado === 2) {
+            const tieneViajes = await ClienteModel.tieneViajesActivos(id);
+            if (tieneViajes) {
+                return res.status(409).json({ 
+                    success: false, 
+                    status: 'active_trips',
+                    message: 'No se puede desactivar o eliminar el cliente porque está asignado como remitente o destinatario en viajes activos.' 
+                });
+            }
+        }
+
         const afectados = await ClienteModel.cambiarEstadoCliente(id, estado);
 
         if (afectados > 0) {
@@ -96,7 +166,6 @@ const cambiarEstado = async (req, res) => {
         return res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
-
 const consultarDocumento = async (req, res) => {
     try {
         const { tipo, numero } = req.params;

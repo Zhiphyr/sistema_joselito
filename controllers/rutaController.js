@@ -18,8 +18,23 @@ const registrar = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Ciudad de origen y destino son obligatorias' });
         }
 
-        const origenNorm = ciudad_origen.trim().toUpperCase();
-        const destinoNorm = ciudad_destino.trim().toUpperCase();
+        const regexCiudades = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
+        if (!regexCiudades.test(ciudad_origen) || ciudad_origen.length > 50) {
+            return res.status(400).json({ success: false, message: 'La ciudad de origen tiene caracteres inválidos o supera los 50 caracteres.' });
+        }
+        if (!regexCiudades.test(ciudad_destino) || ciudad_destino.length > 50) {
+            return res.status(400).json({ success: false, message: 'La ciudad de destino tiene caracteres inválidos o supera los 50 caracteres.' });
+        }
+
+        if (descripcion) {
+            const regexDesc = /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s,.\n-]+$/;
+            if (!regexDesc.test(descripcion) || descripcion.length > 300) {
+                return res.status(400).json({ success: false, message: 'La descripción contiene caracteres inválidos o supera los 300 caracteres.' });
+            }
+        }
+
+        const origenNorm = ciudad_origen.replace(/\s{2,}/g, ' ').trim().toUpperCase();
+        const destinoNorm = ciudad_destino.replace(/\s{2,}/g, ' ').trim().toUpperCase();
 
         if (origenNorm === destinoNorm) {
             return res.status(400).json({ success: false, message: 'El origen y destino no pueden ser iguales' });
@@ -71,6 +86,13 @@ const actualizar = async (req, res) => {
 
         // Se bloquea explícitamente cualquier intento de actualizar ciudad_origen y ciudad_destino.
         // Solo pasamos descripcion al modelo.
+
+        if (descripcion) {
+            const regexDesc = /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s,.\n-]+$/;
+            if (!regexDesc.test(descripcion) || descripcion.length > 300) {
+                return res.status(400).json({ success: false, message: 'La descripción contiene caracteres inválidos o supera los 300 caracteres.' });
+            }
+        }
         await RutaModel.actualizarRuta(id, { descripcion: descripcion ? descripcion.trim() : null });
         return res.status(200).json({ success: true, message: 'Ruta actualizada exitosamente' });
 
@@ -114,6 +136,18 @@ const cambiarEstado = async (req, res) => {
         const ruta = await RutaModel.obtenerRutaPorId(id);
         if (!ruta) {
             return res.status(404).json({ success: false, message: 'Ruta no encontrada' });
+        }
+
+        // Si se va a desactivar (0) o eliminar (2), validar viajes activos
+        if (estado === 0 || estado === 2) {
+            const tieneViajes = await RutaModel.tieneViajesActivos(id);
+            if (tieneViajes) {
+                return res.status(409).json({ 
+                    success: false, 
+                    status: 'active_trips',
+                    message: 'No se puede desactivar o eliminar la ruta porque está asignada a uno o más viajes activos.' 
+                });
+            }
         }
 
         const afectados = await RutaModel.cambiarEstadoRuta(id, estado);

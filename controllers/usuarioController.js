@@ -24,9 +24,30 @@ const listarPerfilesActivos = async (req, res) => {
 const registrar = async (req, res) => {
     try {
         const { id_perfil, nombre, usuario, clave } = req.body;
+        const id_perfil_logueado = req.headers['x-user-profile'];
+
+        if (parseInt(id_perfil_logueado) !== 1 && parseInt(id_perfil_logueado) !== 2) {
+            return res.status(403).json({ success: false, message: 'Acceso Denegado: No tienes permisos para crear usuarios' });
+        }
 
         if (!id_perfil || !nombre || !usuario || !clave) {
             return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios' });
+        }
+
+        // Validaciones Regex
+        const regexNombre = /^[A-Z\s]{3,70}$/;
+        if (!regexNombre.test(nombre)) {
+            return res.status(400).json({ success: false, message: 'El nombre debe tener entre 3 y 70 caracteres, solo mayúsculas' });
+        }
+
+        const regexUsuario = /^[a-z0-9._]+$/;
+        if (!regexUsuario.test(usuario)) {
+            return res.status(400).json({ success: false, message: 'El usuario solo puede contener letras minúsculas, números, puntos y guiones bajos' });
+        }
+
+        const regexClave = /^(?=.*[A-Z])(?=.*\d)\S{8,}$/;
+        if (!regexClave.test(clave)) {
+            return res.status(400).json({ success: false, message: 'La contraseña debe tener mínimo 8 caracteres, al menos 1 mayúscula y 1 número' });
         }
 
         const existe = await UsuarioModel.findByUsername(usuario);
@@ -51,9 +72,26 @@ const actualizar = async (req, res) => {
     try {
         const { id } = req.params;
         const { id_perfil, nombre, usuario, clave } = req.body;
+        const id_perfil_logueado = req.headers['x-user-profile'];
+        const id_usuario_logueado = req.headers['x-user-id'];
+
+        if (parseInt(id_perfil_logueado) !== 1 && parseInt(id_perfil_logueado) !== 2) {
+            return res.status(403).json({ success: false, message: 'Acceso Denegado: No tienes permisos para editar usuarios' });
+        }
 
         if (!id_perfil || !nombre || !usuario) {
             return res.status(400).json({ success: false, message: 'Nombre, usuario y perfil son obligatorios' });
+        }
+
+        // Validaciones Regex
+        const regexNombre = /^[A-Z\s]{3,70}$/;
+        if (!regexNombre.test(nombre)) {
+            return res.status(400).json({ success: false, message: 'El nombre debe tener entre 3 y 70 caracteres, solo mayúsculas' });
+        }
+
+        const regexUsuario = /^[a-z0-9._]+$/;
+        if (!regexUsuario.test(usuario)) {
+            return res.status(400).json({ success: false, message: 'El usuario solo puede contener letras minúsculas, números, puntos y guiones bajos' });
         }
 
         const usuarioTarget = await UsuarioModel.obtenerUsuarioPorId(id);
@@ -61,14 +99,27 @@ const actualizar = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
         }
 
-        const id_perfil_logueado = req.headers['x-user-profile'];
+        if (usuario !== usuarioTarget.usuario) {
+            const existe = await UsuarioModel.findByUsername(usuario);
+            if (existe) {
+                return res.status(400).json({ success: false, message: 'El nombre de usuario ya está en uso' });
+            }
+        }
 
         if (parseInt(usuarioTarget.id_perfil) === 1 && parseInt(id_perfil_logueado) !== 1) {
             return res.status(403).json({ success: false, message: 'Acceso Denegado: Este usuario está protegido por el sistema' });
         }
 
+        if (parseInt(id) === parseInt(id_usuario_logueado) && parseInt(id_perfil) !== parseInt(usuarioTarget.id_perfil)) {
+            return res.status(403).json({ success: false, message: 'No puedes cambiar tu propio perfil' });
+        }
+
         let hashClave = null;
         if (clave && clave.trim() !== '') {
+            const regexClave = /^(?=.*[A-Z])(?=.*\d)\S{8,}$/;
+            if (!regexClave.test(clave)) {
+                return res.status(400).json({ success: false, message: 'La contraseña debe tener mínimo 8 caracteres, al menos 1 mayúscula y 1 número' });
+            }
             hashClave = await bcrypt.hash(clave, 10);
         }
 
@@ -88,6 +139,11 @@ const cambiarEstado = async (req, res) => {
         const { id } = req.params;
         const { estado } = req.body;
         const id_usuario_logueado = req.headers['x-user-id'];
+        const id_perfil_logueado = req.headers['x-user-profile'];
+
+        if (parseInt(id_perfil_logueado) !== 1 && parseInt(id_perfil_logueado) !== 2) {
+            return res.status(403).json({ success: false, message: 'Acceso Denegado: No tienes permisos para cambiar estados' });
+        }
 
         if (parseInt(id) === parseInt(id_usuario_logueado)) {
             return res.status(400).json({ success: false, message: 'No puedes alterar tu propio estado de cuenta' });
@@ -98,15 +154,13 @@ const cambiarEstado = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
         }
 
-        const id_perfil_logueado = req.headers['x-user-profile'];
-
         if (parseInt(usuarioTarget.id_perfil) === 1) {
             return res.status(403).json({ success: false, message: 'Acceso Denegado: Este usuario no puede ser eliminado ni desactivado' });
         }
 
         if (parseInt(usuarioTarget.id_perfil) === 2 && parseInt(estado) !== 1) {
             if (parseInt(id_perfil_logueado) !== 1) {
-                return res.status(400).json({ success: false, message: 'El administrador principal no puede ser desactivado ni eliminado por este nivel de acceso' });
+                return res.status(400).json({ success: false, message: 'No puedes eliminar o desactivar a un usuario administrador' });
             }
         }
 

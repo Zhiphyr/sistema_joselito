@@ -3,7 +3,7 @@ const db = require('../config/db');
 class ProductoModel {
     static async obtenerProductos() {
         const query = `
-            SELECT id_producto, nombre, descripcion, estado
+            SELECT id_producto, nombre, descripcion, estado, fecha_creacion
             FROM productos
             WHERE estado IN (0, 1)
             ORDER BY id_producto ASC
@@ -42,6 +42,22 @@ class ProductoModel {
         const query = `UPDATE productos SET estado = ? WHERE id_producto = ?`;
         const [result] = await db.query(query, [estado, id_producto]);
         return result.affectedRows;
+    }
+
+    static async tieneViajesActivos(id_producto) {
+        const query = `
+            SELECT COUNT(*) as activeCount 
+            FROM viaje v
+            JOIN carga c ON v.id_viaje = c.id_viaje
+            JOIN detalle_carga dc ON c.id_carga = dc.id_carga
+            WHERE dc.id_producto = ?
+            AND v.estado_operativo IN ('En Ruta', 'Llegó a Destino', 'Descargado', 'Incidencia')
+            AND v.estado = 1
+            AND c.estado = 1
+            AND dc.estado = 1
+        `;
+        const [rows] = await db.query(query, [id_producto]);
+        return rows[0].activeCount > 0;
     }
 }
 

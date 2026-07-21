@@ -12,24 +12,79 @@ window.init_camiones = function () {
     document.getElementById('formCamion').addEventListener('submit', guardarCamion);
     document.getElementById('btnBuscarDocCamion').addEventListener('click', buscarDocumentoConductorCamion);
 
-    // Forzar placa en mayúsculas mientras el usuario escribe
-    document.getElementById('placa_camion').addEventListener('input', function () {
-        this.value = this.value.toUpperCase();
+    // Formateo y validación en tiempo real para Nombre
+    document.getElementById('nombre_camion').addEventListener('input', function () {
+        let val = this.value;
+        val = val.replace(/[^a-zA-Z0-9 \-ñÑáéíóúÁÉÍÓÚ]/g, ''); // Solo letras, nums, espacios y guiones
+        val = val.replace(/\s{2,}/g, ' '); // Colapsar espacios
+        // Capitalizar primera letra de cada palabra
+        val = val.replace(/\b\w/g, char => char.toUpperCase());
+        this.value = val;
+        
+        if (val.trim().length < 3 || val.trim().length > 50) {
+            this.style.borderColor = '#ef4444';
+        } else {
+            this.style.borderColor = '#10b981';
+        }
     });
 
-    // Buscador en tiempo real
-    document.getElementById('inputBuscarCamion').addEventListener('keyup', function (e) {
-        const texto = e.target.value.toLowerCase();
-        const filas = document.querySelectorAll('#tbody-camiones tr');
-        filas.forEach(fila => {
-            fila.style.display = fila.textContent.toLowerCase().includes(texto) ? '' : 'none';
-        });
+    // Formateo y validación para Placa
+    document.getElementById('placa_camion').addEventListener('input', function () {
+        let val = this.value.toUpperCase();
+        val = val.replace(/[^A-Z0-9\-]/g, ''); // Sin espacios, solo alfanuméricos y guion
+        this.value = val;
+
+        const placaRegex = /^[A-Z0-9]{3}-\d{3}$/;
+        if (!placaRegex.test(val)) {
+            this.style.borderColor = '#ef4444';
+        } else {
+            this.style.borderColor = '#10b981';
+        }
     });
+
+    // Validación de Teléfono
+    document.getElementById('telefono_camion').addEventListener('input', function () {
+        let val = this.value.replace(/[^0-9]/g, ''); // Solo números
+        this.value = val;
+        
+        const telfRegex = /^9\d{8}$/;
+        if (!telfRegex.test(val)) {
+            this.style.borderColor = '#ef4444';
+        } else {
+            this.style.borderColor = '#10b981';
+        }
+    });
+
+    // Validación de Documento (DNI, único tipo permitido para conductores)
+    const docInput = document.getElementById('numero_documento_camion');
+    const docBtn = document.getElementById('btnBuscarDocCamion');
+
+    function validarDocumento() {
+        let val = docInput.value.replace(/[^0-9]/g, ''); // Solo números
+        if (val.length > 8) val = val.substring(0, 8);
+        docInput.value = val;
+
+        if (val.length === 8) {
+            docBtn.disabled = false;
+            docInput.style.borderColor = '#10b981';
+        } else {
+            docBtn.disabled = true;
+            docInput.style.borderColor = '#ef4444';
+        }
+    }
+
+    docInput.addEventListener('input', validarDocumento);
+    // Validar en la carga inicial
+    validarDocumento();
 };
 
 async function cargarTablaCamiones() {
     const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
     const tbody = document.getElementById('tbody-camiones');
+
+    if ($.fn.DataTable.isDataTable('#tabla-camiones')) {
+        $('#tabla-camiones').DataTable().destroy();
+    }
 
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:32px; color: var(--text-muted);"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
 
@@ -85,6 +140,20 @@ async function cargarTablaCamiones() {
 
             tbody.innerHTML = filasHTML;
 
+            $('#tabla-camiones').DataTable({
+                language: {
+                    url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
+                },
+                order: [[0, 'desc']], // Ordenar por ID descendente
+                pageLength: 15,
+                lengthMenu: [[15, 25, 50, -1], [15, 25, 50, "Todos"]],
+                dom: '<"dt-top-controls"<"dt-left-controls"l>f>rt<"bottom-controls"ip>',
+                columnDefs: [
+                    { orderable: false, targets: 5 } // La columna de acciones no es ordenable
+                ],
+                destroy: true
+            });
+
         } else {
             tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:32px; color: #ef4444;">Error: ${result.message}</td></tr>`;
         }
@@ -119,7 +188,6 @@ window.abrirModalEditarCamion = function (id) {
     document.getElementById('id_camion').value = data.id_camion;
     document.getElementById('nombre_camion').value = data.nombre;
     document.getElementById('placa_camion').value = data.placa;
-    document.getElementById('tipo_documento_camion').value = data.tipo_documento;
     document.getElementById('numero_documento_camion').value = data.numero_documento;
     document.getElementById('conductor_camion').value = data.conductor;
     document.getElementById('direccion_camion').value = data.direccion;
@@ -144,12 +212,28 @@ async function guardarCamion(e) {
     const datos = {
         nombre: document.getElementById('nombre_camion').value.trim(),
         placa: document.getElementById('placa_camion').value.trim().toUpperCase(),
-        tipo_documento: document.getElementById('tipo_documento_camion').value,
+        tipo_documento: 'DNI',
         numero_documento: document.getElementById('numero_documento_camion').value.trim(),
         conductor: document.getElementById('conductor_camion').value.trim(),
         direccion: document.getElementById('direccion_camion').value.trim(),
         telefono: document.getElementById('telefono_camion').value.trim()
     };
+
+    // Validaciones estrictas antes de enviar
+    if (datos.nombre.length < 3 || datos.nombre.length > 50) {
+        return Swal.fire({ icon: 'warning', title: 'Atención', text: 'El nombre/unidad debe tener entre 3 y 50 caracteres.' });
+    }
+    const placaRegex = /^[A-Z0-9]{3}-\d{3}$/;
+    if (!placaRegex.test(datos.placa)) {
+        return Swal.fire({ icon: 'warning', title: 'Atención', text: 'El formato de la placa es inválido. Ej: ABC-123' });
+    }
+    const telfRegex = /^9\d{8}$/;
+    if (!telfRegex.test(datos.telefono)) {
+        return Swal.fire({ icon: 'warning', title: 'Atención', text: 'El teléfono debe tener exactamente 9 dígitos y empezar con 9.' });
+    }
+    if (datos.direccion.length > 150) {
+        return Swal.fire({ icon: 'warning', title: 'Atención', text: 'La dirección no puede exceder los 150 caracteres.' });
+    }
 
     const method = id ? 'PUT' : 'POST';
     const url = id ? `http://localhost:3000/api/camiones/${id}` : 'http://localhost:3000/api/camiones';
@@ -267,7 +351,11 @@ window.cambiarEstadoCamion = async function (id, estado) {
             Swal.fire({ icon: 'success', title: 'Éxito', text: result.message, timer: 1500, showConfirmButton: false });
             cargarTablaCamiones();
         } else {
-            Swal.fire({ icon: 'error', title: 'Error', text: result.message });
+            if (result.status === 'active_trips') {
+                Swal.fire({ icon: 'warning', title: 'Acción bloqueada', text: result.message });
+            } else {
+                Swal.fire({ icon: 'error', title: 'Error', text: result.message });
+            }
         }
     } catch (error) {
         Swal.fire({ icon: 'error', title: 'Error', text: 'Problema de conexión con el servidor.' });
@@ -275,7 +363,6 @@ window.cambiarEstadoCamion = async function (id, estado) {
 };
 
 async function buscarDocumentoConductorCamion() {
-    const tipo = document.getElementById('tipo_documento_camion').value;
     const numero = document.getElementById('numero_documento_camion').value.trim();
     const btn = document.getElementById('btnBuscarDocCamion');
     const icon = btn.querySelector('i');
@@ -290,18 +377,16 @@ async function buscarDocumentoConductorCamion() {
 
     try {
         const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
-        const response = await fetch(`http://localhost:3000/api/camiones/consultar-documento/${tipo}/${numero}`, {
+        const response = await fetch(`http://localhost:3000/api/camiones/consultar-documento/${numero}`, {
             headers: { 'x-user-profile': sessionData.id_perfil }
         });
         const result = await response.json();
 
         if (response.ok && result.success) {
             document.getElementById('conductor_camion').value = result.nombre;
-            document.getElementById('direccion_camion').value = result.direccion || '-';
             document.getElementById('numero_documento_camion').style.borderColor = '#10b981';
         } else {
             document.getElementById('conductor_camion').value = '';
-            document.getElementById('direccion_camion').value = '';
             document.getElementById('numero_documento_camion').style.borderColor = '#ef4444';
             Swal.fire({ icon: 'error', title: 'Error', text: result.message || 'No se encontró el documento' });
         }

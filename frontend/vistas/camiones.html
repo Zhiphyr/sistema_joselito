@@ -10,13 +10,8 @@
 
 <div class="welcome-card sin-padding">
 
-    <div class="tabla-toolbar">
-        <label for="inputBuscarCamion">Buscar:</label>
-        <input type="text" id="inputBuscarCamion" class="form-control" placeholder="Placa, nombre o teléfono...">
-    </div>
-
     <div class="tabla-scroll">
-        <table class="tabla-modulo">
+        <table id="tabla-camiones" class="tabla-modulo display hover" style="width: 100%;">
             <thead>
                 <tr>
                     <th class="tabla-th" style="width: 60px;">ID</th>
@@ -46,38 +41,29 @@
                 <div class="form-group">
                     <label for="nombre_camion">Nombre / Unidad <span class="required">*</span></label>
                     <input type="text" id="nombre_camion" name="nombre_camion" class="form-control" required
-                        autocomplete="off" placeholder="Ej. Volvo FH 2022 - Blanco">
+                        autocomplete="off" placeholder="Ej. Volvo FH 2022 - Blanco" maxlength="50" minlength="3">
                 </div>
 
                 <div class="form-group">
                     <label for="placa_camion">Placa <span class="required">*</span></label>
                     <input type="text" id="placa_camion" name="placa_camion" class="form-control" required
-                        autocomplete="off" placeholder="Ej. ABC-123"
+                        autocomplete="off" placeholder="Ej. ABC-123" maxlength="7"
                         style="font-family: monospace; text-transform: uppercase; letter-spacing: 0.08em;">
                 </div>
 
                 <div class="form-group">
                     <label for="telefono_camion">Teléfono de la Unidad <span class="required">*</span></label>
                     <input type="text" id="telefono_camion" name="telefono_camion" class="form-control" required
-                        autocomplete="off" placeholder="Ej. 987654321">
+                        autocomplete="off" placeholder="Ej. 987654321" maxlength="9">
                 </div>
 
-                <div class="form-group" style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
-                    <div>
-                        <label for="tipo_documento_camion">Tipo <span class="required">*</span></label>
-                        <select id="tipo_documento_camion" name="tipo_documento_camion" class="form-control" required>
-                            <option value="DNI">DNI</option>
-                            <option value="RUC">RUC</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="numero_documento_camion">N° Documento <span class="required">*</span></label>
-                        <div style="display: flex; gap: 8px;">
-                            <input type="text" id="numero_documento_camion" name="numero_documento_camion" class="form-control" required placeholder="N° Doc" style="flex: 1;">
-                            <button type="button" id="btnBuscarDocCamion" class="btn-primary" style="padding: 0 16px; width: auto;" title="Consultar">
-                                <i class="fas fa-search"></i>
-                            </button>
-                        </div>
+                <div class="form-group">
+                    <label for="numero_documento_camion">DNI del Conductor <span class="required">*</span></label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="numero_documento_camion" name="numero_documento_camion" class="form-control" required placeholder="Ej. 12345678" style="flex: 1;" maxlength="8" inputmode="numeric">
+                        <button type="button" id="btnBuscarDocCamion" class="btn-primary" style="padding: 0 16px; width: auto;" title="Consultar">
+                            <i class="fas fa-search"></i>
+                        </button>
                     </div>
                 </div>
 
@@ -87,8 +73,8 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="direccion_camion">Dirección <span class="required">*</span></label>
-                    <input type="text" id="direccion_camion" name="direccion_camion" class="form-control" required readonly placeholder="Autocompletado..." style="background-color: #f1f5f9; cursor: not-allowed;">
+                    <label for="direccion_camion">Dirección (Opcional)</label>
+                    <input type="text" id="direccion_camion" name="direccion_camion" class="form-control" autocomplete="off" placeholder="Ej. Av. Principal 123" maxlength="150">
                 </div>
 
                 <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
@@ -99,3 +85,81 @@
         </div>
     </div>
 </div>
+
+<style>
+    /* Estilos modernos para los controles del DataTable */
+    #tabla-camiones_wrapper {
+        display: flex;
+        flex-direction: column;
+        padding: 24px 24px 0 24px; /* Padding superior y lateral para separar de la card */
+    }
+    
+    .dt-top-controls {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+        background: #f8fafc;
+        padding: 16px 20px;
+        border-radius: 12px;
+        border: 1px solid var(--border-light);
+    }
+
+    .dt-left-controls {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        flex-wrap: wrap;
+    }
+
+    #tabla-camiones_wrapper .dataTables_length,
+    #tabla-camiones_wrapper .dataTables_filter {
+        margin: 0 !important;
+        float: none !important;
+        text-align: left !important;
+    }
+
+    #tabla-camiones_wrapper .dataTables_length label,
+    #tabla-camiones_wrapper .dataTables_filter label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        font-weight: 600;
+        color: var(--text-secondary);
+        font-size: 13px;
+    }
+
+    #tabla-camiones_wrapper .dataTables_length select,
+    #tabla-camiones_wrapper .dataTables_filter input {
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 13px;
+        outline: none;
+        transition: all 0.2s;
+        background: white;
+    }
+
+    #tabla-camiones_wrapper .dataTables_filter input {
+        width: 220px;
+    }
+
+    #tabla-camiones_wrapper .dataTables_length select:focus,
+    #tabla-camiones_wrapper .dataTables_filter input:focus {
+        border-color: var(--brand-blue);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    /* Paginación y info inferior con padding */
+    .bottom-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 24px;
+        border-top: 1px solid var(--border-light);
+        margin-top: auto;
+    }
+</style>

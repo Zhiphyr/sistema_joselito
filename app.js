@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const autoSeed = require('./config/seeder');
 
 const app = express();
 
@@ -9,6 +10,18 @@ const app = express();
 app.use(cors()); // Permitir peticiones de otros orígenes
 app.use(express.json()); // Parseo de JSON
 app.use(express.urlencoded({ extended: true })); // Parseo de datos de formularios urlencoded
+
+// Rutas "limpias" para las vistas principales (sin exponer la extensión .html)
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend', 'login.html'));
+});
+app.get('/dashboard', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend', 'dashboard.html'));
+});
+
+// Compatibilidad: si alguien entra con la URL .html antigua, se lleva a la versión limpia
+app.get('/login.html', (req, res) => res.redirect(301, '/login'));
+app.get('/dashboard.html', (req, res) => res.redirect(301, '/dashboard'));
 
 // Servir archivos estáticos del frontend
 app.use(express.static(path.join(__dirname, 'frontend')));
@@ -23,6 +36,14 @@ const clienteRoutes = require('./routes/clienteRoutes');
 const productoRoutes = require('./routes/productoRoutes');
 const camionRoutes = require('./routes/camionRoutes');
 const rutaRoutes = require('./routes/rutaRoutes');
+const viajeRoutes = require('./routes/viajeRoutes');
+const deudaRoutes = require('./routes/deudaRoutes');
+const cuentaBancariaRoutes = require('./routes/cuentaBancariaRoutes');
+const dashboardFinancieroRoutes = require('./routes/dashboardFinancieroRoutes');
+const indemnizacionRoutes = require('./routes/indemnizacionRoutes');
+const dashboardGeneralRoutes = require('./routes/dashboardGeneralRoutes');
+const landingRoutes = require('./routes/landingRoutes');
+const cotizacionRoutes = require('./routes/cotizacionRoutes');
 
 // Registro de rutas
 app.use('/api/auth', authRoutes);
@@ -34,6 +55,14 @@ app.use('/api/clientes', clienteRoutes);
 app.use('/api/productos', productoRoutes);
 app.use('/api/camiones', camionRoutes);
 app.use('/api/rutas', rutaRoutes);
+app.use('/api/viajes', viajeRoutes);
+app.use('/api/deudas', deudaRoutes);
+app.use('/api/cuentas-bancarias', cuentaBancariaRoutes);
+app.use('/api/dashboard-financiero', dashboardFinancieroRoutes);
+app.use('/api/indemnizaciones', indemnizacionRoutes);
+app.use('/api/dashboard-general', dashboardGeneralRoutes);
+app.use('/api/landing', landingRoutes);
+app.use('/api/cotizaciones', cotizacionRoutes);
 
 // Ruta de prueba
 app.get('/api/ping', (req, res) => {
@@ -43,6 +72,7 @@ app.get('/api/ping', (req, res) => {
 // Configuración del puerto
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`Servidor de Transporte Joselito corriendo en el puerto ${PORT}`);
+    await autoSeed();
 });

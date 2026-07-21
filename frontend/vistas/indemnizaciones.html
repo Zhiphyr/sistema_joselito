@@ -1,0 +1,493 @@
+<div class="module-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+    <div>
+        <h2 style="margin: 0;">Indemnizaciones a Clientes</h2>
+        <p style="margin: 4px 0 0; color: var(--text-secondary);">Gestión de pagos por productos siniestrados o rechazados.</p>
+    </div>
+</div>
+
+<div class="tabs-container" style="margin-bottom: 20px;">
+    <button class="tab-btn active" onclick="cambiarTabIndemnizaciones('pendientes')" id="tab-pendientes">
+        Deudas Pendientes
+    </button>
+    <button class="tab-btn" onclick="cambiarTabIndemnizaciones('historial')" id="tab-historial">
+        Historial de Pagos
+    </button>
+</div>
+
+<!-- Tab Deudas Pendientes -->
+<div id="content-pendientes" class="tab-content active" style="display: block;">
+    <div class="welcome-card" style="max-width: 100%; background-color: #f1f5f9; padding: 24px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.02);">
+        <div id="contenedorDeudas" style="display: grid; gap: 16px;">
+            <div style="text-align: center; color: #94a3b8; padding: 30px;">
+                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                <p style="margin-top: 10px;">Cargando deudas pendientes...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tab Historial de Pagos -->
+<div id="content-historial" class="tab-content" style="display: none;">
+    <div class="welcome-card sin-padding" style="max-width: 100%;">
+        
+        <!-- Controles Superiores Custom -->
+        <div style="padding: 24px 24px 0 24px; display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: flex-end;">
+            <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+                <div>
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Desde:</label>
+                    <input type="date" id="filtro-fecha-desde" class="form-control" style="font-size: 13px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-light); height: 38px;">
+                </div>
+                <div>
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Hasta:</label>
+                    <input type="date" id="filtro-fecha-hasta" class="form-control" style="font-size: 13px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-light); height: 38px;">
+                </div>
+                <button onclick="limpiarFiltroFechas()" class="btn-secondary" style="padding: 8px 12px; font-size: 13px; height: 38px;" title="Limpiar Fechas"><i class="fas fa-eraser"></i></button>
+            </div>
+            <!-- Buscador propio (no el que genera DataTables) para no depender de reparentar
+                 su DOM entre pestañas: se conecta a la tabla vía la API .search().draw() -->
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <label style="font-weight: 600; color: var(--text-secondary); font-size: 13px; margin: 0;">Buscar:</label>
+                <input type="text" id="buscador-historial-pagos" placeholder="Buscar cliente, ID, op...">
+            </div>
+        </div>
+
+        <div class="tabla-scroll" style="padding: 0 24px; margin-top: 16px;">
+            <table class="tabla-modulo" id="tabla-historial-pagos" style="font-size: 13px; width: 100%;">
+                <thead>
+                    <tr>
+                        <th class="tabla-th">ID Pago</th>
+                        <th class="tabla-th">Cliente</th>
+                        <th class="tabla-th">Fecha de Pago</th>
+                        <th class="tabla-th">Monto Total</th>
+                        <th class="tabla-th">Método</th>
+                        <th class="tabla-th">N° Operación</th>
+                        <th class="tabla-th">Usuario</th>
+                        <th class="tabla-th">Estado</th>
+                        <th class="tabla-th" style="text-align: center;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyHistorialPagos">
+                    <tr>
+                        <td colspan="9" style="text-align: center;">
+                            <i class="fas fa-spinner fa-spin"></i> Cargando historial...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Pagar Indemnización -->
+<div id="modalPagarIndemnizacion" class="modal-overlay" style="display: none; align-items: center;">
+    <div class="modal-container" style="max-width: 640px; width: 100%;">
+        <div class="modal-header">
+            <h3><i class="fas fa-handshake" style="color: #3b82f6; margin-right: 8px;"></i>Registrar Pago a Cliente</h3>
+            <button class="btn-close" onclick="cerrarModalPago()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+            <div id="infoClientePago" style="margin-bottom: 15px; padding: 10px; background-color: #f1f5f9; border-radius: 8px;">
+                <!-- Se llenará con JS -->
+            </div>
+            
+            <form id="formPagarIndemnizacion">
+                <div class="form-group">
+                    <label>Beneficiario del Pago *</label>
+                    <select id="pagoIdCliente" class="form-control" required onchange="actualizarFaltaPagarIndem()"></select>
+                </div>
+
+                <h4 style="margin-bottom: 10px;">Productos a Pagar</h4>
+                <div id="listaProductosPagar" style="margin-bottom: 15px;">
+                    <!-- Se llenará con JS -->
+                </div>
+
+                <div class="form-group">
+                    <label>Monto Total a Pagar</label>
+                    <div id="pagoMontoTotalDisplay" style="font-size: 20px; font-weight: 800; color: var(--brand-blue); background: #eff6ff; padding: 12px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-light);">S/ 0.00</div>
+                    <input type="hidden" id="pagoMontoTotal">
+                </div>
+                
+                <div style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-top: 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                        <label style="font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-wallet" style="color: var(--brand-blue);"></i> Métodos de Pago
+                        </label>
+                        <div id="indemFaltaPagar" style="font-size: 13px; font-weight: 700; color: #ef4444; background: #fee2e2; padding: 4px 10px; border-radius: 6px;">
+                            Falta Pagar: S/ 0.00
+                        </div>
+                    </div>
+
+                    <div id="contenedorListaPagosIndem" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+                        <!-- Las líneas de pago se insertan dinámicamente aquí -->
+                    </div>
+
+                    <button type="button" onclick="agregarNuevoPagoIndem()" id="btnAgregarPagoIndem" class="pago-linea-agregar">
+                        <i class="fas fa-plus-circle"></i> Añadir Método de Pago
+                    </button>
+                </div>
+
+                <div class="form-group" style="margin-top: 16px;">
+                    <label>Observaciones</label>
+                    <textarea id="pagoObservaciones" class="form-control" rows="2" maxlength="300" placeholder="Ej: Pago acordado con el cliente por el daño de la mercadería reportado en este viaje. Indicar aquí cualquier acuerdo especial."></textarea>
+                </div>
+            </form>
+        </div>
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; gap: 12px; background: #f8fafc; border-bottom-left-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-lg);">
+            <button class="btn-secondary" onclick="cerrarModalPago()">Cancelar</button>
+            <button class="btn-primary" id="btnGuardarPago" onclick="procesarPago()">
+                <i class="fas fa-save"></i> Confirmar Pago
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detalles de Pago Historial -->
+<div id="modalDetallesPago" class="modal-overlay" style="display: none; align-items: center;">
+    <div class="modal-container" style="max-width: 600px; width: 100%;">
+        <div class="modal-header">
+            <h3><i class="fas fa-list" style="margin-right: 8px;"></i>Detalles del Pago</h3>
+            <button class="btn-close" onclick="cerrarModalDetallesPago()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+            <div id="contenidoDetallesPago"></div>
+        </div>
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border-light); text-align: right;">
+            <button class="btn-secondary" onclick="cerrarModalDetallesPago()">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* ==========================================
+       Tabs (Deudas Pendientes / Historial de Pagos)
+       ========================================== */
+    .tabs-container {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 24px;
+        border-bottom: 2px solid var(--border-light);
+    }
+
+    .tab-btn {
+        background: none;
+        border: none;
+        padding: 12px 24px;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        cursor: pointer;
+        border-bottom: 3px solid transparent;
+        margin-bottom: -2px;
+        transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+        color: var(--brand-blue);
+    }
+
+    .tab-btn.active {
+        color: var(--brand-blue);
+        border-bottom: 3px solid var(--brand-blue);
+    }
+
+    /* ==========================================
+       Badges Premium para Tabla
+       ========================================== */
+    .badge-pill-success {
+        background-color: #dcfce7;
+        color: #166534;
+        padding: 6px 14px;
+        border-radius: 9999px;
+        font-size: 11px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid #bbf7d0;
+    }
+    .badge-pill-danger {
+        background-color: #fee2e2;
+        color: #991b1b;
+        padding: 6px 14px;
+        border-radius: 9999px;
+        font-size: 11px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid #fecaca;
+    }
+    .badge-pill-mixed {
+        background-color: #f8fafc;
+        color: #475569;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        font-size: 10px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid #e2e8f0;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+
+    /* Hover en filas de tabla para legibilidad horizontal */
+    #tabla-historial-pagos tbody tr:hover {
+        background-color: #f8fafc;
+    }
+
+    /* Buscador propio del historial de pagos */
+    #buscador-historial-pagos {
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-size: 13px;
+        outline: none;
+        transition: all 0.2s;
+        background: white;
+        width: 350px;
+        height: 38px;
+    }
+    #buscador-historial-pagos:focus {
+        border-color: var(--brand-blue);
+        box-shadow: 0 0 0 3px rgba(15, 76, 129, 0.1);
+    }
+    
+    .bottom-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 24px;
+        flex-wrap: wrap;
+        gap: 12px;
+        border-top: 1px solid var(--border-light);
+    }
+    .dt-length-bottom select {
+        border: 1px solid var(--border-light);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 13px;
+        outline: none;
+        margin: 0 6px;
+    }
+
+    /* ==========================================
+       Cards: Viaje > Carga (deudas pendientes)
+       ========================================== */
+    .viaje-card {
+        background: white;
+        border-radius: 12px;
+        border: 1px solid var(--border-light);
+        overflow: hidden;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    }
+    .viaje-card:hover {
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        border-color: #cbd5e1;
+        transform: translateY(-2px);
+    }
+
+    .viaje-card-header {
+        cursor: pointer;
+        background: white;
+        padding: 18px 24px;
+        transition: background-color 0.2s ease;
+    }
+    .viaje-card-header:hover {
+        background-color: #f8fafc;
+    }
+    .viaje-card-header h3 {
+        margin: 0;
+        font-size: 16px;
+        color: var(--text-primary);
+        font-weight: 700;
+    }
+    .viaje-card-header p {
+        margin: 4px 0 0;
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+    .viaje-card-header .chevron {
+        color: var(--text-muted);
+        transition: transform 0.2s ease;
+    }
+    .viaje-card-header .chevron.rotated {
+        transform: rotate(180deg);
+    }
+
+    .viaje-card-body {
+        padding: 20px 24px;
+        background: #fbfcfe;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .carga-card {
+        background: white;
+        border: 1px solid var(--border-light);
+        border-radius: 10px;
+        padding: 18px 20px;
+    }
+    .carga-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+    }
+    .carga-card-header h4 {
+        margin: 0;
+        font-size: 14px;
+        color: var(--text-primary);
+        font-weight: 700;
+    }
+    .carga-card-header p {
+        margin: 6px 0 0;
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+    .carga-card-total {
+        text-align: right;
+    }
+    .carga-card-total span {
+        display: block;
+        font-size: 11px;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .carga-card-total strong {
+        font-size: 16px;
+        color: #ef4444;
+    }
+
+    .carga-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 16px;
+        background: #f8fafc;
+        padding: 14px 16px;
+        border-radius: 8px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .carga-card-footer .seleccionado-label {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+    .carga-card-footer .seleccionado-monto {
+        font-weight: 700;
+        color: #10b981;
+        font-size: 16px;
+        margin-left: 8px;
+    }
+
+    /* ==========================================
+       DataTable wrapper - Historial de Pagos
+       ========================================== */
+    #tabla-historial-pagos_wrapper {
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+    }
+
+    /* Color de acciones en tabla de historial */
+    .btn-icon.text-primary { color: var(--brand-blue); }
+    .btn-icon.text-danger { color: #ef4444; }
+    .btn-icon.text-danger:hover { background-color: #fee2e2; }
+
+    /* ==========================================
+       Carrito de métodos de pago (pagos mixtos)
+       ========================================== */
+    .pago-linea-indem {
+        background: #f8fafc;
+        border: 1px solid var(--border-light);
+        border-radius: 10px;
+        padding: 16px;
+        position: relative;
+    }
+    .pago-linea-eliminar {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: none;
+        border: none;
+        color: #ef4444;
+        cursor: pointer;
+        font-size: 14px;
+        padding: 4px;
+    }
+    .pago-linea-row {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+    }
+    .pago-linea-campo {
+        flex: 1;
+        min-width: 140px;
+        margin-bottom: 12px;
+    }
+    .pago-linea-row .pago-linea-campo {
+        margin-bottom: 0;
+    }
+    .pago-linea-campo label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        display: block;
+        margin-bottom: 4px;
+    }
+    .pago-monto-hint {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 4px;
+    }
+    .pago-monto-hint.excede {
+        color: #ef4444;
+        font-weight: 600;
+    }
+    .pago-linea-agregar {
+        width: 100%;
+        padding: 12px;
+        border: 1px dashed var(--brand-blue);
+        border-radius: 8px;
+        background: #eff6ff;
+        color: var(--brand-blue);
+        font-weight: 600;
+        font-size: 13px;
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s ease;
+    }
+    .pago-linea-agregar:hover {
+        background: var(--brand-blue-light);
+    }
+    .pago-dropzone {
+        border: 2px dashed var(--border-light);
+        border-radius: 8px;
+        padding: 16px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: white;
+    }
+    .pago-dropzone.dragover {
+        border-color: var(--brand-blue);
+        background: var(--brand-blue-light);
+    }
+
+    #btnGuardarPago:disabled {
+        background-color: #94a3b8;
+        cursor: not-allowed;
+        opacity: 0.7;
+    }
+</style>

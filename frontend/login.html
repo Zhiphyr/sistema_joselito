@@ -1,48 +1,83 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
+    <script>
+        if (sessionStorage.getItem('usuario_joselito')) {
+            window.location.replace('/dashboard');
+        }
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Transporte Joselito</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>Transporte Joselito - Central Logística</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/login.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
-
 <body>
+
     <div class="login-wrapper">
-        <div class="login-container">
-            <div class="login-header">
-                <h1>Transporte Joselito</h1>
-                <p>Acceso al panel administrativo</p>
+
+        <!-- COLUMNA IZQUIERDA: MAPA DE CARRETERA INTERACTIVO (PARALLAX + TILT) -->
+        <div class="panel-visual" id="panelVisual">
+            <!-- Capa de imagen de carretera -->
+            <div class="visual-background" id="bgLayer"></div>
+            <div class="visual-overlay"></div>
+
+            <!-- Cabecera Logo -->
+            <div class="visual-header">
+                <div class="logo-container">
+                    <h2>Transporte Joselito</h2>
+                </div>
             </div>
 
-            <form id="loginForm" class="login-form">
-                <div class="form-group">
-                    <label for="usuario">Usuario</label>
-                    <input type="text" id="usuario" name="usuario" placeholder="Ingresa tu usuario" required
-                        autocomplete="off">
-                </div>
 
-                <div class="form-group">
-                    <label for="clave">Contraseña</label>
-                    <input type="password" id="clave" name="clave" placeholder="Ingresa tu contraseña" required>
-                </div>
-
-                <button type="submit" class="btn-primary" id="btnSubmit">
-                    <span>Iniciar Sesión</span>
-                    <div class="spinner" id="spinner" style="display: none;"></div>
-                </button>
-            </form>
-
-            <div class="login-footer">
-                <p>&copy; 2026 Transporte Joselito. Todos los derechos reservados.</p>
+            <!-- Pie de página izquierdo -->
+            <div class="visual-footer">
+                <span>© 2026 Transporte Joselito S.A.C. Todos los derechos reservados.</span>
             </div>
         </div>
+
+        <!-- COLUMNA DERECHA: FORMULARIO DE ACCESO MINIMALISTA -->
+        <div class="panel-form">
+            <div class="form-container">
+                
+                <div class="form-header">
+                    <img src="img/letras-blancas.png" alt="Transporte Joselito" class="logo-login">
+                    <h2 class="welcome-text">Bienvenido de nuevo</h2>
+                    <p>Ingresa tus credenciales para acceder al panel de control.</p>
+                </div>
+
+                <!-- Formulario -->
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="usuario">Usuario</label>
+                        <div class="input-wrapper">
+                            <i class="fa-solid fa-envelope"></i>
+                            <input type="text" id="usuario" name="usuario" placeholder="Ingresa tu usuario" required autocomplete="off">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="clave">Contraseña</label>
+                        <div class="input-wrapper">
+                            <i class="fa-solid fa-lock"></i>
+                            <input type="password" id="clave" name="clave" placeholder="Ingresa tu contraseña" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-login" id="btnSubmit">
+                        <span>Ingresar a la Plataforma</span>
+                        <i class="fa-solid fa-right-to-bracket"></i>
+                        <div class="spinner" id="spinner" style="display: none;"></div>
+                    </button>
+                </form>
+
+            </div>
+        </div>
+
     </div>
 
     <script src="js/login.js"></script>
 </body>
-
 </html>

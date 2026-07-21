@@ -8,6 +8,7 @@ router.get('/', perfilController.listarPerfiles);
 router.post('/', verificarAdmin, perfilController.crear);
 router.put('/:id', verificarAdmin, perfilController.actualizar);
 router.patch('/:id/estado', verificarAdmin, perfilController.cambiarEstado);
+router.get('/:id/usuarios-count', verificarAdmin, perfilController.contarUsuariosAsignados);
 
 // Rutas para opciones y permisos
 router.get('/opciones', perfilController.listarOpciones);

@@ -1,157 +1,354 @@
 :root {
-    /* Intent: Professional, trustworthy, clean */
-    /* Palette: Blues & Whites */
-    --brand-blue: #0f4c81; /* Classic Corporate Blue */
-    --brand-blue-hover: #135d9d;
-    --brand-blue-active: #0c3e69;
-    
-    --surface-bg: #f4f7f9; /* Slight blue tint in gray */
-    --surface-card: #ffffff;
-    
-    --text-primary: #1e293b;
-    --text-secondary: #64748b;
-    --text-muted: #94a3b8;
-    
-    --border-subtle: rgba(15, 76, 129, 0.1);
-    --border-focus: rgba(15, 76, 129, 0.3);
-    
-    --shadow-card: 0 4px 20px rgba(15, 76, 129, 0.08);
-    --radius-md: 8px;
-    --radius-lg: 12px;
+    --brand-primary: #0ea5e9;
+    --brand-cyan: #22d3ee;
+    --brand-primary-glow: rgba(14, 165, 233, 0.2);
+    --brand-dark: #070a13;
+    --text-muted: #64748b;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
 }
 
 * {
-    box-sizing: border-box;
     margin: 0;
     padding: 0;
+    box-sizing: border-box;
+    font-family: 'Outfit', sans-serif;
 }
 
-body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background-color: var(--surface-bg);
-    color: var(--text-primary);
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+body, html {
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    background-color: var(--brand-dark);
+    color: #ffffff;
+}
+
+html.swal2-height-auto {
+    height: 100% !important;
 }
 
 .login-wrapper {
+    width: 100% !important;
+    height: 100vh !important;
+    display: flex;
+    flex-direction: row;
+}
+
+/* ==========================================
+   COLUMNA IZQUIERDA: VISUAL INTERACTIVO (PARALLAX)
+   ========================================== */
+.panel-visual {
+    width: 60%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 60px;
+}
+
+/* Imagen de fondo con escala para permitir el movimiento parallax con el mouse */
+.visual-background {
+    position: absolute;
+    top: -5%;
+    left: -5%;
+    width: 110%;
+    height: 110%;
+    background-image: url('https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?q=80&w=1200&auto=format&fit=crop');
+    background-size: cover;
+    background-position: center;
+    z-index: 1;
+    transition: transform 0.2s ease-out;
+}
+
+/* Capa de mezcla azul profundo/noche ultra-premium */
+.visual-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
-    max-width: 420px;
-    padding: 20px;
+    height: 100%;
+    background: radial-gradient(circle at center, rgba(15, 23, 42, 0.2) 0%, rgba(7, 10, 19, 0.9) 100%);
+    z-index: 2;
+    pointer-events: none;
 }
 
-.login-container {
-    background: var(--surface-card);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-card);
-    padding: 40px;
-    border: 1px solid var(--border-subtle);
+.visual-header, .visual-body, .visual-footer {
+    position: relative;
+    z-index: 3;
 }
 
-.login-header {
-    text-align: center;
-    margin-bottom: 32px;
+/* Cabecera */
+.visual-header .logo-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
-.login-header h1 {
-    font-size: 24px;
+.visual-header .logo-container i {
+    font-size: 26px;
+    color: var(--brand-cyan);
+    filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.5));
+}
+
+.visual-header .logo-container h2 {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+}
+
+/* Tarjeta Interactiva con Efecto Tilt 3D */
+.visual-body {
+    max-width: 500px;
+    perspective: 800px;
+}
+
+.info-card-interactive {
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-xl);
+    padding: 35px;
+    box-shadow: 0 25px 50px rgba(0,0,0,0.5), 0 0 30px rgba(14, 165, 233, 0.1);
+    transform-style: preserve-3d;
+    transition: box-shadow 0.3s;
+}
+
+.info-card-interactive span {
+    font-size: 11px;
     font-weight: 700;
-    color: var(--brand-blue);
-    margin-bottom: 8px;
+    color: var(--brand-cyan);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    display: inline-block;
+    margin-bottom: 12px;
 }
 
-.login-header p {
+.info-card-interactive h1 {
+    font-size: 40px;
+    font-weight: 850;
+    line-height: 1.25;
+    background: linear-gradient(to right, #ffffff 40%, #bae6fd 100%);
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 15px;
+}
+
+.info-card-interactive p {
+    color: #94a3b8;
+    font-size: 15px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+/* Barra de estado en línea minimalista */
+.system-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    color: #22c55e;
+    font-weight: 600;
+}
+
+.pulse-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #22c55e;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #22c55e;
+    animation: pulseGreen 1.8s infinite;
+}
+
+@keyframes pulseGreen {
+    0%, 100% { transform: scale(0.9); opacity: 0.7; }
+    50% { transform: scale(1.25); opacity: 1; }
+}
+
+.visual-footer {
+    font-size: 12px;
+    color: #475569;
+}
+
+
+/* ==========================================
+   COLUMNA DERECHA: FORMULARIO DE ACCESO PREMIUM
+   ========================================== */
+.panel-form {
+    width: 40%;
+    height: 100%;
+    background-color: #070a12;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 60px;
+    border-left: 1px solid rgba(255,255,255,0.04);
+    position: relative;
+}
+
+/* Detalle visual en esquina */
+.panel-form::before {
+    content: '';
+    position: absolute;
+    width: 250px;
+    height: 250px;
+    background: radial-gradient(circle, rgba(14,165,233,0.1) 0%, rgba(0,0,0,0) 70%);
+    bottom: -50px;
+    right: -50px;
+    pointer-events: none;
+}
+
+.form-container {
+    width: 100%;
+    max-width: 380px;
+    z-index: 2;
+}
+
+.form-header {
+    margin-bottom: 35px;
+    text-align: center;
+}
+
+.form-header h2 {
+    font-size: 28px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: 0.5px;
+}
+
+.logo-login {
+    width: 100%;
+    max-width: 250px;
+    margin-bottom: 16px;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.welcome-text {
+    font-size: 22px !important;
+    font-weight: 700 !important;
+    color: #f8fafc;
+}
+
+.form-header p {
+    color: #94a3b8;
     font-size: 14px;
-    color: var(--text-secondary);
+    margin-top: 6px;
 }
 
+/* Inputs Modernos con efecto de resplandor LED al enfocar */
 .form-group {
-    margin-bottom: 24px;
+    margin-bottom: 20px;
+    text-align: left;
 }
 
 .form-group label {
     display: block;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-primary);
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
     margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    transition: color 0.3s;
 }
 
-.form-group input {
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-wrapper i {
+    position: absolute;
+    left: 16px;
+    color: #475569;
+    font-size: 16px;
+    transition: color 0.3s;
+}
+
+.input-wrapper input {
     width: 100%;
-    padding: 12px 16px;
-    font-size: 14px;
-    color: var(--text-primary);
-    background-color: #fafafa;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    transition: all 0.2s ease;
-    font-family: inherit;
-}
-
-.form-group input:hover {
-    border-color: var(--border-focus);
-}
-
-.form-group input:focus {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px 14px 48px;
+    color: #ffffff;
+    font-size: 15px;
     outline: none;
-    background-color: #fff;
-    border-color: var(--brand-blue);
-    box-shadow: 0 0 0 3px rgba(15, 76, 129, 0.1);
+    transition: all 0.3s;
 }
 
-.btn-primary {
+.input-wrapper input:focus {
+    border-color: var(--brand-cyan);
+    box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.25);
+    background: #020617;
+}
+
+.input-wrapper input:focus + i {
+    color: var(--brand-cyan);
+}
+
+.form-group:focus-within label {
+    color: var(--brand-cyan);
+}
+
+/* Botón de acceso con animación hover */
+.btn-login {
     width: 100%;
-    padding: 14px;
-    background-color: var(--brand-blue);
-    color: #fff;
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: 14px;
-    font-weight: 600;
+    background: linear-gradient(135deg, var(--brand-primary) 0%, #0284c7 100%);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 700;
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4);
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    position: relative;
 }
 
-.btn-primary:hover {
-    background-color: var(--brand-blue-hover);
+.btn-login:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px rgba(14, 165, 233, 0.6);
+    background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
 }
 
-.btn-primary:active {
-    background-color: var(--brand-blue-active);
-}
-
-.btn-primary:disabled {
+.btn-login:disabled {
     opacity: 0.7;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
-.login-footer {
-    margin-top: 32px;
-    text-align: center;
-}
-
-.login-footer p {
-    font-size: 12px;
-    color: var(--text-muted);
-}
-
-/* Spinner animation for loading state */
+/* Spinner de carga */
 .spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(255,255,255,0.3);
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255,255,255,0.3);
+    border-top: 3px solid #ffffff;
     border-radius: 50%;
-    border-top-color: #fff;
-    animation: spin 0.8s linear infinite;
+    animation: spin 1s linear infinite;
+    position: absolute;
+    right: 20px;
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }

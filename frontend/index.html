@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transporte Joselito | Carga Segura</title>
+    <!-- CSS de la Landing Page -->
+    <link rel="stylesheet" href="css/landing.css">
+    <!-- Toast Notification -->
+    <div id="toast-notification" class="toast-notification">
+        <div class="toast-icon"><i class="fas fa-check-circle"></i></div>
+        <div class="toast-text">Un asesor se comunica contigo pronto. Muchas gracias.</div>
+    </div>
+    <!-- FontAwesome para íconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- 1. NAVBAR -->
+    <nav class="navbar">
+        <a href="#" class="nav-brand">
+            <img src="img/letras-blancas.png" alt="Transporte Joselito">
+        </a>
+        <div class="nav-links">
+            <a href="#about" style="color: var(--accent-bronze);">Sobre Nosotros</a>
+            <a href="#cotizar" style="color: var(--accent-bronze);">Cotizar</a>
+        </div>
+        <div class="nav-contact">
+            <span><i class="fas fa-phone" style="color: var(--accent-bronze); margin-right: 8px;"></i>947 010 376</span>
+            <div class="nav-social">
+                <a href="https://wa.me/51947010376" target="_blank"><i class="fab fa-whatsapp"></i></a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 2. HERO SECTION -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1 class="hero-title">Garantía y Seguridad en Transporte de Carga</h1>
+            <p class="hero-subtitle">La mejor opción de servicio de transporte de carga pesada entre Lima y Chiclayo. Puntualidad y cuidado en cada kilómetro.</p>
+            <a href="#cotizar" class="btn-primary">Cotizar <i class="fas fa-play" style="font-size: 12px; margin-left: 8px;"></i></a>
+        </div>
+        
+        <div class="hero-features">
+            <div class="feature-item">
+                <i class="fas fa-truck-moving"></i>
+                <span>Todo tipo de carga</span>
+            </div>
+            <div class="feature-item">
+                <i class="fas fa-weight-hanging"></i>
+                <span>Sin límite de peso</span>
+            </div>
+            <div class="feature-item">
+                <i class="fas fa-truck"></i>
+                <span>Flota moderna y segura</span>
+            </div>
+            <div class="feature-item">
+                <i class="fas fa-clock"></i>
+                <span>Tiempos exactos de entrega</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. SOBRE NOSOTROS -->
+    <section id="about" class="about">
+        <div class="about-text">
+            <h2>Empresa de Transportes</h2>
+            <h3>TRANSPORTE JOSELITO</h3>
+            <p>Transporte Joselito fue fundada con la misión de brindar un servicio logístico impecable entre Lima y Chiclayo. A lo largo de los años, hemos perfeccionado el movimiento de carga pesada, entendiendo que el éxito de su negocio depende de nuestra puntualidad y cuidado.</p>
+            <p>Nuestros principales objetivos son la entrega oportuna del punto A al punto B manteniendo la calidad e integridad absoluta de su mercancía. Calidad, puntualidad y responsabilidad son nuestras habilidades clave.</p>
+        </div>
+        
+        <div class="about-visual">
+            <div class="about-image-mask">
+                <img src="img/landing/landing-mercado.jpg" alt="Operaciones Transporte Joselito">
+            </div>
+            <!-- Burbujas Flotantes con características -->
+            <div class="bubble bubble-1">
+                Ofrecemos tiempos de entrega rápidos, <strong>más rápidos</strong> que las empresas con almacenamiento tradicional.
+            </div>
+            <div class="bubble bubble-2">
+                Su carga viaja segura y permanece <strong>sin daños</strong> gracias a la ausencia de transbordos innecesarios.
+            </div>
+            <div class="bubble bubble-3">
+                Trabajamos mediante contratos formales y proporcionamos <strong>todas las facilidades de pago</strong> convenientes para su negocio.
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. MÉTRICAS -->
+    <section class="metrics">
+        <div class="metric-card">
+            <div class="metric-number">3200+</div>
+            <div class="metric-label">Clientes corporativos que confían en nosotros</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-number">10000+</div>
+            <div class="metric-label">Toneladas de carga entregadas a tiempo</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-number">8+</div>
+            <div class="metric-label">Años de éxito rotundo en el mercado logístico</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-number">34+</div>
+            <div class="metric-label">Especialistas y conductores trabajando para usted</div>
+        </div>
+    </section>
+
+    <!-- 5. COTIZADOR -->
+    <section id="cotizar" class="calculator">
+        <div>
+            <div class="calc-header">
+                <h2>Calcule el costo de su envío</h2>
+                <h3>Cotización en línea</h3>
+                <p style="color: var(--text-gray); margin-bottom: 30px;">Deje sus datos y nuestro equipo comercial se comunicará con usted en minutos con la mejor tarifa.</p>
+            </div>
+            
+            <form class="calc-form" id="static-form">
+                <div class="form-group">
+                    <label>¿De dónde recogemos la carga?</label>
+                    <input type="text" placeholder="Ej: Lima, Los Olivos">
+                </div>
+                <div class="form-group">
+                    <label>¿A dónde la llevamos?</label>
+                    <input type="text" placeholder="Ej: Chiclayo, La Victoria">
+                </div>
+                <div class="form-group">
+                    <label>¿Cómo podemos llamarle?</label>
+                    <input type="text" placeholder="Su nombre completo">
+                </div>
+                <div class="form-group">
+                    <label>Su número de teléfono</label>
+                    <input type="tel" id="static-phone" placeholder="987654321" minlength="9" maxlength="9" pattern="9[0-9]{8}">
+                </div>
+                
+                <div class="calc-action">
+                    <button type="button" class="btn-primary" onclick="enviarDatosEstatico()">Enviar Datos <i class="fas fa-paper-plane" style="font-size: 12px; margin-left: 8px;"></i></button>
+                    <p class="calc-terms">Al hacer clic en el botón, doy mi <a href="#">consentimiento para el procesamiento de mis datos personales</a>.</p>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Info Contactos Lateral -->
+        <div class="calc-contacts">
+            <h4>Contactos</h4>
+            
+            <div class="contact-item">
+                <p>Números de contacto:</p>
+                <h5>947 010 376</h5>
+            </div>
+            
+            <div class="contact-item">
+                <p>Correo electrónico:</p>
+                <h5>operaciones@joselito.com.pe</h5>
+            </div>
+            
+            <div class="contact-item" style="margin-top: 40px;">
+                <p>Otros métodos de comunicación:</p>
+                <div class="contact-social">
+                    <a href="https://wa.me/51947010376" target="_blank"><i class="fab fa-whatsapp"></i></a>
+                    <a href="mailto:operaciones@joselito.com.pe"><i class="fas fa-envelope"></i></a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 6. FOOTER -->
+    <footer>
+        <div class="footer-logo">
+            <img src="img/letras-blancas.png" alt="Joselito Logo">
+        </div>
+        <div class="footer-links">
+            <a href="#">Política de privacidad</a>
+            <a href="#">Términos y condiciones</a>
+        </div>
+        <div>
+            &copy; 2026 Transporte Joselito S.A.C. Todos los derechos reservados.
+    </footer>
+
+    <!-- Modal Cotizador -->
+    <div id="modal-cotizador" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Cotización en Línea</h2>
+                <button class="btn-close" onclick="cerrarCotizador()"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="form-cotizador" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; max-height: calc(90vh - 65px);">
+                <div class="modal-body">
+                    <div style="position: absolute; left: -9999px; top: -9999px;" aria-hidden="true">
+                        <label for="cot-sitio-web">Deje este campo vacío</label>
+                        <input type="text" id="cot-sitio-web" name="sitio_web" tabindex="-1" autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label>Su nombre completo</label>
+                        <input type="text" id="cot-nombre" required placeholder="EJ. JUAN PEREZ" autocomplete="off">
+                    </div>
+                    <div class="form-row" style="display: flex; gap: 16px;">
+                        <div class="form-group" style="flex: 1;">
+                            <label>Teléfono (WhatsApp)</label>
+                            <input type="text" id="cot-telefono" required placeholder="987654321" minlength="9" maxlength="9" pattern="9[0-9]{8}" autocomplete="off">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>Correo electrónico (Opcional)</label>
+                            <input type="email" id="cot-correo" placeholder="Ej. juan@empresa.com" minlength="3" maxlength="100" pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$" autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Ruta de Envío</label>
+                        <select id="cot-ruta" required>
+                            <option value="">Cargando rutas...</option>
+                        </select>
+                    </div>
+
+                    <div class="productos-section">
+                        <h3>Bienes a transportar</h3>
+                        <div id="lista-productos">
+                            <!-- Filas dinámicas de productos -->
+                        </div>
+                        <button type="button" class="btn-secondary" onclick="agregarProductoCotizacion()" style="margin-top: 10px;"><i class="fas fa-plus"></i> Añadir Producto</button>
+                    </div>
+
+                    <div id="resultado-cotizacion" class="cotizacion-resultado" style="display: none;">
+                        <h3>Flete Estimado</h3>
+                        <div id="monto-estimado">S/ 0.00 - S/ 0.00</div>
+                        <div class="cotizacion-aviso">
+                            <strong>IMPORTANTE:</strong> Este es un precio referencial estimado. El flete final será confirmado en agencia tras el pesaje, volumen y evaluación física de la carga.
+                        </div>
+                        <div style="display: flex; gap: 12px;">
+                            <button id="btn-whatsapp-cot" type="button" class="btn-whatsapp-modal" style="flex: 2;"><i class="fab fa-whatsapp"></i> Enviar por WhatsApp</button>
+                            <button id="btn-nueva-cotizacion" type="button" class="btn-secondary" style="flex: 1; justify-content: center; border-color: var(--text-muted);" onclick="resetCotizador()">Nueva Cotización</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="submit" class="btn-primary-solid">Calcular Envío</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/landing.js"></script>
+</body>
+</html>

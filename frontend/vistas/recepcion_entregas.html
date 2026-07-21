@@ -1,0 +1,266 @@
+<div class="vista-contenedor" style="max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; height: 100%; box-sizing: border-box;">
+    
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h2 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 24px; font-weight: 700;">Recepción y Entregas</h2>
+            <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">Gestión de viajes en ruta y llegadas a destino.</p>
+        </div>
+    </div>
+
+    <!-- Contenedor principal para el módulo -->
+    <div id="contenedor-viajes-recepcion" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; overflow-y: auto; padding-right: 8px; padding-bottom: 24px; flex: 1; align-content: flex-start;">
+        <!-- Las tarjetas se renderizarán dinámicamente aquí -->
+    </div>
+
+</div>
+
+<!-- Modal Gestionar Entregas -->
+<div id="modal-gestionar-entregas" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1050; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+    <div style="background: white; border-radius: 12px; width: 100%; max-width: 800px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; max-height: 90vh;">
+        
+        <!-- Header Modal -->
+        <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <div style="color: var(--brand-blue); font-size: 20px;">
+                    <i class="fas fa-tasks"></i>
+                </div>
+                <h3 style="margin: 0; font-size: 18px; color: var(--text-primary); font-weight: 700; display: flex; align-items: center; gap: 12px;">
+                    Gestionar Entregas 
+                    <span id="modal-gestionar-titulo-viaje" style="background: #e0f2fe; color: var(--brand-blue); padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;">Viaje #---</span>
+                </h3>
+            </div>
+            <button id="btn-cerrar-modal-gestionar-x" style="background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; padding: 4px;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Body Modal (Scrollable) -->
+        <div id="modal-gestionar-body" style="padding: 24px; overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 24px; background: #f8fafc;">
+            <!-- Contenido dinámico renderizado desde JS -->
+        </div>
+
+        <!-- Footer Modal -->
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; align-items: center; background: white; border-radius: 0 0 12px 12px;">
+            <button id="btn-cerrar-modal-gestionar-btn" style="padding: 8px 24px; background: white; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; font-weight: 600; color: var(--text-primary); cursor: pointer; transition: all 0.2s;">
+                Cerrar
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<!-- Si tu sistema requiere que el script se inserte, puedes descomentar: -->
+<script src="/js/vistas/recepcion_entregas.js"></script>
+
+<!-- Modal Entrega Parcial -->
+<div id="modal-entrega-parcial" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1060; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+    <div style="background: #f8fafc; border-radius: 12px; width: 100%; max-width: 650px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; max-height: 90vh;">
+        
+        <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; background: white; border-radius: 12px 12px 0 0;">
+            <h3 id="modal-parcial-titulo" style="margin: 0; font-size: 18px; color: var(--text-primary); font-weight: 700;">Gestión de Entrega - Carga #---</h3>
+            <button id="btn-cerrar-modal-parcial-x" style="background: white; border: 1px solid #e2e8f0; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-muted); cursor: pointer; transition: all 0.2s;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div style="padding: 24px; overflow-y: auto; flex: 1;">
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px; display: flex; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+                <div>
+                    <span style="display: block; font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">REMITENTE</span>
+                    <span id="modal-parcial-remitente" style="font-size: 14px; color: var(--text-secondary);"></span>
+                </div>
+                <div style="text-align: right;">
+                    <span style="display: block; font-size: 10px; font-weight: 700; color: #2563eb; text-transform: uppercase; margin-bottom: 4px;">DESTINATARIO (RECIBE)</span>
+                    <span id="modal-parcial-destinatario" style="font-size: 16px; font-weight: 800; color: #1e3a8a;"></span>
+                </div>
+            </div>
+
+            <!-- Paso 1 -->
+            <div id="modal-parcial-step1">
+                <h4 style="margin: 0 0 16px 0; font-size: 15px; font-weight: 700; color: var(--text-primary);">Detalle de Productos a Entregar</h4>
+                <div id="modal-parcial-productos">
+                    <!-- Productos dinámicos -->
+                </div>
+            </div>
+
+            <!-- Paso 2: Resumen -->
+            <div id="modal-parcial-step2" style="display: none;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <!-- Aceptados -->
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px;">
+                        <h4 style="margin: 0 0 16px 0; font-size: 14px; font-weight: 700; color: #16a34a; display: flex; align-items: center; gap: 8px;">
+                            <i class="far fa-check-circle"></i> Nueva Carga (Aceptados)
+                        </h4>
+                        <div id="resumen-aceptados-container" style="display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Items -->
+                        </div>
+                    </div>
+                    <!-- Rechazados -->
+                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px;">
+                        <h4 style="margin: 0 0 16px 0; font-size: 14px; font-weight: 700; color: #dc2626; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-times"></i> Carga Original (Rechazados)
+                        </h4>
+                        <div id="resumen-rechazados-container" style="display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Items -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; align-items: center; gap: 12px; background: white; border-radius: 0 0 12px 12px;">
+            <div id="footer-step1" style="display: flex; gap: 12px; width: 100%; justify-content: flex-end;">
+                <button id="btn-cerrar-modal-parcial-btn" style="padding: 10px 20px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--text-primary); cursor: pointer; transition: all 0.2s;">Cancelar</button>
+                <button id="btn-ver-resumen-parcial" style="padding: 10px 24px; background: #2563eb; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; color: white; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
+                    Ver Resumen <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+            <div id="footer-step2" style="display: none; gap: 12px; width: 100%; justify-content: flex-end;">
+                <button id="btn-volver-editar-parcial" style="padding: 10px 20px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--text-primary); cursor: pointer; transition: all 0.2s;">Volver a Editar</button>
+                <button id="btn-confirmar-entrega-parcial" style="padding: 10px 24px; background: #00b341; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; color: white; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
+                    <i class="far fa-check-circle"></i> Confirmar Entrega
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Siniestro / Transbordo -->
+<div id="modal-transbordo" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1050; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+    <div style="background: white; border-radius: 12px; width: 100%; max-width: 900px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; max-height: 90vh;">
+        
+        <!-- Header -->
+        <div style="padding: 20px 24px 0 24px; border-bottom: 1px solid var(--border-light); background: #fffcf8; border-radius: 12px 12px 0 0;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="color: #ea580c; font-size: 18px;">
+                        <i class="fas fa-exchange-alt"></i>
+                    </div>
+                    <h3 style="margin: 0; font-size: 18px; color: #c2410c; font-weight: 700; display: flex; align-items: center; gap: 12px;">
+                        Siniestro / Transbordo
+                        <span id="modal-transbordo-titulo-viaje" style="background: #ffedd5; color: #ea580c; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;">Viaje #---</span>
+                    </h3>
+                </div>
+                <button id="btn-cerrar-modal-transbordo-x" style="background: none; border: none; font-size: 18px; color: var(--text-muted); cursor: pointer;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Tabs -->
+            <div style="display: flex; gap: 24px;">
+                <button class="transbordo-tab active" data-tab="camion" style="background: none; border: none; padding-bottom: 8px; font-size: 15px; font-weight: 700; cursor: pointer; color: #ea580c; border-bottom: 2px solid #ea580c;">Camión de Transbordo</button>
+                <button class="transbordo-tab" data-tab="carga" style="background: none; border: none; padding-bottom: 8px; font-size: 15px; font-weight: 700; cursor: pointer; color: #94a3b8; border-bottom: none;">Seleccionar Carga</button>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div style="padding: 24px; overflow-y: auto; flex: 1; background: #f8fafc;">
+            <!-- Tab Camion -->
+            <div id="tab-transbordo-camion" style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;">
+                
+                <!-- Cuadro Resumen Financiero -->
+                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                    <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700; color: #d97706; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-info-circle"></i> Resumen del Viaje Accidentado
+                    </h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div>
+                            <span style="display: block; font-size: 11px; font-weight: 600; color: #b45309; text-transform: uppercase; margin-bottom: 4px;">Camión Accidentado</span>
+                            <span id="transbordo-resumen-camion" style="font-size: 14px; font-weight: 700; color: var(--text-primary);">Cargando...</span>
+                        </div>
+                        <div>
+                            <span style="display: block; font-size: 11px; font-weight: 600; color: #b45309; text-transform: uppercase; margin-bottom: 4px;">Peso Aprox. a Transbordar</span>
+                            <span id="transbordo-resumen-peso" style="font-size: 14px; font-weight: 700; color: var(--text-primary);">0.00 kg</span>
+                        </div>
+                        <div>
+                            <span style="display: block; font-size: 11px; font-weight: 600; color: #b45309; text-transform: uppercase; margin-bottom: 4px;">Tarifa de Flete (Carga)</span>
+                            <span id="transbordo-resumen-flete" style="font-size: 14px; font-weight: 700; color: #16a34a;">S/ 0.00 / kg</span>
+                        </div>
+                        <div>
+                            <span style="display: block; font-size: 11px; font-weight: 600; color: #b45309; text-transform: uppercase; margin-bottom: 4px;">Tarifa Transportista (Anterior)</span>
+                            <span id="transbordo-resumen-tarifa" style="font-size: 14px; font-weight: 700; color: #dc2626;">S/ 0.00 / kg</span>
+                        </div>
+                    </div>
+                </div>
+
+                <h4 style="margin: 0 0 16px 0; font-size: 15px; font-weight: 700; color: var(--text-primary); border-bottom: 1px solid #f1f5f9; padding-bottom: 12px;">Datos del Nuevo Vehículo</h4>
+                
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <!-- Camión -->
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Camión Asignado</label>
+                        <select id="transbordo-camion-select" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; outline: none;">
+                            <option value="">Seleccione un camión disponible...</option>
+                        </select>
+                    </div>
+
+                    <!-- Ruta -->
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Ruta</label>
+                        <input type="text" id="transbordo-ruta-input" readonly style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; background: #f8fafc; color: var(--text-secondary); outline: none;">
+                    </div>
+
+                    <!-- Fecha -->
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Fecha y Hora de Salida</label>
+                        <input type="text" id="transbordo-fecha-input" readonly style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; background: #f8fafc; color: var(--text-secondary); outline: none;">
+                    </div>
+
+                    <!-- Tarifa -->
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Tarifa Transportista (S/ por kg)</label>
+                        <div style="position: relative;">
+                            <span style="position: absolute; left: 12px; top: 10px; color: #94a3b8; font-weight: 600;">S/</span>
+                            <input type="number" step="0.01" id="transbordo-tarifa-input" placeholder="0.00" style="width: 100%; padding: 10px 12px 10px 32px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; outline: none; box-sizing: border-box;">
+                        </div>
+                        <span id="transbordo-tarifa-warning" style="display: none; font-size: 11px; color: #dc2626; font-weight: 600; margin-top: 4px; display: none;">
+                            <i class="fas fa-exclamation-triangle"></i> ¡Atención! La tarifa ofrecida es mayor al flete y generará pérdidas.
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tab Carga -->
+            <div id="tab-transbordo-carga" style="display: none; grid-template-columns: 1fr 1fr; gap: 24px; min-height: 400px; height: 100%;">
+                <!-- Columna Izquierda: Camión Accidentado -->
+                <div style="background: white; border: 1px solid #fecaca; border-radius: 8px; display: flex; flex-direction: column;">
+                    <div style="padding: 16px; border-bottom: 1px dashed #fecaca;">
+                        <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: #b91c1c; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-exclamation-triangle"></i> Camión Accidentado
+                        </h4>
+                    </div>
+                    <div style="padding: 16px; overflow-y: auto;">
+                        <p style="margin: 0 0 16px 0; font-size: 13px; font-weight: 600; color: #ef4444;">Cargas por definir o marcadas como siniestrada total:</p>
+                        <div id="transbordo-cargas-accidentado-lista" style="display: flex; flex-direction: column; gap: 16px;">
+                            <!-- Aquí se inyectarán las tarjetas de las cargas -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Columna Derecha: Camión de Transbordo -->
+                <div style="background: #f8fafc; border: 1px solid #bfdbfe; border-radius: 8px; display: flex; flex-direction: column;">
+                    <div style="padding: 16px; border-bottom: 1px dashed #bfdbfe;">
+                        <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: #1d4ed8; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-truck"></i> Camión de Transbordo
+                        </h4>
+                    </div>
+                    <div style="padding: 16px; display: flex; flex-direction: column; flex: 1;">
+                        <p style="margin: 0 0 16px 0; font-size: 13px; font-weight: 600; color: #2563eb;">Cargas asignadas al nuevo vehículo:</p>
+                        <div id="transbordo-cargas-nuevo-lista" style="flex: 1; display: flex; flex-direction: column; gap: 16px; align-items: stretch; justify-content: flex-start; min-height: 200px; padding-top: 24px;">
+                            <p style="margin: 0; font-size: 13px; font-style: italic; color: #3b82f6;">Aún no hay cargas asignadas para transbordo.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; align-items: center; gap: 12px; background: white; border-radius: 0 0 12px 12px;">
+            <button id="btn-cerrar-modal-transbordo-btn" style="padding: 10px 20px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--text-primary); cursor: pointer; transition: all 0.2s;">Cancelar</button>
+            <button id="btn-confirmar-transbordo" style="padding: 10px 24px; background: #ea580c; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; color: white; cursor: pointer; transition: all 0.2s;">
+                Confirmar Transbordo
+            </button>
+        </div>
+
+    </div>
+</div>

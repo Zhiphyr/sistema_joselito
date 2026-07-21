@@ -13,21 +13,17 @@ window.init_clientes = function () {
     document.getElementById('formCliente').addEventListener('submit', guardarCliente);
     document.getElementById('btnBuscarDocumento').addEventListener('click', buscarDocumentoEnApiExterna);
 
-    // Buscador en tiempo real
-    document.getElementById('inputBuscarCliente').addEventListener('keyup', function (e) {
-        const texto = e.target.value.toLowerCase();
-        const filas = document.querySelectorAll('#tbody-clientes tr');
-        filas.forEach(fila => {
-            fila.style.display = fila.textContent.toLowerCase().includes(texto) ? '' : 'none';
-        });
-    });
 };
-
 async function cargarTablaClientes() {
     const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
     const tbody = document.getElementById('tbody-clientes');
 
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color: var(--text-muted);"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
+    // Destruir instancia anterior si existe para evitar problemas de re-renderizado
+    if ($.fn.DataTable.isDataTable('#tabla-clientes')) {
+        $('#tabla-clientes').DataTable().destroy();
+    }
+
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--text-muted);"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
 
     try {
         const response = await fetch('http://localhost:3000/api/clientes', {
@@ -39,7 +35,7 @@ async function cargarTablaClientes() {
             window.clientesCache = result.data;
 
             if (result.data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color: var(--text-muted);">No se encontraron clientes</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: var(--text-muted);">No se encontraron clientes</td></tr>';
                 return;
             }
 
@@ -57,6 +53,10 @@ async function cargarTablaClientes() {
                     ? '<span class="badge-tipo-ruc">RUC</span>'
                     : '<span class="badge-tipo-dni">DNI</span>';
 
+                const correo = c.correo
+                    ? c.correo
+                    : '<span style="color:#aaa; font-style:italic;">Sin correo</span>';
+
                 filasHTML += `
                     <tr class="tabla-tr">
                         <td class="tabla-td tabla-id">${c.id_cliente}</td>
@@ -64,6 +64,7 @@ async function cargarTablaClientes() {
                         <td class="tabla-td"><span class="tabla-mono">${c.numero_documento}</span></td>
                         <td class="tabla-td tabla-nombre">${c.nombre_razon_social}</td>
                         <td class="tabla-td tabla-secundario">${c.telefono}</td>
+                        <td class="tabla-td">${correo}</td>
                         <td class="tabla-td">${badgeEstado}</td>
                         <td class="tabla-td">
                             <button class="btn-action btn-edit" onclick="abrirModalEditarCliente(${c.id_cliente})" title="Editar">
@@ -81,27 +82,141 @@ async function cargarTablaClientes() {
             });
 
             tbody.innerHTML = filasHTML;
+
+            $('#tabla-clientes').DataTable({
+                language: {
+                    url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
+                },
+                order: [[0, 'desc']], // Ordenar por ID descendente
+                pageLength: 15,
+                lengthMenu: [[15, 25, 50, -1], [15, 25, 50, "Todos"]],
+                dom: '<"dt-top-controls"<"dt-left-controls"l>f>rt<"bottom-controls"ip>',
+                columnDefs: [
+                    { orderable: false, targets: 7 } // La columna de acciones no es ordenable
+                ]
+            });
+
         } else {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color: #ef4444;">Error: ${result.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color: #ef4444;">Error: ${result.message}</td></tr>`;
         }
     } catch (error) {
-        console.error("Error al cargar clientes:", error);
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color: #ef4444;">Error de conexión con el servidor</td></tr>';
+        console.error('Error al cargar clientes:', error);
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color: #ef4444;">Error de conexión con el servidor</td></tr>';
+    }
+
+}
+
+function validarDocumento() {
+    const tipo = document.getElementById('tipo_documento').value;
+    const num = document.getElementById('numero_documento').value.trim();
+    const btnLupa = document.getElementById('btnBuscarDocumento');
+
+    let regex = null;
+    if (tipo === 'DNI') regex = /^\d{8}$/;
+    if (tipo === 'RUC') regex = /^(10|15|17|20)\d{9}$/;
+
+    if (regex && regex.test(num)) {
+        document.getElementById('numero_documento').style.borderColor = '#10b981';
+        btnLupa.disabled = false;
+        btnLupa.style.opacity = '1';
+        btnLupa.style.cursor = 'pointer';
+        return true;
+    } else {
+        document.getElementById('numero_documento').style.borderColor = num.length > 0 ? '#ef4444' : '';
+        btnLupa.disabled = true;
+        btnLupa.style.opacity = '0.5';
+        btnLupa.style.cursor = 'not-allowed';
+        return false;
+    }
+}
+
+function validarTelefono() {
+    const tel = document.getElementById('telefono').value.trim();
+    const regex = /^9\d{8}$/;
+    if (regex.test(tel)) {
+        document.getElementById('telefono').style.borderColor = '#10b981';
+        return true;
+    } else {
+        document.getElementById('telefono').style.borderColor = tel.length > 0 ? '#ef4444' : '';
+        return false;
+    }
+}
+
+function validarCorreo() {
+    const correo = document.getElementById('correo').value.trim();
+    if (correo.length === 0) {
+        document.getElementById('correo').style.borderColor = '';
+        return true; // Es opcional
+    }
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (regex.test(correo)) {
+        document.getElementById('correo').style.borderColor = '#10b981';
+        return true;
+    } else {
+        document.getElementById('correo').style.borderColor = '#ef4444';
+        return false;
+    }
+}
+
+function validarBotonGuardar() {
+    const numDoc = document.getElementById('numero_documento').value.trim();
+    const nombre = document.getElementById('nombre_razon_social').value.trim();
+    const idEdit = document.getElementById('id_cliente').value;
+    const btnGuardar = document.getElementById('btnGuardarCliente');
+
+    const docValido = validarDocumento();
+    const telValido = validarTelefono();
+    const correoValido = validarCorreo();
+    const nombreValido = nombre.length > 0 && nombre !== 'Consultando...' && nombre !== 'No se encontró el documento';
+
+    // Verificar duplicidad en frontend
+    let esDuplicado = false;
+    if (window.clientesCache && docValido) {
+        esDuplicado = window.clientesCache.some(c => c.numero_documento === numDoc && c.id_cliente != idEdit);
+    }
+
+    if (docValido && telValido && correoValido && nombreValido && !esDuplicado) {
+        btnGuardar.disabled = false;
+        btnGuardar.style.opacity = '1';
+        btnGuardar.style.cursor = 'pointer';
+    } else {
+        btnGuardar.disabled = true;
+        btnGuardar.style.opacity = '0.5';
+        btnGuardar.style.cursor = 'not-allowed';
     }
 }
 
 function configurarEventosDocumento() {
     const tipoDoc = document.getElementById('tipo_documento');
     const numDoc = document.getElementById('numero_documento');
+    const telInput = document.getElementById('telefono');
+    const correoInput = document.getElementById('correo');
+    const btnLupa = document.getElementById('btnBuscarDocumento');
+    
+    // Inicializar estado botón
+    btnLupa.disabled = true;
+    btnLupa.style.opacity = '0.5';
+    btnLupa.style.cursor = 'not-allowed';
 
     tipoDoc.addEventListener('change', function () {
         numDoc.value = '';
+        document.getElementById('nombre_razon_social').value = '';
         numDoc.maxLength = this.value === 'DNI' ? 8 : 11;
+        validarBotonGuardar();
     });
 
     numDoc.addEventListener('input', function () {
         this.value = this.value.replace(/[^0-9]/g, '');
+        document.getElementById('nombre_razon_social').value = ''; // Resetear nombre si cambia documento
+        validarBotonGuardar();
     });
+
+    telInput.addEventListener('input', function () {
+        this.value = this.value.replace(/[^0-9]/g, '');
+        validarBotonGuardar();
+    });
+
+    correoInput.addEventListener('input', validarBotonGuardar);
 }
 
 function abrirModalCrearCliente() {
@@ -109,11 +224,14 @@ function abrirModalCrearCliente() {
     document.getElementById('id_cliente').value = '';
     document.getElementById('modalTitle').textContent = 'Nuevo Cliente';
 
-    // Al crear, los campos de documento son editables
     document.getElementById('tipo_documento').disabled = false;
     document.getElementById('numero_documento').readOnly = false;
     document.getElementById('numero_documento').maxLength = 8;
+    
+    // Resetear bordes
+    ['numero_documento', 'telefono', 'correo'].forEach(id => document.getElementById(id).style.borderColor = '');
 
+    validarBotonGuardar();
     document.getElementById('modalCliente').style.display = 'flex';
 }
 
@@ -129,17 +247,21 @@ window.abrirModalEditarCliente = function (id) {
     document.getElementById('tipo_documento').value = data.tipo_documento;
     document.getElementById('numero_documento').value = data.numero_documento;
     document.getElementById('nombre_razon_social').value = data.nombre_razon_social;
-    document.getElementById('direccion').value = data.direccion;
+    document.getElementById('direccion').value = data.direccion || '';
     document.getElementById('telefono').value = data.telefono;
     document.getElementById('correo').value = data.correo || '';
 
-    // Regla: En edición, los documentos son inmutables
     document.getElementById('tipo_documento').disabled = true;
     document.getElementById('numero_documento').readOnly = true;
 
+    // Resetear bordes
+    ['numero_documento', 'telefono', 'correo'].forEach(id => document.getElementById(id).style.borderColor = '');
+
     document.getElementById('modalTitle').textContent = 'Editar Cliente';
+    validarBotonGuardar();
     document.getElementById('modalCliente').style.display = 'flex';
 };
+
 
 async function guardarCliente(e) {
     e.preventDefault();
@@ -242,7 +364,7 @@ window.cambiarEstadoCliente = async function (id, estado, silent = false) {
 
     if (!silent) {
         const titulo = estado === 2 ? '¿Eliminar cliente?' : (estado === 1 ? '¿Activar cliente?' : '¿Desactivar cliente?');
-        const texto = estado === 2 ? 'Esta acción es irreversible (borrado lógico).' : 'Cambiarás el estado del cliente en el sistema.';
+        const texto = estado === 2 ? 'Esta acción es irreversible' : 'Cambiarás el estado del cliente en el sistema.';
 
         const confirm = await Swal.fire({
             title: titulo,
@@ -326,16 +448,14 @@ async function buscarDocumentoEnApiExterna() {
 
         if (response.ok && result.success) {
             inputNombre.value = result.nombre;
-            const inputDireccion = document.getElementById('direccion');
-            if (result.direccion && !inputDireccion.value.trim()) {
-                inputDireccion.value = result.direccion;
-            }
+            validarBotonGuardar();
         } else {
-            inputNombre.value = '';
+            inputNombre.value = 'No se encontró el documento';
             Swal.fire({ icon: 'error', title: 'Consulta fallida', text: result.message || 'No se encontró el documento' });
         }
     } catch (error) {
-        inputNombre.value = '';
+        inputNombre.value = 'No se encontró el documento';
+        validarBotonGuardar();
         Swal.fire({ icon: 'error', title: 'Error', text: 'Error de conexión al consultar el documento.' });
     } finally {
         btn.innerHTML = iconoOriginal;

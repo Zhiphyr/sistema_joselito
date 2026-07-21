@@ -8,15 +8,10 @@
     </button>
 </div>
 
-<div class="welcome-card sin-padding">
-
-    <div class="tabla-toolbar">
-        <label for="inputBuscarUsuario">Buscar:</label>
-        <input type="text" id="inputBuscarUsuario" class="form-control" placeholder="Nombre, usuario o perfil...">
-    </div>
+<div class="welcome-card sin-padding" style="margin-top: 15px; margin-bottom: 15px;">
 
     <div class="tabla-scroll">
-        <table class="tabla-modulo">
+        <table id="tabla-usuarios" class="tabla-modulo display hover stripe" style="width:100%">
             <thead>
                 <tr>
                     <th class="tabla-th" style="width: 60px;">ID</th>
@@ -32,6 +27,110 @@
     </div>
 </div>
 
+<style>
+    /* Estilos modernos para los controles del DataTable */
+    #tabla-usuarios_wrapper {
+        display: flex;
+        flex-direction: column;
+        padding: 24px 24px 0 24px; /* Padding superior y lateral para separar de la card */
+    }
+    
+    .dt-top-controls {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+        background: #f8fafc;
+        padding: 16px 20px;
+        border-radius: 12px;
+        border: 1px solid var(--border-light);
+    }
+
+    .dt-left-controls {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        flex-wrap: wrap;
+    }
+
+    #tabla-usuarios_wrapper .dataTables_length,
+    #tabla-usuarios_wrapper .dataTables_filter {
+        margin: 0 !important;
+        float: none !important;
+        text-align: left !important;
+    }
+
+    #tabla-usuarios_wrapper .dataTables_length label,
+    #tabla-usuarios_wrapper .dataTables_filter label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        font-weight: 600;
+        color: var(--text-secondary);
+        font-size: 13px;
+    }
+
+    #tabla-usuarios_wrapper .dataTables_length select,
+    #tabla-usuarios_wrapper .dataTables_filter input {
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 13px;
+        outline: none;
+        transition: all 0.2s;
+        background: white;
+    }
+
+    #tabla-usuarios_wrapper .dataTables_filter input {
+        width: 220px;
+    }
+
+    #tabla-usuarios_wrapper .dataTables_length select:focus,
+    #tabla-usuarios_wrapper .dataTables_filter input:focus {
+        border-color: var(--brand-blue);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    /* Paginación y info inferior con padding */
+    .bottom-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 24px;
+        border-top: 1px solid var(--border-light);
+        margin-top: auto;
+    }
+
+    /* Input de contraseña con botón para mostrar/ocultar */
+    .password-input-wrapper {
+        position: relative;
+    }
+
+    .password-input-wrapper input {
+        padding-right: 40px;
+    }
+
+    .btn-toggle-password {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 4px 6px;
+        font-size: 14px;
+        transition: color 0.2s;
+    }
+
+    .btn-toggle-password:hover {
+        color: var(--brand-blue);
+    }
+</style>
 <!-- Modal CRUD Usuario -->
 <div id="modalUsuario" class="modal-overlay" style="display: none;">
     <div class="modal-container">
@@ -46,34 +145,41 @@
                 <div class="form-group">
                     <label for="nombre">Nombre Completo <span class="required">*</span></label>
                     <input type="text" id="nombre" name="nombre" class="form-control" required
-                        placeholder="Ej. Juan Pérez">
+                        placeholder="Ej. Juan Pérez" maxlength="70" oninput="this.value = this.value.toUpperCase().replace(/[^A-Z\s]/g, ''); validarBotonGuardarUsuario();">
                 </div>
 
                 <div class="form-group">
                     <label for="usuario_login">Usuario <span class="required">*</span></label>
                     <input type="text" id="usuario_login" name="usuario_login" class="form-control" required
-                        autocomplete="off" placeholder="Ej. jperez">
+                        autocomplete="off" placeholder="Ej. jperez" maxlength="30" oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9._]/g, ''); validarBotonGuardarUsuario();">
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" id="grupoPerfil">
                     <label for="id_perfil">Perfil <span class="required">*</span></label>
-                    <select id="id_perfil" name="id_perfil" class="form-control" required>
+                    <select id="id_perfil" name="id_perfil" class="form-control" required onchange="validarBotonGuardarUsuario();">
                         <option value="">Seleccione...</option>
                     </select>
+                </div>
+                <div id="avisoPerfilPropio" style="display: none; color: var(--text-muted); font-size: 12px; margin-bottom: 16px;">
+                    <i class="fas fa-info-circle"></i> No puedes cambiar tu propio perfil. Pídeselo a otro administrador.
                 </div>
 
                 <div class="form-group">
                     <label for="clave_login" id="labelClave">Contraseña</label>
-                    <input type="password" id="clave_login" name="clave_login" class="form-control"
-                        autocomplete="new-password">
+                    <div class="password-input-wrapper">
+                        <input type="password" id="clave_login" name="clave_login" class="form-control"
+                            autocomplete="new-password" oninput="this.value = this.value.replace(/\s/g, ''); validarBotonGuardarUsuario();">
+                        <button type="button" class="btn-toggle-password" id="btnTogglePasswordUsuario" tabindex="-1" title="Mostrar/Ocultar contraseña">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                     <small id="helpClave"
-                        style="color: var(--text-muted); font-size: 12px; display: none; margin-top: 4px;">(Dejar en
-                        blanco para no cambiar)</small>
+                        style="color: var(--text-muted); font-size: 12px; display: block; margin-top: 4px;">Políticas: Mínimo 8 caracteres, al menos 1 letra mayúscula y 1 número.</small>
                 </div>
 
                 <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
                     <button type="button" class="btn-secondary" id="btnCancelarModal">Cancelar</button>
-                    <button type="submit" class="btn-primary" style="width: auto; padding: 10px 24px;">Guardar</button>
+                    <button type="submit" class="btn-primary" id="btnGuardarUsuario" style="width: auto; padding: 10px 24px;">Guardar</button>
                 </div>
             </form>
         </div>
