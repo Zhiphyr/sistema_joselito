@@ -187,6 +187,10 @@
             </div>
             <form id="form-cotizador" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; max-height: calc(90vh - 65px);">
                 <div class="modal-body">
+                    <div style="position: absolute; left: -9999px; top: -9999px;" aria-hidden="true">
+                        <label for="cot-sitio-web">Deje este campo vacío</label>
+                        <input type="text" id="cot-sitio-web" name="sitio_web" tabindex="-1" autocomplete="off">
+                    </div>
                     <div class="form-group">
                         <label>Su nombre completo</label>
                         <input type="text" id="cot-nombre" required placeholder="EJ. JUAN PEREZ" autocomplete="off">

@@ -4,6 +4,10 @@ let cargaSeleccionadaPago = null;
 let cuentasIndem = [];
 let billeterasIndem = [];
 let carritoPagosIndem = [];
+// Snapshot de saldos (fresco al abrir el modal de pago) usado solo para mostrar
+// "Saldo disponible" en vivo y para el chequeo previo al envío; la validación real
+// e infalible sigue siendo la del backend (registrarPago / calcularSaldoDisponible).
+let resumenCuentasIndemActual = null;
 
 // Inicialización de la vista
 window.init_indemnizaciones = async function() {
@@ -25,6 +29,48 @@ async function cargarCuentasYBilleterasIndem() {
     } catch (error) {
         console.error('Error cargando cuentas y billeteras:', error);
     }
+}
+
+// Trae fresco (nunca cacheado) el saldo de cada cuenta/billetera/caja física, igual
+// que dashboard_financiero.js y liquidacion.js, para no confiar en un saldo cacheado
+// que pudo cambiar por otros movimientos mientras el modal de pago estaba abierto.
+async function obtenerResumenCuentasIndem() {
+    try {
+        const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+        const response = await fetch('/api/dashboard-financiero/cuentas-resumen', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const result = await response.json();
+        return result.success ? result.data : null;
+    } catch (error) {
+        console.error('Error al obtener el resumen de cuentas:', error);
+        return null;
+    }
+}
+
+// Misma resolución que dashboard_financiero.js/resolverSaldoDisponibleFinanciero: Efectivo
+// y Depósito comparten la Caja Física (igual que resolverOrigenPagoIndemnizacion en el
+// backend); una billetera arrastra el saldo combinado de su cuenta vinculada si tiene una.
+function resolverSaldoDisponibleIndem(resumenCuentas, metodo, idCuenta, idBilletera) {
+    if (!resumenCuentas) return null;
+
+    if (metodo === 'Efectivo' || metodo === 'Depósito') {
+        return resumenCuentas.caja_fisica ? Number(resumenCuentas.caja_fisica.saldo) : 0;
+    }
+    if (metodo === 'Billetera Digital') {
+        const cuentaVinculada = resumenCuentas.cuentas_bancarias.find(c =>
+            c.billetera_vinculada && String(c.billetera_vinculada.id_billetera) === String(idBilletera)
+        );
+        if (cuentaVinculada) return Number(cuentaVinculada.saldo);
+
+        const billeteraIndependiente = resumenCuentas.billeteras_independientes.find(b =>
+            String(b.id_billetera) === String(idBilletera)
+        );
+        return billeteraIndependiente ? Number(billeteraIndependiente.saldo) : 0;
+    }
+    // Transferencia -> cuenta bancaria seleccionada
+    const cuenta = resumenCuentas.cuentas_bancarias.find(c => String(c.id_cuenta) === String(idCuenta));
+    return cuenta ? Number(cuenta.saldo) : 0;
 }
 
 function cambiarTabIndemnizaciones(tabId) {
@@ -287,9 +333,17 @@ function abrirModalPago(idViaje, idCarga) {
         numOpEstado: null,
         evidencia_file: null
     }];
+    resumenCuentasIndemActual = null;
     renderizarCarritoPagosIndem();
 
     document.getElementById('modalPagarIndemnizacion').style.display = 'flex';
+
+    // El saldo se trae fresco al abrir el modal (no basta el caché de init) y se
+    // vuelve a renderizar el carrito para mostrar "Saldo disponible" por línea.
+    obtenerResumenCuentasIndem().then(resumen => {
+        resumenCuentasIndemActual = resumen;
+        renderizarCarritoPagosIndem();
+    });
 }
 
 function cerrarModalPago() {
@@ -420,6 +474,15 @@ function renderizarCarritoPagosIndem() {
         const mostrarEvidencia = metodo !== 'Efectivo';
         const nombreArchivo = pago.evidencia_file ? pago.evidencia_file.name : '';
 
+        const saldoLinea = resolverSaldoDisponibleIndem(resumenCuentasIndemActual, metodo, pago.id_cuenta, pago.id_billetera);
+        const requiereSeleccion = (metodo === 'Transferencia' && !pago.id_cuenta) || (metodo === 'Billetera Digital' && !pago.id_billetera);
+        let saldoHintTexto = '';
+        if (!resumenCuentasIndemActual) {
+            saldoHintTexto = 'Consultando saldo...';
+        } else if (!requiereSeleccion) {
+            saldoHintTexto = `Saldo disponible: S/ ${Number(saldoLinea || 0).toFixed(2)}`;
+        }
+
         const bloque = document.createElement('div');
         bloque.className = 'pago-linea-indem';
         bloque.innerHTML = `
@@ -459,6 +522,8 @@ function renderizarCarritoPagosIndem() {
                     ${opcionesBilleteras}
                 </select>
             </div>
+
+            <div id="saldoHintIndem_${index}" class="pago-monto-hint" style="color: var(--text-muted);">${saldoHintTexto}</div>
 
             <div class="pago-linea-campo" style="display: ${mostrarNumOp ? 'block' : 'none'};">
                 <label>N° Operación *</label>
@@ -537,8 +602,35 @@ function actualizarPagoIndem(index, campo, valor) {
         carritoPagosIndem[index].monto_pagado = Number(valor) || 0;
     }
 
+    if (campo === 'id_cuenta' || campo === 'id_billetera') {
+        actualizarSaldoHintIndem(index);
+    }
+
     // También cubre id_cuenta/id_billetera: cambian si la línea cumple sus requisitos
     actualizarFaltaPagarIndem();
+}
+
+// Refresca solo el hint de saldo de una línea (sin re-renderizar todo el bloque, para
+// no perder el foco del select mientras el usuario interactúa con él).
+function actualizarSaldoHintIndem(index) {
+    const pago = carritoPagosIndem[index];
+    const hint = document.getElementById(`saldoHintIndem_${index}`);
+    if (!pago || !hint) return;
+
+    const metodo = pago.metodo_pago || 'Efectivo';
+    const requiereSeleccion = (metodo === 'Transferencia' && !pago.id_cuenta) || (metodo === 'Billetera Digital' && !pago.id_billetera);
+
+    if (!resumenCuentasIndemActual) {
+        hint.textContent = 'Consultando saldo...';
+        return;
+    }
+    if (requiereSeleccion) {
+        hint.textContent = '';
+        return;
+    }
+
+    const saldo = resolverSaldoDisponibleIndem(resumenCuentasIndemActual, metodo, pago.id_cuenta, pago.id_billetera);
+    hint.textContent = `Saldo disponible: S/ ${Number(saldo || 0).toFixed(2)}`;
 }
 
 function validarMontoIndem(index, input) {
@@ -747,6 +839,36 @@ async function procesarPago() {
         } catch (error) {
             console.error('Error verificando número de operación:', error);
         }
+    }
+
+    // Chequeo de fondos con datos frescos (por si otro movimiento consumió el saldo
+    // mientras el modal estaba abierto). No reemplaza la validación real del backend
+    // (registrarPago), que es la que de verdad no se puede saltar.
+    const resumenFrescoIndem = await obtenerResumenCuentasIndem();
+    const saldosReservadosIndem = new Map();
+    for (let i = 0; i < carritoPagosIndem.length; i++) {
+        const p = carritoPagosIndem[i];
+        const montoLinea = Number(p.monto_pagado) || 0;
+        if (montoLinea <= 0) continue;
+
+        const claveSaldo = p.metodo_pago === 'Billetera Digital' ? `billetera:${p.id_billetera}` :
+            (p.metodo_pago === 'Transferencia' ? `cuenta:${p.id_cuenta}` : 'caja_fisica');
+
+        const saldoBase = resolverSaldoDisponibleIndem(resumenFrescoIndem, p.metodo_pago, p.id_cuenta, p.id_billetera);
+        if (saldoBase === null) continue;
+
+        const yaReservado = saldosReservadosIndem.get(claveSaldo) || 0;
+        const saldoRestante = Math.round((saldoBase - yaReservado) * 100) / 100;
+
+        if (saldoRestante < montoLinea) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Fondos Insuficientes',
+                text: `El método de pago "${p.metodo_pago}" del pago #${i + 1} solo tiene S/ ${saldoRestante.toFixed(2)} disponible.`
+            });
+            return;
+        }
+        saldosReservadosIndem.set(claveSaldo, yaReservado + montoLinea);
     }
 
     const detalles = window.detallesParaPagar.map(det => ({

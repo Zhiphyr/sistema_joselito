@@ -25,6 +25,14 @@ window.init_usuarios = function () {
     document.getElementById('btnCancelarModal').addEventListener('click', cerrarModalUsuario);
     document.getElementById('formUsuario').addEventListener('submit', guardarUsuario);
 
+    document.getElementById('btnTogglePasswordUsuario').addEventListener('click', function () {
+        const input = document.getElementById('clave_login');
+        const icono = this.querySelector('i');
+        const mostrar = input.type === 'password';
+        input.type = mostrar ? 'text' : 'password';
+        icono.className = mostrar ? 'fas fa-eye-slash' : 'fas fa-eye';
+    });
+
     // El buscador en tiempo real ahora es manejado por DataTables
 };
 
@@ -182,7 +190,7 @@ window.validarBotonGuardarUsuario = function () {
 
     // Validación de Contraseña
     const claveVal = claveInput.value;
-    const regexClave = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+    const regexClave = /^(?=.*[A-Z])(?=.*\d)\S{8,}$/;
     const helpClave = document.getElementById('helpClave');
     let claveInvalida = false;
 
@@ -223,20 +231,29 @@ function abrirModalCrearUsuario() {
     document.getElementById('modalTitle').textContent = 'Nuevo Usuario';
     document.getElementById('clave_login').required = true;
     document.getElementById('clave_login').placeholder = 'Ej. Joselito123';
-    
+
     const helpClave = document.getElementById('helpClave');
     helpClave.textContent = 'Políticas: Mínimo 8 caracteres, al menos 1 letra mayúscula y 1 número.';
     helpClave.style.display = 'block';
 
+    // Crear siempre permite elegir el perfil (nunca es "uno mismo")
+    document.getElementById('grupoPerfil').style.display = 'block';
+    document.getElementById('id_perfil').disabled = false;
+    document.getElementById('avisoPerfilPropio').style.display = 'none';
+
     const inputs = document.querySelectorAll('#formUsuario .form-control');
     inputs.forEach(input => input.classList.remove('is-invalid'));
-    
+
     document.getElementById('modalUsuario').style.display = 'flex';
     window.validarBotonGuardarUsuario();
 }
 
 function cerrarModalUsuario() {
     document.getElementById('modalUsuario').style.display = 'none';
+
+    const inputClave = document.getElementById('clave_login');
+    inputClave.type = 'password';
+    document.getElementById('btnTogglePasswordUsuario').querySelector('i').className = 'fas fa-eye';
 }
 
 window.abrirModalEditarUsuario = function (id) {
@@ -257,10 +274,16 @@ window.abrirModalEditarUsuario = function (id) {
     document.getElementById('clave_login').required = false;
     document.getElementById('clave_login').value = '';
     document.getElementById('clave_login').placeholder = 'Dejar en blanco para no cambiar';
-    
+
     const helpClave = document.getElementById('helpClave');
     helpClave.textContent = 'Políticas: Mínimo 8 caracteres, al menos 1 letra mayúscula y 1 número.';
     helpClave.style.display = 'block';
+
+    // Un usuario no puede cambiar su propio perfil (evita que se autodegrade/promueva)
+    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+    const esUsuarioPropio = parseInt(sessionData.id_usuario) === parseInt(data.id_usuario);
+    document.getElementById('grupoPerfil').style.display = esUsuarioPropio ? 'none' : 'block';
+    document.getElementById('avisoPerfilPropio').style.display = esUsuarioPropio ? 'block' : 'none';
 
     const inputs = document.querySelectorAll('#formUsuario .form-control');
     inputs.forEach(input => input.classList.remove('is-invalid'));
@@ -295,20 +318,38 @@ async function guardarUsuario(e) {
     const method = id ? 'PUT' : 'POST';
     const url = id ? `http://localhost:3000/api/usuarios/${id}` : 'http://localhost:3000/api/usuarios';
 
+    const esEdicionPropia = id && parseInt(sessionData.id_usuario) === parseInt(id);
+
     try {
         const response = await fetch(url, {
             method,
             headers: {
                 'Content-Type': 'application/json',
-                'x-user-profile': sessionData.id_perfil
+                'x-user-profile': sessionData.id_perfil,
+                'x-user-id': sessionData.id_usuario
             },
             body: JSON.stringify(datos)
         });
         const result = await response.json();
 
         if (response.ok && result.success) {
-            Swal.fire({ icon: 'success', title: 'Éxito', text: result.message, timer: 1500, showConfirmButton: false });
             cerrarModalUsuario();
+
+            if (esEdicionPropia) {
+                // Modificar la propia cuenta invalida los datos cacheados en sessionStorage
+                // (nombre, usuario, contraseña), así que forzamos a re-loguearse.
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'Datos actualizados',
+                    text: 'Por seguridad, debes iniciar sesión nuevamente.',
+                    confirmButtonText: 'Ir al login'
+                });
+                sessionStorage.removeItem('usuario_joselito');
+                window.location.href = '/login.html';
+                return;
+            }
+
+            Swal.fire({ icon: 'success', title: 'Éxito', text: result.message, timer: 1500, showConfirmButton: false });
             cargarTablaUsuarios();
         } else {
             Swal.fire({ icon: 'error', title: 'Error', text: result.message });

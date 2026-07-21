@@ -103,6 +103,33 @@
         border-top: 1px solid var(--border-light);
         margin-top: auto;
     }
+
+    /* Input de contraseña con botón para mostrar/ocultar */
+    .password-input-wrapper {
+        position: relative;
+    }
+
+    .password-input-wrapper input {
+        padding-right: 40px;
+    }
+
+    .btn-toggle-password {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 4px 6px;
+        font-size: 14px;
+        transition: color 0.2s;
+    }
+
+    .btn-toggle-password:hover {
+        color: var(--brand-blue);
+    }
 </style>
 <!-- Modal CRUD Usuario -->
 <div id="modalUsuario" class="modal-overlay" style="display: none;">
@@ -127,17 +154,25 @@
                         autocomplete="off" placeholder="Ej. jperez" maxlength="30" oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9._]/g, ''); validarBotonGuardarUsuario();">
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" id="grupoPerfil">
                     <label for="id_perfil">Perfil <span class="required">*</span></label>
                     <select id="id_perfil" name="id_perfil" class="form-control" required onchange="validarBotonGuardarUsuario();">
                         <option value="">Seleccione...</option>
                     </select>
                 </div>
+                <div id="avisoPerfilPropio" style="display: none; color: var(--text-muted); font-size: 12px; margin-bottom: 16px;">
+                    <i class="fas fa-info-circle"></i> No puedes cambiar tu propio perfil. Pídeselo a otro administrador.
+                </div>
 
                 <div class="form-group">
                     <label for="clave_login" id="labelClave">Contraseña</label>
-                    <input type="password" id="clave_login" name="clave_login" class="form-control"
-                        autocomplete="new-password" oninput="validarBotonGuardarUsuario();">
+                    <div class="password-input-wrapper">
+                        <input type="password" id="clave_login" name="clave_login" class="form-control"
+                            autocomplete="new-password" oninput="this.value = this.value.replace(/\s/g, ''); validarBotonGuardarUsuario();">
+                        <button type="button" class="btn-toggle-password" id="btnTogglePasswordUsuario" tabindex="-1" title="Mostrar/Ocultar contraseña">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                     <small id="helpClave"
                         style="color: var(--text-muted); font-size: 12px; display: block; margin-top: 4px;">Políticas: Mínimo 8 caracteres, al menos 1 letra mayúscula y 1 número.</small>
                 </div>

@@ -43,6 +43,17 @@ class CamionModel {
         return rows[0];
     }
 
+    static async findByNumeroDocumento(numero_documento, excludeId = null) {
+        let query = `SELECT * FROM camiones WHERE numero_documento = ? AND estado != 2`;
+        const params = [numero_documento];
+        if (excludeId) {
+            query += ` AND id_camion != ?`;
+            params.push(excludeId);
+        }
+        const [rows] = await db.query(query, params);
+        return rows[0];
+    }
+
     static async registrarCamion(datos) {
         const { nombre, placa, tipo_documento, numero_documento, conductor, direccion, telefono } = datos;
         const query = `

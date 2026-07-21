@@ -403,7 +403,7 @@ const obtenerTodosMovimientos = async (req, res) => {
 const REGEX_MONTO_DECIMAL = /^\d{1,8}(\.\d{1,2})?$/;
 // Letras (con tildes/ñ), números, paréntesis, guiones y espacios; máx. 150 caracteres.
 const REGEX_CONCEPTO = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ0-9()\-\s]{1,150}$/;
-const REGEX_NUMERO_OPERACION = /^[a-zA-Z0-9-]{1,100}$/;
+const REGEX_NUMERO_OPERACION = /^\d{3,15}$/;
 
 // Valida y resuelve una cuenta bancaria o billetera digital seleccionada en un formulario
 // (Nuevo Ingreso / Nuevo Egreso / Transferencia Interna) a sus columnas reales de
@@ -660,6 +660,12 @@ const registrarTransferenciaInterna = async (req, res) => {
             await connection.rollback();
             connection.release();
             return res.status(400).json({ success: false, message: 'El destino seleccionado no existe o está inactivo.' });
+        }
+
+        if (origen.metodo_pago !== 'Efectivo' && (!numero_operacion || !String(numero_operacion).trim())) {
+            await connection.rollback();
+            connection.release();
+            return res.status(400).json({ success: false, message: 'El origen seleccionado requiere un número de operación.' });
         }
 
         const claveOrigen = origen.id_cuenta ? `cuenta:${origen.id_cuenta}` : `billetera:${origen.id_billetera}`;

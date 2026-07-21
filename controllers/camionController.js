@@ -28,12 +28,11 @@ const registrar = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios (excepto dirección)' });
         }
 
-        const tipoMin = tipo_documento.toLowerCase();
-        if (tipoMin === 'dni' && numero_documento.length !== 8) {
-            return res.status(400).json({ success: false, message: 'El DNI debe tener 8 dígitos' });
+        if (tipo_documento.toUpperCase() !== 'DNI') {
+            return res.status(400).json({ success: false, message: 'El conductor debe registrarse con DNI' });
         }
-        if (tipoMin === 'ruc' && numero_documento.length !== 11) {
-            return res.status(400).json({ success: false, message: 'El RUC debe tener 11 dígitos' });
+        if (numero_documento.length !== 8) {
+            return res.status(400).json({ success: false, message: 'El DNI debe tener 8 dígitos' });
         }
 
         if (nombre.trim().length < 3 || nombre.trim().length > 50) {
@@ -74,14 +73,22 @@ const registrar = async (req, res) => {
             }
         }
 
-        const id = await CamionModel.registrarCamion({ 
-            nombre: nombre.trim(), 
-            placa: placaNorm, 
-            tipo_documento, 
-            numero_documento, 
-            conductor: conductor.trim(), 
-            direccion: direccion ? direccion.trim() : null, 
-            telefono: telefono.trim() 
+        const conductorDuplicado = await CamionModel.findByNumeroDocumento(numero_documento);
+        if (conductorDuplicado) {
+            return res.status(400).json({
+                success: false,
+                message: `Este conductor ya está asignado al camión con placa ${conductorDuplicado.placa}`
+            });
+        }
+
+        const id = await CamionModel.registrarCamion({
+            nombre: nombre.trim(),
+            placa: placaNorm,
+            tipo_documento,
+            numero_documento,
+            conductor: conductor.trim(),
+            direccion: direccion ? direccion.trim() : null,
+            telefono: telefono.trim()
         });
         return res.status(201).json({ success: true, message: 'Camión registrado exitosamente', id });
 
@@ -105,6 +112,13 @@ const actualizar = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Camión no encontrado' });
         }
 
+        if (tipo_documento.toUpperCase() !== 'DNI') {
+            return res.status(400).json({ success: false, message: 'El conductor debe registrarse con DNI' });
+        }
+        if (numero_documento.length !== 8) {
+            return res.status(400).json({ success: false, message: 'El DNI debe tener 8 dígitos' });
+        }
+
         if (nombre.trim().length < 3 || nombre.trim().length > 50) {
             return res.status(400).json({ success: false, message: 'El nombre/unidad debe tener entre 3 y 50 caracteres' });
         }
@@ -116,7 +130,15 @@ const actualizar = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El teléfono debe tener 9 dígitos y empezar con 9' });
         }
 
-        await CamionModel.actualizarCamion(id, { 
+        const conductorDuplicado = await CamionModel.findByNumeroDocumento(numero_documento, id);
+        if (conductorDuplicado) {
+            return res.status(400).json({
+                success: false,
+                message: `Este conductor ya está asignado al camión con placa ${conductorDuplicado.placa}`
+            });
+        }
+
+        await CamionModel.actualizarCamion(id, {
             nombre: nombre.trim(), 
             tipo_documento, 
             numero_documento, 
@@ -144,6 +166,15 @@ const reactivar = async (req, res) => {
 
         if (camion.estado !== 2) {
             return res.status(400).json({ success: false, message: 'Solo se pueden reactivar camiones eliminados' });
+        }
+
+        const numeroDocumentoFinal = numero_documento || camion.numero_documento;
+        const conductorDuplicado = await CamionModel.findByNumeroDocumento(numeroDocumentoFinal, id);
+        if (conductorDuplicado) {
+            return res.status(400).json({
+                success: false,
+                message: `Este conductor ya está asignado al camión con placa ${conductorDuplicado.placa}`
+            });
         }
 
         await CamionModel.reactivarCamion(id, {
@@ -204,18 +235,13 @@ const cambiarEstado = async (req, res) => {
 
 const consultarDocumento = async (req, res) => {
     try {
-        const { tipo, numero } = req.params;
+        const { numero } = req.params;
 
-        if (!tipo || !numero) {
-            return res.status(400).json({ success: false, message: 'Tipo y número de documento requeridos' });
+        if (!numero) {
+            return res.status(400).json({ success: false, message: 'Número de documento requerido' });
         }
 
-        const tipoMin = tipo.toLowerCase();
-        if (tipoMin !== 'dni' && tipoMin !== 'ruc') {
-            return res.status(400).json({ success: false, message: 'Tipo de documento inválido. Use dni o ruc.' });
-        }
-
-        const url = `https://miapi.cloud/v1/${tipoMin}/${numero}`;
+        const url = `https://miapi.cloud/v1/dni/${numero}`;
         const token = process.env.MIAPICLOUD_TOKEN;
 
         if (!token || token === 'coloca_tu_token_aqui_antes_de_usarlo') {
@@ -234,14 +260,8 @@ const consultarDocumento = async (req, res) => {
 
         if (response.ok && data && data.success && data.datos) {
             const datos = data.datos;
-            let nombreCompleto = '';
             let direccionCompleta = '';
-
-            if (tipoMin === 'ruc') {
-                nombreCompleto = datos.razon_social || '';
-            } else {
-                nombreCompleto = `${datos.nombres || ''} ${datos.ape_paterno || ''} ${datos.ape_materno || ''}`.trim();
-            }
+            const nombreCompleto = `${datos.nombres || ''} ${datos.ape_paterno || ''} ${datos.ape_materno || ''}`.trim();
 
             if (datos.domiciliado) {
                 const dom = datos.domiciliado;

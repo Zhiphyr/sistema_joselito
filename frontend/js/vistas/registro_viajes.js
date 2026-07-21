@@ -483,6 +483,11 @@ function crearNuevaPestaniaViaje(esRestauracion = false) {
         }
     });
 
+    // Un camión elegido en esta pestaña debe dejar de aparecer en las demás
+    if (selectCamion) {
+        selectCamion.addEventListener('change', refrescarSelectsCamionTodasLasPestanias);
+    }
+
     if (btnRegistrarViajeFinal) {
         btnRegistrarViajeFinal.addEventListener('click', function() {
             registrarViajeBackend(this);
@@ -491,10 +496,49 @@ function crearNuevaPestaniaViaje(esRestauracion = false) {
 
     // 3. Activar la nueva pestaña
     activarPestania(idViaje);
-    
+
+    refrescarSelectsCamionTodasLasPestanias();
+
     if (!esRestauracion) {
         guardarEstadoEnLocalStorage(idViaje);
     }
+}
+
+/**
+ * Reconstruye el <select> de camión de TODAS las pestañas abiertas para que un
+ * camión ya elegido en una pestaña no pueda volver a elegirse en otra. Si dos
+ * pestañas terminan con el mismo camión (por ejemplo, estado legado restaurado
+ * desde localStorage antes de esta validación), solo la primera en el DOM lo
+ * conserva y a las demás se les limpia la selección.
+ */
+function refrescarSelectsCamionTodasLasPestanias() {
+    const selects = Array.from(document.querySelectorAll('.select-camion'));
+
+    const yaAsignados = new Set();
+    selects.forEach(select => {
+        if (select.value) {
+            if (yaAsignados.has(select.value)) {
+                select.value = '';
+            } else {
+                yaAsignados.add(select.value);
+            }
+        }
+    });
+
+    selects.forEach(select => {
+        const valorActual = select.value;
+        select.innerHTML = '<option value="">Seleccione un camión...</option>';
+        window.opcionesCamiones.forEach(c => {
+            const idStr = String(c.id_camion);
+            if (idStr === valorActual || !yaAsignados.has(idStr)) {
+                const opt = document.createElement('option');
+                opt.value = c.id_camion;
+                opt.textContent = `${c.placa} - Conductor: ${c.conductor}`;
+                select.appendChild(opt);
+            }
+        });
+        select.value = valorActual;
+    });
 }
 
 /**
@@ -552,6 +596,9 @@ function cerrarPestania(id, btnElement) {
     if (divContenido) {
         divContenido.remove();
     }
+
+    // El camión que tenía esta pestaña vuelve a estar disponible para las demás
+    refrescarSelectsCamionTodasLasPestanias();
 
     const botonesRestantes = document.querySelectorAll('.tab-btn');
     
@@ -934,7 +981,7 @@ function agregarBloqueProducto(prodInicial = null) {
                     </select>
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
-                    <label style="font-size: 12px;">Marca Visual (Saco)</label>
+                    <label style="font-size: 12px;">Marca Visual</label>
                     <input type="text" class="form-control prod-marca" placeholder="Ej. Marca Azul" required>
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
@@ -1142,20 +1189,77 @@ function guardarCargaEnMemoria() {
         };
 
         const idViajeActual = window.idViajeModalActivo;
-        
-        if (window.idCargaEditandoActiva) {
-            const index = window.cargasPorViaje[idViajeActual].findIndex(c => c.id_carga_temp === window.idCargaEditandoActiva);
-            if (index !== -1) {
-                nuevaCarga.id_carga_temp = window.idCargaEditandoActiva;
-                window.cargasPorViaje[idViajeActual][index] = nuevaCarga;
+        const idCargaEditandoActiva = window.idCargaEditandoActiva;
+
+        // Busca otra carga manual (no las traídas de almacén, que ya están ligadas
+        // a un id_carga real y no se pueden "absorber" productos ajenos) del mismo
+        // viaje con idéntico remitente y destinatario, para ofrecer fusionarla.
+        const cargaDuplicada = (window.cargasPorViaje[idViajeActual] || []).find(c =>
+            !c.es_carga_existente &&
+            c.id_carga_temp !== idCargaEditandoActiva &&
+            String(c.id_remitente) === String(idRemitente) &&
+            String(c.id_destinatario) === String(idDestinatario)
+        );
+
+        const guardarSeparada = () => {
+            if (idCargaEditandoActiva) {
+                const index = window.cargasPorViaje[idViajeActual].findIndex(c => c.id_carga_temp === idCargaEditandoActiva);
+                if (index !== -1) {
+                    nuevaCarga.id_carga_temp = idCargaEditandoActiva;
+                    window.cargasPorViaje[idViajeActual][index] = nuevaCarga;
+                }
+            } else {
+                window.cargasPorViaje[idViajeActual].push(nuevaCarga);
             }
-        } else {
-            window.cargasPorViaje[idViajeActual].push(nuevaCarga);
+
+            cerrarModalNuevaCarga();
+            renderizarCargasViaje(idViajeActual);
+            guardarEstadoEnLocalStorage(idViajeActual);
+        };
+
+        const fusionarConDuplicada = () => {
+            // Si se estaba editando una carga distinta a la duplicada, esa carga
+            // "desaparece" porque sus productos pasan a formar parte de la otra.
+            if (idCargaEditandoActiva) {
+                window.cargasPorViaje[idViajeActual] = window.cargasPorViaje[idViajeActual]
+                    .filter(c => c.id_carga_temp !== idCargaEditandoActiva);
+            }
+
+            cargaDuplicada.productos = cargaDuplicada.productos.concat(productos);
+            cargaDuplicada.resumen.total_peso += sumaPesoTotal;
+            cargaDuplicada.resumen.total_flete += sumaFleteTotal;
+
+            cerrarModalNuevaCarga();
+            renderizarCargasViaje(idViajeActual);
+            guardarEstadoEnLocalStorage(idViajeActual);
+            resaltarCargaFusionada(cargaDuplicada.id_carga_temp);
+        };
+
+        if (cargaDuplicada) {
+            Swal.fire({
+                title: 'Ya existe una carga igual',
+                html: `Se encontró otra carga con el mismo remitente y destinatario:<br><strong>${cargaDuplicada.nombre_remitente} &rarr; ${cargaDuplicada.nombre_destinatario}</strong><br><br>¿Deseas fusionar estos productos en esa carga o mantenerla por separado?`,
+                icon: 'question',
+                showDenyButton: true,
+                showCancelButton: true,
+                confirmButtonColor: '#0f4c81',
+                denyButtonColor: '#64748b',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: 'Fusionar en esa carga',
+                denyButtonText: 'Mantener separado',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fusionarConDuplicada();
+                } else if (result.isDenied) {
+                    guardarSeparada();
+                }
+                // Si cancela, no se hace nada y el modal de la carga sigue abierto.
+            });
+            return;
         }
 
-        cerrarModalNuevaCarga();
-        renderizarCargasViaje(idViajeActual);
-        guardarEstadoEnLocalStorage(idViajeActual);
+        guardarSeparada();
     };
 
     if (productoConPerdida !== null) {
@@ -1196,6 +1300,7 @@ function renderizarCargasViaje(idViaje) {
         contenedorCargas.style.display = 'none';
         estadoVacio.style.display = 'flex';
         contenedorCargas.innerHTML = '';
+        actualizarTotalesGenerales(vista, listaCargas);
         return;
     }
 
@@ -1224,7 +1329,7 @@ function renderizarCargasViaje(idViaje) {
         });
 
         const cardHtml = `
-            <div style="border: 1px solid var(--border-light); border-radius: var(--radius-lg); background: #fff; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 16px;">
+            <div id="carga-card-${carga.id_carga_temp}" style="border: 1px solid var(--border-light); border-radius: var(--radius-lg); background: #fff; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 16px;">
                 <div style="padding: 12px 16px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
                     <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center;">
                         <span style="background-color: #e0f2fe; color: var(--brand-blue); padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 12px;">Carga ${index + 1}</span>
@@ -1272,6 +1377,14 @@ function renderizarCargasViaje(idViaje) {
     });
 
     actualizarTotalesGenerales(vista, listaCargas);
+}
+
+function resaltarCargaFusionada(idCargaTemp) {
+    const el = document.getElementById(`carga-card-${idCargaTemp}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('carga-fusion-destacada');
+    setTimeout(() => el.classList.remove('carga-fusion-destacada'), 3000);
 }
 
 function actualizarTotalesGenerales(vista, listaCargas) {
@@ -1476,6 +1589,8 @@ function restaurarEstadoDesdeLocalStorage() {
             }
         });
         
+        refrescarSelectsCamionTodasLasPestanias();
+
         contadorViajes = maxContador;
         activarPestania(pestañasActivas[pestañasActivas.length - 1]);
     }

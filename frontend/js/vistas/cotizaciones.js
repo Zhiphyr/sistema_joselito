@@ -5,6 +5,10 @@ let detallesActual = [];
 let idCotizacionSeleccionada = null;
 let clientesDisponibles = [];
 let productosDisponibles = [];
+let rutasDisponibles = [];
+let cargaActual = null;
+let detalleCargaActual = [];
+let filaProductoTrigger = null;
 
 window.init_cotizaciones = function () {
     console.log("Módulo Cotizaciones inicializado");
@@ -42,6 +46,20 @@ function configurarEventosCotizaciones() {
     document.getElementById('btnCancelarAprobar').addEventListener('click', cerrarModalAprobar);
     document.getElementById('btnConfirmarAprobar').addEventListener('click', confirmarAprobarCotizacion);
 
+    document.getElementById('btnAccionWhatsapp').addEventListener('click', () => {
+        if (!cotizacionActual || !cotizacionActual.telefono) return;
+        const mensaje = `Hola ${cotizacionActual.nombres}, le escribimos de Transportes Joselito respecto a su cotización #${cotizacionActual.id_cotizacion}.`;
+        window.open(`https://wa.me/51${cotizacionActual.telefono}?text=${encodeURIComponent(mensaje)}`, '_blank');
+        marcarCotizacionComoContactada();
+    });
+
+    document.getElementById('btnAccionCorreo').addEventListener('click', () => {
+        if (!cotizacionActual || !cotizacionActual.correo) return;
+        const asunto = encodeURIComponent(`Cotización #${cotizacionActual.id_cotizacion} - Transportes Joselito`);
+        window.location.href = `mailto:${cotizacionActual.correo}?subject=${asunto}`;
+        marcarCotizacionComoContactada();
+    });
+
     ['remitente', 'destinatario'].forEach(rol => {
         document.getElementById(`btnNuevo${capitalizar(rol)}`).addEventListener('click', () => togglePanelNuevoCliente(rol, true));
         document.getElementById(`nc-${rol}-btnCancelar`).addEventListener('click', () => togglePanelNuevoCliente(rol, false));
@@ -68,6 +86,71 @@ function configurarEventosCotizaciones() {
 
         document.getElementById(`nc-${rol}-correo`).addEventListener('input', () => validarBotonGuardarNuevoCliente(rol));
     });
+
+    document.getElementById('btnNuevaCotizacion').addEventListener('click', abrirFormularioCrearCotizacion);
+    document.getElementById('btnCerrarCrearCotizacion').addEventListener('click', cerrarFormularioCrearCotizacion);
+    document.getElementById('btnCancelarCrearCotizacion').addEventListener('click', cerrarFormularioCrearCotizacion);
+    document.getElementById('btnGuardarCotizacionInterna').addEventListener('click', guardarCotizacionInterna);
+    document.getElementById('btnAgregarProductoCrear').addEventListener('click', agregarFilaProductoCrear);
+
+    document.getElementById('crear-nombres').addEventListener('input', function () {
+        this.value = this.value.toUpperCase().replace(/[^A-ZÁÉÍÓÚÑ\s]/g, '');
+    });
+
+    document.getElementById('crear-telefono').addEventListener('input', function () {
+        let val = this.value.replace(/[^0-9]/g, '').slice(0, 9);
+        if (val.length > 0 && val[0] !== '9') {
+            val = val.slice(1);
+        }
+        this.value = val;
+    });
+
+    document.getElementById('crear-correo').addEventListener('input', function () {
+        const val = this.value.trim();
+        if (val.length === 0) {
+            this.style.borderColor = '';
+            return;
+        }
+        this.style.borderColor = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val) ? '#10b981' : '#ef4444';
+    });
+
+    document.getElementById('lista-productos-crear').addEventListener('click', (e) => {
+        if (e.target.closest('.btn-nuevo-producto-rapido')) {
+            abrirModalNuevoProductoRapido(e.target.closest('.crear-producto-row'));
+        }
+        if (e.target.closest('.btn-quitar-fila-crear')) {
+            const lista = document.getElementById('lista-productos-crear');
+            if (lista.children.length > 1) {
+                e.target.closest('.crear-producto-row').remove();
+            } else {
+                Swal.fire({ icon: 'info', title: 'Debe existir al menos un producto', timer: 1500, showConfirmButton: false });
+            }
+        }
+    });
+
+    document.getElementById('lista-productos-crear').addEventListener('change', (e) => {
+        if (e.target.classList.contains('crear-prod-select')) {
+            actualizarBotonNuevoProducto(e.target.closest('.crear-producto-row'));
+        }
+        if (e.target.classList.contains('crear-prod-fragil') || e.target.classList.contains('crear-prod-perecible')) {
+            aplicarExclusividadCaracteristica(e.target);
+        }
+    });
+
+    document.getElementById('lista-productos-crear').addEventListener('input', (e) => {
+        if (e.target.classList.contains('crear-prod-peso')) {
+            filtrarDecimal(e.target, 8, 2);
+        }
+        if (e.target.classList.contains('crear-prod-cant')) {
+            e.target.value = e.target.value.replace(/[^0-9]/g, '').slice(0, 5);
+        }
+    });
+
+    document.getElementById('btnCerrarModalProductoRapido').addEventListener('click', cerrarModalNuevoProductoRapido);
+    document.getElementById('btnCancelarProductoRapido').addEventListener('click', cerrarModalNuevoProductoRapido);
+    document.getElementById('btnGuardarProductoRapido').addEventListener('click', guardarProductoRapido);
+    document.getElementById('npr-nombre').addEventListener('input', validarBotonGuardarProductoRapido);
+    document.getElementById('npr-descripcion').addEventListener('input', validarBotonGuardarProductoRapido);
 }
 
 function capitalizar(texto) {
@@ -96,8 +179,15 @@ const currentLength = 15;
 let todasCargadas = false;
 
 function inicializarTablaCotizaciones() {
+    // Se reinician aquí porque init_cotizaciones() se vuelve a ejecutar cada vez que se
+    // reingresa a la vista, pero este script solo se carga/ejecuta una vez (dashboard.js
+    // no reinyecta el <script> en visitas posteriores), así que estas variables de módulo
+    // conservan su valor entre visitas si no se resetean explícitamente aquí.
+    currentStart = 0;
+    todasCargadas = false;
+
     // Simulamos tablaCotizaciones para que tablaCotizaciones.ajax.reload() no rompa nada
-    window.tablaCotizaciones = {
+    tablaCotizaciones = {
         ajax: {
             reload: function() {
                 currentStart = 0;
@@ -212,7 +302,7 @@ async function cargarDetalleCotizacion(id) {
         const result = await response.json();
 
         if (response.ok && result.success) {
-            renderDetalleCotizacion(result.cotizacion, result.detalles);
+            renderDetalleCotizacion(result.cotizacion, result.detalles, result.carga, result.detalleCarga);
         } else {
             Swal.fire({ icon: 'error', title: 'Error', text: result.message || 'No se pudo obtener el detalle de la cotización.' });
         }
@@ -222,12 +312,15 @@ async function cargarDetalleCotizacion(id) {
     }
 }
 
-function renderDetalleCotizacion(cotizacion, detalles) {
+function renderDetalleCotizacion(cotizacion, detalles, carga, detalleCarga) {
     cotizacionActual = cotizacion;
     detallesActual = detalles || [];
     idCotizacionSeleccionada = cotizacion.id_cotizacion;
+    cargaActual = carga || null;
+    detalleCargaActual = detalleCarga || [];
 
     document.getElementById('detalle-cotizacion-vacio').style.display = 'none';
+    document.getElementById('crear-cotizacion-card').style.display = 'none';
     document.getElementById('detalle-cotizacion-card').style.display = 'block';
 
     const puedeGestionar = cotizacion.estado === 'Pendiente' || cotizacion.estado === 'Contactado';
@@ -249,6 +342,10 @@ function renderDetalleCotizacion(cotizacion, detalles) {
     document.getElementById('detalle-flete').textContent =
         `S/ ${Number(cotizacion.flete_estimado_min).toFixed(2)} - S/ ${Number(cotizacion.flete_estimado_max).toFixed(2)}`;
 
+    document.getElementById('detalle-origen').innerHTML = cotizacion.origen === 'Interna'
+        ? '<span class="badge-origen-interna">Interna</span>'
+        : '<span class="badge-origen-publica">Pública</span>';
+
     const tieneTelefono = cotizacion.telefono && cotizacion.telefono.trim() !== '';
     const tieneCorreo = cotizacion.correo && cotizacion.correo.trim() !== '';
 
@@ -260,30 +357,85 @@ function renderDetalleCotizacion(cotizacion, detalles) {
     const tbodyDetalle = document.getElementById('tbody-detalle-cotizacion');
     if (!detalles || detalles.length === 0) {
         tbodyDetalle.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:16px; color: var(--text-muted);">Sin productos registrados</td></tr>';
+    } else {
+        let filasHTML = '';
+        detalles.forEach(d => {
+            let caracteristicas = '';
+            if (d.es_fragil) caracteristicas += '<span class="badge-caracteristica">Frágil</span>';
+            if (d.es_perecible) caracteristicas += '<span class="badge-caracteristica">Perecible</span>';
+            if (d.es_mudanza) caracteristicas += '<span class="badge-caracteristica">Mudanza</span>';
+            if (!caracteristicas) caracteristicas = '-';
+
+            filasHTML += `
+                <tr class="tabla-tr">
+                    <td class="tabla-td">${d.producto}</td>
+                    <td class="tabla-td" style="text-align: right; white-space: nowrap;">${d.cantidad}</td>
+                    <td class="tabla-td" style="text-align: right; white-space: nowrap;">${Number(d.peso_unitario).toFixed(2)} kg</td>
+                    <td class="tabla-td" style="text-align: right; white-space: nowrap;">${Number(d.peso_total).toFixed(2)} kg</td>
+                    <td class="tabla-td">${caracteristicas}</td>
+                    <td class="tabla-td" style="text-align: right; white-space: nowrap;">S/ ${Number(d.subtotal_calculado).toFixed(2)}</td>
+                </tr>
+            `;
+        });
+        tbodyDetalle.innerHTML = filasHTML;
+    }
+
+    renderCargaGenerada(cargaActual, detalleCargaActual);
+}
+
+function renderCargaGenerada(carga, detalleCarga) {
+    const seccion = document.getElementById('detalle-carga-generada-section');
+
+    if (!carga) {
+        seccion.style.display = 'none';
         return;
     }
 
-    let filasHTML = '';
-    detalles.forEach(d => {
-        let caracteristicas = '';
-        if (d.es_fragil) caracteristicas += '<span class="badge-caracteristica">Frágil</span>';
-        if (d.es_perecible) caracteristicas += '<span class="badge-caracteristica">Perecible</span>';
-        if (d.es_mudanza) caracteristicas += '<span class="badge-caracteristica">Mudanza</span>';
-        if (!caracteristicas) caracteristicas = '-';
+    seccion.style.display = 'block';
+    document.getElementById('carga-remitente').textContent = carga.remitente_nombre || '-';
+    document.getElementById('carga-destinatario').textContent = carga.destinatario_nombre || '-';
+    document.getElementById('carga-flete-total').textContent = `S/ ${Number(carga.flete_total).toFixed(2)}`;
 
-        filasHTML += `
-            <tr class="tabla-tr">
-                <td class="tabla-td">${d.producto}</td>
-                <td class="tabla-td" style="text-align: right; white-space: nowrap;">${d.cantidad}</td>
-                <td class="tabla-td" style="text-align: right; white-space: nowrap;">${Number(d.peso_unitario).toFixed(2)} kg</td>
-                <td class="tabla-td" style="text-align: right; white-space: nowrap;">${Number(d.peso_total).toFixed(2)} kg</td>
-                <td class="tabla-td">${caracteristicas}</td>
-                <td class="tabla-td" style="text-align: right; white-space: nowrap;">S/ ${Number(d.subtotal_calculado).toFixed(2)}</td>
-            </tr>
-        `;
-    });
+    const tbody = document.getElementById('tbody-carga-generada');
+    if (!detalleCarga || detalleCarga.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:16px; color: var(--text-muted);">Sin líneas de carga registradas</td></tr>';
+        return;
+    }
 
-    tbodyDetalle.innerHTML = filasHTML;
+    tbody.innerHTML = detalleCarga.map(d => `
+        <tr class="tabla-tr">
+            <td class="tabla-td">${d.producto_nombre}</td>
+            <td class="tabla-td">${d.marca_visual || '-'}</td>
+            <td class="tabla-td" style="text-align: right; white-space: nowrap;">${d.cantidad_sacos} / ${Number(d.peso_unitario).toFixed(2)} kg</td>
+            <td class="tabla-td" style="text-align: right; white-space: nowrap;">S/ ${Number(d.precio_peso).toFixed(2)}</td>
+            <td class="tabla-td" style="text-align: right; white-space: nowrap;">S/ ${Number(d.flete_subtotal).toFixed(2)}</td>
+        </tr>
+    `).join('');
+}
+
+// ============================================================
+// Contactar (WhatsApp / Correo) -> marca la cotización como "Contactado"
+// ============================================================
+
+async function marcarCotizacionComoContactada() {
+    if (!cotizacionActual || cotizacionActual.estado !== 'Pendiente') return;
+
+    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+
+    try {
+        const response = await fetch(`http://localhost:3000/api/cotizaciones/${idCotizacionSeleccionada}/contactar`, {
+            method: 'PATCH',
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            tablaCotizaciones.ajax.reload(null, false);
+            cargarDetalleCotizacion(idCotizacionSeleccionada);
+        }
+    } catch (error) {
+        console.error('Error al marcar cotización como contactada:', error);
+    }
 }
 
 // ============================================================
@@ -424,8 +576,16 @@ function construirFilasProductosAprobar() {
     detallesActual.forEach(d => {
         const cantidad = Number(d.cantidad);
         const pesoUnitario = Number(d.peso_unitario);
-        const nombreCotizado = (d.producto || '').trim().toLowerCase();
-        const match = productosDisponibles.find(p => p.nombre.trim().toLowerCase() === nombreCotizado);
+        let match = null;
+        let matchExacto = false;
+        if (d.id_producto) {
+            match = productosDisponibles.find(p => p.id_producto === Number(d.id_producto));
+            if (match) matchExacto = true;
+        }
+        if (!match) {
+            const nombreCotizado = (d.producto || '').trim().toLowerCase();
+            match = productosDisponibles.find(p => p.nombre.trim().toLowerCase() === nombreCotizado);
+        }
 
         let opciones = '<option value="">Seleccione...</option>';
         productosDisponibles.forEach(p => {
@@ -436,15 +596,25 @@ function construirFilasProductosAprobar() {
         filas += `
             <tr class="tabla-tr">
                 <td class="tabla-td" style="min-width: 250px;">
-                    <div style="font-weight: 600; margin-bottom: 6px; color: var(--text-primary); font-size: 13px;">${d.producto}</div>
-                    <select class="form-control aprobar-select-producto" id="aprobar-prod-${d.id_cotizacion_detalle}" style="width: 100%;">${opciones}</select>
+                    <div class="aprobar-prod-etiqueta">Cotizado como: ${d.producto}</div>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        ${matchExacto ? `
+                        <div class="aprobar-prod-locked-badge" id="aprobar-prod-badge-${d.id_cotizacion_detalle}">
+                            <span>${match.nombre}</span>
+                            <i class="fas fa-lock" title="Producto mapeado automáticamente desde el catálogo."></i>
+                        </div>
+                        <select class="form-control aprobar-select-producto" id="aprobar-prod-${d.id_cotizacion_detalle}" style="display: none;">${opciones}</select>
+                        ` : `
+                        <select class="form-control aprobar-select-producto" id="aprobar-prod-${d.id_cotizacion_detalle}" style="width: 100%;">${opciones}</select>
+                        `}
+                    </div>
                 </td>
-                <td class="tabla-td" style="text-align: center;"><input type="text" class="form-control aprobar-input-marca" id="aprobar-marca-${d.id_cotizacion_detalle}" placeholder="Opcional" style="text-align: center;"></td>
+                <td class="tabla-td" style="text-align: center;"><input type="text" class="form-control aprobar-input-marca" id="aprobar-marca-${d.id_cotizacion_detalle}" placeholder="Ej. Marca Verde" style="text-align: center;"></td>
                 <td class="tabla-td" style="text-align: right; white-space: nowrap; color: var(--text-secondary);">${cantidad} / ${pesoUnitario.toFixed(2)} kg</td>
                 <td class="tabla-td" style="text-align: right;">
-                    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
-                        <span style="color: var(--text-secondary); font-weight: 600;">S/</span>
-                        <input type="number" min="0.01" step="0.01" class="form-control aprobar-input-tarifa" id="aprobar-tarifa-${d.id_cotizacion_detalle}" placeholder="0.00" style="width: 90px; text-align: right;">
+                    <div class="aprobar-input-group">
+                        <span class="aprobar-input-group-prefix">S/</span>
+                        <input type="number" min="0.01" max="99999999.99" step="0.01" class="aprobar-input-tarifa" id="aprobar-tarifa-${d.id_cotizacion_detalle}" placeholder="0.00">
                     </div>
                 </td>
                 <td class="tabla-td" id="aprobar-pesototal-${d.id_cotizacion_detalle}" style="text-align: right; white-space: nowrap;">${(cantidad * pesoUnitario).toFixed(2)} kg</td>
@@ -455,7 +625,11 @@ function construirFilasProductosAprobar() {
     tbody.innerHTML = filas;
 
     detallesActual.forEach(d => {
-        document.getElementById(`aprobar-tarifa-${d.id_cotizacion_detalle}`).addEventListener('input', actualizarFleteTotalAprobar);
+        const inputTarifa = document.getElementById(`aprobar-tarifa-${d.id_cotizacion_detalle}`);
+        inputTarifa.addEventListener('input', () => {
+            filtrarDecimal(inputTarifa, 8, 2);
+            actualizarFleteTotalAprobar();
+        });
     });
 
     actualizarFleteTotalAprobar();
@@ -502,6 +676,11 @@ async function confirmarAprobarCotizacion() {
 
         if (!idProducto) {
             Swal.fire({ icon: 'warning', title: 'Faltan datos', text: `Seleccione el producto de catálogo para "${d.producto}".` });
+            return;
+        }
+
+        if (!marcaVisual) {
+            Swal.fire({ icon: 'warning', title: 'Faltan datos', text: `Ingrese la marca visual para "${d.producto}".` });
             return;
         }
 
@@ -560,9 +739,9 @@ async function confirmarAprobarCotizacion() {
 function togglePanelNuevoCliente(rol, mostrar) {
     const panel = document.getElementById(`panelNuevo${capitalizar(rol)}`);
     const wrapper = document.getElementById(`wrapper-select-${rol}`);
-    
+
     panel.style.display = mostrar ? 'block' : 'none';
-    if(wrapper) wrapper.style.display = mostrar ? 'none' : 'block';
+    if (wrapper) wrapper.style.display = mostrar ? 'none' : 'block';
 
     if (mostrar) {
         document.getElementById(`nc-${rol}-tipo_documento`).value = 'DNI';
@@ -769,6 +948,321 @@ async function guardarNuevoCliente(rol) {
             Swal.fire({ icon: 'error', title: 'Error', text: result.message });
         }
     } catch (error) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'Problema de conexión con el servidor.' });
+    }
+}
+
+// ============================================================
+// Nueva Cotización (panel inline en la card de detalle)
+// ============================================================
+
+function abrirFormularioCrearCotizacion() {
+    document.querySelectorAll('.cotizacion-list-card').forEach(el => el.classList.remove('active'));
+    document.getElementById('detalle-cotizacion-vacio').style.display = 'none';
+    document.getElementById('detalle-cotizacion-card').style.display = 'none';
+    document.getElementById('crear-cotizacion-card').style.display = 'block';
+
+    document.getElementById('crear-nombres').value = '';
+    document.getElementById('crear-telefono').value = '';
+    document.getElementById('crear-correo').value = '';
+    document.getElementById('lista-productos-crear').innerHTML = '';
+
+    Promise.all([cargarRutasParaCrear(), cargarProductosDisponibles()])
+        .then(() => agregarFilaProductoCrear());
+}
+
+function cerrarFormularioCrearCotizacion() {
+    document.getElementById('crear-cotizacion-card').style.display = 'none';
+    const hayCotizacionCargada = !!idCotizacionSeleccionada;
+    document.getElementById('detalle-cotizacion-vacio').style.display = hayCotizacionCargada ? 'none' : 'flex';
+    document.getElementById('detalle-cotizacion-card').style.display = hayCotizacionCargada ? 'block' : 'none';
+}
+
+async function cargarRutasParaCrear() {
+    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+
+    try {
+        const response = await fetch('http://localhost:3000/api/rutas', {
+            headers: { 'x-user-profile': sessionData.id_perfil }
+        });
+        const result = await response.json();
+        rutasDisponibles = (result.data || []).filter(r => r.estado === 1);
+
+        const select = document.getElementById('crear-ruta');
+        select.innerHTML = '<option value="">Seleccione una ruta...</option>' +
+            rutasDisponibles.map(r => `<option value="${r.id_ruta}">${r.ciudad_origen} → ${r.ciudad_destino}</option>`).join('');
+    } catch (error) {
+        console.error('Error al cargar rutas:', error);
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo cargar la lista de rutas.' });
+    }
+}
+
+function opcionesProductoHTML() {
+    return '<option value="">Seleccione...</option>' +
+        productosDisponibles.map(p => `<option value="${p.id_producto}">${p.nombre}</option>`).join('');
+}
+
+function agregarFilaProductoCrear() {
+    const lista = document.getElementById('lista-productos-crear');
+
+    const html = `
+        <div class="crear-producto-row">
+            <div style="display: flex; gap: 12px; align-items: flex-end;">
+                <div style="flex: 3;">
+                    <label style="display: block; margin-bottom: 4px; font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Producto</label>
+                    <div style="display: flex; gap: 8px;">
+                        <select class="form-control crear-prod-select" style="flex: 1;">${opcionesProductoHTML()}</select>
+                        <button type="button" class="btn-secondary btn-nuevo-producto-rapido" style="width: auto;" title="Registrar producto nuevo">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+                <div style="flex: 1.5;">
+                    <label style="display: block; margin-bottom: 4px; font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Peso Unit.(Kg)</label>
+                    <input type="number" class="form-control crear-prod-peso" min="0.1" max="99999999.99" step="0.01" placeholder="Ej. 10.5">
+                </div>
+                <div style="width: 90px; flex-shrink: 0;">
+                    <label style="display: block; margin-bottom: 4px; font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Cantidad</label>
+                    <input type="number" class="form-control crear-prod-cant" min="1" max="99999" placeholder="Ej. 5">
+                </div>
+                <button type="button" class="btn-quitar-fila-crear" title="Quitar" style="background: none; border: none; color: #ef4444; font-size: 16px; cursor: pointer; margin-bottom: 10px;">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+            <div class="crear-checkbox-group">
+                <label class="crear-chip-label">
+                    <input type="checkbox" class="crear-prod-fragil">
+                    <span>Frágil</span>
+                </label>
+                <label class="crear-chip-label">
+                    <input type="checkbox" class="crear-prod-perecible">
+                    <span>Perecible</span>
+                </label>
+            </div>
+        </div>
+    `;
+    lista.insertAdjacentHTML('beforeend', html);
+}
+
+function actualizarBotonNuevoProducto(fila) {
+    if (!fila) return;
+    const select = fila.querySelector('.crear-prod-select');
+    const btn = fila.querySelector('.btn-nuevo-producto-rapido');
+    btn.disabled = select.value !== '';
+}
+
+function aplicarExclusividadCaracteristica(checkboxCambiado) {
+    if (!checkboxCambiado.checked) return;
+    const fila = checkboxCambiado.closest('.crear-producto-row');
+    const otra = checkboxCambiado.classList.contains('crear-prod-fragil')
+        ? fila.querySelector('.crear-prod-perecible')
+        : fila.querySelector('.crear-prod-fragil');
+    if (otra) otra.checked = false;
+}
+
+function filtrarDecimal(input, maxEnteros, maxDecimales) {
+    let val = input.value;
+    if (val.includes('.')) {
+        let [entero, decimal] = val.split('.');
+        entero = entero.slice(0, maxEnteros);
+        decimal = decimal.slice(0, maxDecimales);
+        input.value = `${entero}.${decimal}`;
+    } else if (val.length > maxEnteros) {
+        input.value = val.slice(0, maxEnteros);
+    }
+}
+
+function refrescarTodosLosSelectsProducto() {
+    document.querySelectorAll('.crear-prod-select').forEach(select => {
+        const valorActual = select.value;
+        select.innerHTML = opcionesProductoHTML();
+        select.value = valorActual;
+    });
+}
+
+async function guardarCotizacionInterna() {
+    const nombres = document.getElementById('crear-nombres').value.trim();
+    const telefono = document.getElementById('crear-telefono').value.trim();
+    const correo = document.getElementById('crear-correo').value.trim();
+    const id_ruta = document.getElementById('crear-ruta').value;
+
+    if (!nombres || !telefono || !id_ruta) {
+        Swal.fire({ icon: 'warning', title: 'Faltan datos', text: 'Complete nombres, teléfono y ruta.' });
+        return;
+    }
+
+    if (!/^[A-ZÁÉÍÓÚÑ\s]+$/.test(nombres)) {
+        Swal.fire({ icon: 'warning', title: 'Nombre inválido', text: 'El nombre solo debe contener letras.' });
+        return;
+    }
+
+    if (!/^9\d{8}$/.test(telefono)) {
+        Swal.fire({ icon: 'warning', title: 'Teléfono inválido', text: 'El teléfono debe tener 9 dígitos y empezar con 9.' });
+        return;
+    }
+
+    if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+        Swal.fire({ icon: 'warning', title: 'Correo inválido', text: 'Ingrese un correo con formato válido.' });
+        return;
+    }
+
+    const productos = [];
+    for (const fila of document.querySelectorAll('#lista-productos-crear .crear-producto-row')) {
+        const idProducto = fila.querySelector('.crear-prod-select').value;
+        const peso = Number(fila.querySelector('.crear-prod-peso').value);
+        const cantidad = Number(fila.querySelector('.crear-prod-cant').value);
+
+        if (!idProducto) {
+            Swal.fire({ icon: 'warning', title: 'Faltan datos', text: 'Seleccione un producto de catálogo en cada fila.' });
+            return;
+        }
+        if (!(peso > 0) || !(cantidad > 0)) {
+            Swal.fire({ icon: 'warning', title: 'Faltan datos', text: 'Peso y cantidad deben ser mayores a 0 en cada fila.' });
+            return;
+        }
+
+        productos.push({
+            id_producto: Number(idProducto),
+            peso_unitario: peso,
+            cantidad,
+            fragil: fila.querySelector('.crear-prod-fragil').checked,
+            perecible: fila.querySelector('.crear-prod-perecible').checked
+        });
+    }
+
+    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+    const btn = document.getElementById('btnGuardarCotizacionInterna');
+    const textoOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+    try {
+        const response = await fetch('http://localhost:3000/api/cotizaciones', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-user-profile': sessionData.id_perfil },
+            body: JSON.stringify({ nombres, telefono, correo, id_ruta, productos })
+        });
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            cerrarFormularioCrearCotizacion();
+            Swal.fire({ icon: 'success', title: 'Cotización registrada', timer: 1500, showConfirmButton: false });
+            tablaCotizaciones.ajax.reload();
+            await cargarDetalleCotizacion(result.id_cotizacion);
+        } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: result.message || 'No se pudo registrar la cotización.' });
+        }
+    } catch (error) {
+        console.error('Error al registrar cotización interna:', error);
+        Swal.fire({ icon: 'error', title: 'Error', text: 'Error de conexión con el servidor.' });
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+    }
+}
+
+// ============================================================
+// Modal rápido: registrar producto nuevo desde el formulario de creación
+// ============================================================
+
+function abrirModalNuevoProductoRapido(fila) {
+    filaProductoTrigger = fila;
+    document.getElementById('npr-nombre').value = '';
+    document.getElementById('npr-descripcion').value = '';
+    document.getElementById('npr-nombre').style.borderColor = '';
+    document.getElementById('npr-descripcion').style.borderColor = '';
+    document.getElementById('btnGuardarProductoRapido').disabled = true;
+    document.getElementById('modalNuevoProductoRapido').style.display = 'flex';
+}
+
+function cerrarModalNuevoProductoRapido() {
+    document.getElementById('modalNuevoProductoRapido').style.display = 'none';
+    filaProductoTrigger = null;
+}
+
+// Mismas reglas que controllers/productoController.js::registrar
+function validarNombreProductoRapido() {
+    const input = document.getElementById('npr-nombre');
+    const val = input.value.trim().toUpperCase();
+    const regex = /^[A-Z0-9ÁÉÍÓÚÑ\s\-,.]+$/;
+    const ok = val.length >= 3 && val.length <= 60 && regex.test(val);
+    input.style.borderColor = val.length === 0 ? '' : (ok ? '#10b981' : '#ef4444');
+    return ok;
+}
+
+function validarDescripcionProductoRapido() {
+    const input = document.getElementById('npr-descripcion');
+    const val = input.value.trim();
+    if (val.length === 0) {
+        input.style.borderColor = '';
+        return true;
+    }
+    const regex = /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s,.\n-]*$/;
+    const ok = val.length <= 250 && regex.test(val);
+    input.style.borderColor = ok ? '#10b981' : '#ef4444';
+    return ok;
+}
+
+function validarBotonGuardarProductoRapido() {
+    document.getElementById('btnGuardarProductoRapido').disabled =
+        !(validarNombreProductoRapido() && validarDescripcionProductoRapido());
+}
+
+async function guardarProductoRapido() {
+    const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
+    const nombre = document.getElementById('npr-nombre').value.trim().toUpperCase();
+    const descripcion = document.getElementById('npr-descripcion').value.trim();
+
+    try {
+        const response = await fetch('http://localhost:3000/api/productos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-user-profile': sessionData.id_perfil },
+            body: JSON.stringify({ nombre, descripcion })
+        });
+        const result = await response.json();
+
+        if (response.status === 409 && result.reactivar) {
+            const confirmar = await Swal.fire({
+                title: 'Producto inactivo detectado',
+                text: `El producto "${result.productoInfo.nombre}" ya existe pero está inactivo o eliminado. ¿Desea reactivarlo y usarlo?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, reactivar',
+                cancelButtonText: 'Cancelar'
+            });
+
+            if (confirmar.isConfirmed) {
+                await fetch(`http://localhost:3000/api/productos/${result.productoInfo.id_producto}/estado`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'x-user-profile': sessionData.id_perfil },
+                    body: JSON.stringify({ estado: 1 })
+                });
+                await cargarProductosDisponibles();
+                refrescarTodosLosSelectsProducto();
+                if (filaProductoTrigger) {
+                    filaProductoTrigger.querySelector('.crear-prod-select').value = result.productoInfo.id_producto;
+                    actualizarBotonNuevoProducto(filaProductoTrigger);
+                }
+                cerrarModalNuevoProductoRapido();
+                Swal.fire({ icon: 'success', title: 'Producto reactivado', timer: 1500, showConfirmButton: false });
+            }
+            return;
+        }
+
+        if (response.ok && result.success) {
+            await cargarProductosDisponibles();
+            refrescarTodosLosSelectsProducto();
+            if (filaProductoTrigger) {
+                filaProductoTrigger.querySelector('.crear-prod-select').value = result.id;
+                actualizarBotonNuevoProducto(filaProductoTrigger);
+            }
+            cerrarModalNuevoProductoRapido();
+            Swal.fire({ icon: 'success', title: 'Producto registrado', timer: 1500, showConfirmButton: false });
+        } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: result.message });
+        }
+    } catch (error) {
+        console.error('Error al registrar producto rápido:', error);
         Swal.fire({ icon: 'error', title: 'Error', text: 'Problema de conexión con el servidor.' });
     }
 }

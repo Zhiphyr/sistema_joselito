@@ -1,4 +1,9 @@
 const db = require('../config/db');
+const { calcularCotizacionCompleta } = require('../services/cotizacionPricingService');
+
+const REGEX_TELEFONO = /^9\d{8}$/;
+const REGEX_CORREO = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
+const MAX_LEN_NOMBRES = 100;
 
 const listarCotizacionesDataTable = async (req, res) => {
     try {
@@ -82,6 +87,7 @@ const obtenerCotizacionDetalle = async (req, res) => {
                 c.flete_estimado_min,
                 c.flete_estimado_max,
                 c.estado,
+                c.origen,
                 c.fecha_registro,
                 r.ciudad_origen,
                 r.ciudad_destino
@@ -99,6 +105,7 @@ const obtenerCotizacionDetalle = async (req, res) => {
             SELECT
                 id_cotizacion_detalle,
                 producto,
+                id_producto,
                 cantidad,
                 peso_unitario,
                 peso_total,
@@ -111,10 +118,53 @@ const obtenerCotizacionDetalle = async (req, res) => {
         `;
         const [detalles] = await db.query(sqlDetalles, [id]);
 
+        let carga = null;
+        let detalleCarga = [];
+
+        if (cotizacionRows[0].estado === 'Convertido a Carga') {
+            const [cargaRows] = await db.query(`
+                SELECT
+                    ca.id_carga,
+                    ca.flete_total,
+                    ca.estado_cobro,
+                    ca.estado_entrega,
+                    ca.id_remitente,
+                    ca.id_destinatario,
+                    crc.nombre_razon_social AS remitente_nombre,
+                    cdc.nombre_razon_social AS destinatario_nombre
+                FROM Carga ca
+                LEFT JOIN clientes crc ON crc.id_cliente = ca.id_remitente
+                LEFT JOIN clientes cdc ON cdc.id_cliente = ca.id_destinatario
+                WHERE ca.id_cotizacion_origen = ? AND ca.estado = 1
+            `, [id]);
+
+            if (cargaRows.length > 0) {
+                carga = cargaRows[0];
+                const [detalleCargaRows] = await db.query(`
+                    SELECT
+                        dc.id_detalle,
+                        dc.id_producto,
+                        p.nombre AS producto_nombre,
+                        dc.marca_visual,
+                        dc.cantidad_sacos,
+                        dc.peso_unitario,
+                        dc.peso_total,
+                        dc.precio_peso,
+                        dc.flete_subtotal
+                    FROM Detalle_Carga dc
+                    JOIN productos p ON p.id_producto = dc.id_producto
+                    WHERE dc.id_carga = ? AND dc.estado = 1
+                `, [carga.id_carga]);
+                detalleCarga = detalleCargaRows;
+            }
+        }
+
         return res.status(200).json({
             success: true,
             cotizacion: cotizacionRows[0],
-            detalles
+            detalles,
+            carga,
+            detalleCarga
         });
     } catch (error) {
         console.error('Error en obtenerCotizacionDetalle:', error);
@@ -141,6 +191,28 @@ const rechazarCotizacion = async (req, res) => {
     } catch (error) {
         console.error('Error en rechazarCotizacion:', error);
         return res.status(500).json({ success: false, message: 'Error al rechazar la cotización' });
+    }
+};
+
+const contactarCotizacion = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [result] = await db.query(
+            `UPDATE cotizaciones
+             SET estado = 'Contactado'
+             WHERE id_cotizacion = ? AND estado = 'Pendiente'`,
+            [id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(409).json({ success: false, message: 'La cotización ya no está en estado Pendiente' });
+        }
+
+        return res.status(200).json({ success: true, message: 'Cotización marcada como contactada' });
+    } catch (error) {
+        console.error('Error en contactarCotizacion:', error);
+        return res.status(500).json({ success: false, message: 'Error al actualizar la cotización' });
     }
 };
 
@@ -265,9 +337,113 @@ const aprobarCotizacion = async (req, res) => {
     }
 };
 
+const crearCotizacionInterna = async (req, res) => {
+    let { nombres, telefono, correo, id_ruta, productos } = req.body;
+
+    nombres = nombres ? nombres.trim().toUpperCase() : '';
+    telefono = telefono ? telefono.trim() : '';
+    correo = correo ? correo.trim() : '';
+
+    if (!id_ruta || !nombres || !telefono) {
+        return res.status(400).json({ success: false, message: 'Faltan datos requeridos.' });
+    }
+
+    if (nombres.length > MAX_LEN_NOMBRES) {
+        return res.status(400).json({ success: false, message: 'El nombre ingresado es demasiado largo.' });
+    }
+
+    if (!REGEX_TELEFONO.test(telefono)) {
+        return res.status(400).json({ success: false, message: 'El número de teléfono no es válido.' });
+    }
+
+    if (correo && !REGEX_CORREO.test(correo)) {
+        return res.status(400).json({ success: false, message: 'El correo electrónico no es válido.' });
+    }
+
+    if (!Array.isArray(productos) || productos.length === 0) {
+        return res.status(400).json({ success: false, message: 'Debe incluir al menos un producto.' });
+    }
+
+    for (const p of productos) {
+        if (!p.id_producto) {
+            return res.status(400).json({ success: false, message: 'Cada producto debe seleccionarse del catálogo.' });
+        }
+        if (!(Number(p.cantidad) > 0) || !(Number(p.peso_unitario) > 0)) {
+            return res.status(400).json({ success: false, message: 'Cantidad y peso unitario deben ser mayores a 0.' });
+        }
+    }
+
+    try {
+        const [rutaRows] = await db.query('SELECT id_ruta FROM rutas WHERE id_ruta = ? AND estado = 1', [id_ruta]);
+        if (rutaRows.length === 0) {
+            return res.status(400).json({ success: false, message: 'La ruta seleccionada no es válida.' });
+        }
+
+        const idsProducto = [...new Set(productos.map(p => Number(p.id_producto)))];
+        const [catalogoRows] = await db.query(
+            'SELECT id_producto, nombre FROM productos WHERE estado = 1 AND id_producto IN (?)',
+            [idsProducto]
+        );
+        const catalogoMap = new Map(catalogoRows.map(r => [r.id_producto, r.nombre]));
+        for (const p of productos) {
+            if (!catalogoMap.has(Number(p.id_producto))) {
+                return res.status(400).json({ success: false, message: 'Uno de los productos seleccionados no existe o está inactivo.' });
+            }
+        }
+
+        const productosParaCalculo = productos.map(p => ({
+            nombre: catalogoMap.get(Number(p.id_producto)),
+            id_producto: Number(p.id_producto),
+            peso_unitario: Number(p.peso_unitario),
+            cantidad: Number(p.cantidad),
+            fragil: !!p.fragil,
+            perecible: !!p.perecible,
+            mudanza: !!p.mudanza
+        }));
+
+        const { detalles, fleteMin, fleteMax } = await calcularCotizacionCompleta(id_ruta, productosParaCalculo);
+        const idUsuario = req.headers['x-user-profile'] || 1;
+
+        const connection = await db.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            const [cotResult] = await connection.query(`
+                INSERT INTO cotizaciones
+                  (nombres, telefono, correo, id_ruta, flete_estimado_min, flete_estimado_max,
+                   origen, id_usuario, estado)
+                VALUES (?, ?, ?, ?, ?, ?, 'Interna', ?, 'Pendiente')
+            `, [nombres, telefono, correo || null, id_ruta, fleteMin, fleteMax, idUsuario]);
+
+            const idCotizacion = cotResult.insertId;
+
+            for (const det of detalles) {
+                await connection.query(`
+                    INSERT INTO cotizacion_detalles
+                      (id_cotizacion, producto, id_producto, cantidad, peso_unitario, peso_total, es_fragil, es_perecible, es_mudanza, subtotal_calculado)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `, [idCotizacion, det.nombre, det.id_producto, det.cantidad, det.peso_unitario, det.peso_total, det.fragil, det.perecible, det.mudanza, det.subtotalCalculado]);
+            }
+
+            await connection.commit();
+            return res.status(201).json({ success: true, message: 'Cotización registrada exitosamente', id_cotizacion: idCotizacion });
+        } catch (dbErr) {
+            await connection.rollback();
+            throw dbErr;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error en crearCotizacionInterna:', error);
+        return res.status(500).json({ success: false, message: 'Error al registrar la cotización' });
+    }
+};
+
 module.exports = {
     listarCotizacionesDataTable,
     obtenerCotizacionDetalle,
     rechazarCotizacion,
-    aprobarCotizacion
+    contactarCotizacion,
+    aprobarCotizacion,
+    crearCotizacionInterna
 };

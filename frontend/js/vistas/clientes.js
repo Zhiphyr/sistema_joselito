@@ -364,7 +364,7 @@ window.cambiarEstadoCliente = async function (id, estado, silent = false) {
 
     if (!silent) {
         const titulo = estado === 2 ? '¿Eliminar cliente?' : (estado === 1 ? '¿Activar cliente?' : '¿Desactivar cliente?');
-        const texto = estado === 2 ? 'Esta acción es irreversible (borrado lógico).' : 'Cambiarás el estado del cliente en el sistema.';
+        const texto = estado === 2 ? 'Esta acción es irreversible' : 'Cambiarás el estado del cliente en el sistema.';
 
         const confirm = await Swal.fire({
             title: titulo,

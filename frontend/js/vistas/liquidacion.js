@@ -996,10 +996,11 @@ function actualizarNetoModal(inputActivo = null) {
     // Calcular Falta Pagar
     const sumaPagos = carritoPagosLiq.reduce((acc, p) => acc + (Number(p.monto_pagado) || 0), 0);
     const faltaPagar = Math.max(0, neto - sumaPagos);
-    
+    const hayOperacionDuplicadaLiq = validarDuplicadosNumOperacionLiq();
+
     const divFaltaPagar = document.getElementById('modalLiqFaltaPagar');
     if (divFaltaPagar) {
-        if (Math.abs(neto - sumaPagos) < 0.01 && neto > 0) {
+        if (Math.abs(neto - sumaPagos) < 0.01 && neto > 0 && !hayOperacionDuplicadaLiq) {
             divFaltaPagar.style.background = '#dcfce7';
             divFaltaPagar.style.color = '#16a34a';
             divFaltaPagar.textContent = '¡Pago Cubierto!';
@@ -1008,6 +1009,16 @@ function actualizarNetoModal(inputActivo = null) {
                 btn.disabled = false;
                 btn.style.opacity = '1';
                 btn.style.cursor = 'pointer';
+            }
+        } else if (Math.abs(neto - sumaPagos) < 0.01 && neto > 0 && hayOperacionDuplicadaLiq) {
+            divFaltaPagar.style.background = '#fee2e2';
+            divFaltaPagar.style.color = '#ef4444';
+            divFaltaPagar.textContent = 'N° de operación repetido';
+            const btn = document.getElementById('btnConfirmarLiquidacion');
+            if (btn) {
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'not-allowed';
             }
         } else if (sumaPagos > neto + 0.001) {
             divFaltaPagar.style.background = '#fef08a';
@@ -1212,10 +1223,14 @@ function renderizarCarritoPagosLiq() {
             <!-- Número de Operación -->
             <div style="margin-bottom: 12px; display: ${mostrarNumOp ? 'block' : 'none'};" class="campo-numop-${index}">
                 <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">N° Operación</label>
-                <input type="text" id="numOpLiq_${index}" value="${pago.numero_operacion || ''}" oninput="validarNumOperacionLiq(${index}, this)" placeholder="Ej: 00012345" style="width: 100%; padding: 8px; border: 1px solid var(--border-light); border-radius: 6px; font-size: 13px; outline: none; box-sizing: border-box;">
+                <input type="text" id="numOpLiq_${index}" value="${pago.numero_operacion || ''}" maxlength="15" oninput="validarNumOperacionLiq(${index}, this)" placeholder="Ej: 00012345" style="width: 100%; padding: 8px; border: 1px solid var(--border-light); border-radius: 6px; font-size: 13px; outline: none; box-sizing: border-box;">
                 <div id="errorNumOp_${index}" style="display: none; font-size: 11px; color: #ef4444; margin-top: 4px; align-items: center; gap: 4px;">
                     <i class="fas fa-exclamation-circle"></i>
-                    <span>Solo números, letras y guiones (sin espacios)</span>
+                    <span>Solo números, letras y guiones (máx. 15, sin espacios)</span>
+                </div>
+                <div id="errorNumOpDup_${index}" style="display: none; font-size: 11px; color: #ef4444; margin-top: 4px; align-items: center; gap: 4px;">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>N° de operación repetido en otro pago de esta liquidación</span>
                 </div>
             </div>
 
@@ -1376,23 +1391,60 @@ function formatearMontoLiq(index, input) {
     }
 }
 
-// Validación de N° Operación: solo alfanuméricos y guiones
+// Validación de N° Operación: solo alfanuméricos y guiones, máximo 15 caracteres
 function validarNumOperacionLiq(index, input) {
-    const valor = input.value;
-    const regex = /^[a-zA-Z0-9-]*$/;
+    const valorOriginal = input.value;
     const errorDiv = document.getElementById(`errorNumOp_${index}`);
-    
-    if (valor && !regex.test(valor)) {
-        // Limpiar caracteres no válidos
-        input.value = valor.replace(/[^a-zA-Z0-9-]/g, '');
+
+    const valorLimpio = valorOriginal.replace(/[^a-zA-Z0-9-]/g, '').slice(0, 15);
+    const huboCorreccion = valorLimpio !== valorOriginal;
+    input.value = valorLimpio;
+
+    if (huboCorreccion) {
         input.style.borderColor = '#ef4444';
         if (errorDiv) errorDiv.style.display = 'flex';
     } else {
         input.style.borderColor = 'var(--border-light)';
         if (errorDiv) errorDiv.style.display = 'none';
     }
-    
-    carritoPagosLiq[index].numero_operacion = input.value;
+
+    carritoPagosLiq[index].numero_operacion = valorLimpio;
+    actualizarNetoModal();
+}
+
+// Un mismo N° de operación no puede repetirse entre los distintos métodos de pago
+// de una misma liquidación (pago mixto). Devuelve true si encuentra algún duplicado.
+function validarDuplicadosNumOperacionLiq() {
+    const vistos = new Map();
+    let hayDuplicado = false;
+
+    // Limpiar marcas de duplicado de una pasada anterior. Usa box-shadow (no
+    // border-color) para no pisar la marca de formato inválido de validarNumOperacionLiq.
+    carritoPagosLiq.forEach((pago, index) => {
+        const input = document.getElementById(`numOpLiq_${index}`);
+        const errorDivDup = document.getElementById(`errorNumOpDup_${index}`);
+        if (input) input.style.boxShadow = '';
+        if (errorDivDup) errorDivDup.style.display = 'none';
+    });
+
+    carritoPagosLiq.forEach((pago, index) => {
+        const valor = (pago.numero_operacion || '').trim();
+        if (!valor) return;
+
+        if (vistos.has(valor)) {
+            hayDuplicado = true;
+            [index, vistos.get(valor)].forEach(i => {
+                const input = document.getElementById(`numOpLiq_${i}`);
+                const errorDivDup = document.getElementById(`errorNumOpDup_${i}`);
+                if (input) input.style.boxShadow = '0 0 0 2px #ef4444';
+                if (errorDivDup) errorDivDup.style.display = 'flex';
+            });
+        } else {
+            vistos.set(valor, index);
+        }
+    });
+
+    return hayDuplicado;
 }
 
 window.renderizarCarritoPagosLiq = renderizarCarritoPagosLiq;
@@ -1402,6 +1454,7 @@ window.actualizarPagoLiq = actualizarPagoLiq;
 window.validarMontoLiq = validarMontoLiq;
 window.formatearMontoLiq = formatearMontoLiq;
 window.validarNumOperacionLiq = validarNumOperacionLiq;
+window.validarDuplicadosNumOperacionLiq = validarDuplicadosNumOperacionLiq;
 
 // Validar y manejar evidencia de imagen
 window.validarYSubirEvidenciaLiq = function(index, files) {
@@ -1490,10 +1543,15 @@ window.procesarLiquidacion = async function() {
     // Validar N° Operación en pagos que no son efectivo
     for (let i = 0; i < carritoPagosLiq.length; i++) {
         const p = carritoPagosLiq[i];
-        if (p.numero_operacion && !/^[a-zA-Z0-9-]*$/.test(p.numero_operacion)) {
-            Swal.fire({ icon: 'warning', title: 'N° Operación inválido', text: `El pago #${i + 1} tiene caracteres no permitidos en el número de operación.` });
+        if (p.numero_operacion && (!/^[a-zA-Z0-9-]*$/.test(p.numero_operacion) || p.numero_operacion.length > 15)) {
+            Swal.fire({ icon: 'warning', title: 'N° Operación inválido', text: `El pago #${i + 1} tiene un número de operación inválido (solo letras, números y guiones, máximo 15 caracteres).` });
             return;
         }
+    }
+
+    if (validarDuplicadosNumOperacionLiq()) {
+        Swal.fire({ icon: 'warning', title: 'N° Operación repetido', text: 'Dos o más métodos de pago de esta liquidación tienen el mismo N° de operación.' });
+        return;
     }
 
     let sumaPagos = carritoPagosLiq.reduce((acc, p) => acc + (Number(p.monto_pagado) || 0), 0);

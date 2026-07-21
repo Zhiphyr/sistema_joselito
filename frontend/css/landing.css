@@ -626,7 +626,8 @@ input[type="number"] {
 }
 
 .producto-row input[type="text"],
-.producto-row input[type="number"] {
+.producto-row input[type="number"],
+.producto-row select {
     width: 100%;
     padding: 10px 12px;
     background: rgba(255,255,255,0.06);
@@ -638,10 +639,37 @@ input[type="number"] {
     transition: all 0.3s ease;
 }
 
-.producto-row input:focus {
+.producto-row select option {
+    background: #1a1a1a;
+    color: var(--text-white);
+}
+
+.producto-row input:focus,
+.producto-row select:focus {
     outline: none;
     border-color: var(--accent-bronze);
     box-shadow: 0 0 0 2px var(--accent-bronze-dim);
+}
+
+.btn-volver-select {
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.3s ease;
+}
+
+.btn-volver-select:hover {
+    color: var(--accent-bronze);
+    border-color: var(--accent-bronze);
 }
 
 .producto-row .checkbox-group {

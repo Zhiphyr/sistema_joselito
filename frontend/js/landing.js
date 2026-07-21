@@ -1,4 +1,5 @@
 let cotizacionActualId = null;
+let productosCatalogoLanding = [];
 
 document.addEventListener('DOMContentLoaded', () => {
     // Cargar rutas
@@ -14,6 +15,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     opt.textContent = `${r.ciudad_origen} -> ${r.ciudad_destino}`;
                     select.appendChild(opt);
                 });
+            }
+        });
+
+    // Cargar catálogo de productos para el select de cada fila
+    fetch('/api/landing/productos')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                productosCatalogoLanding = data.productos;
+                refrescarSelectsProductoLanding();
             }
         });
 
@@ -41,10 +52,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function abrirCotizador() {
     document.getElementById('modal-cotizador').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
 }
 
 function cerrarCotizador() {
     document.getElementById('modal-cotizador').style.display = 'none';
+    document.body.style.overflow = '';
 }
 
 function resetCotizador() {
@@ -72,20 +85,41 @@ function resetCotizador() {
     cotizacionActualId = null;
 }
 
+function opcionesProductoLandingHTML() {
+    let html = '<option value="">Seleccione un producto...</option>';
+    html += productosCatalogoLanding.map(p => `<option value="${p.id_producto}">${p.nombre}</option>`).join('');
+    html += '<option value="otro">Otro (no está en la lista)</option>';
+    return html;
+}
+
+function refrescarSelectsProductoLanding() {
+    document.querySelectorAll('.prod-select').forEach(select => {
+        const valorActual = select.value;
+        select.innerHTML = opcionesProductoLandingHTML();
+        select.value = valorActual;
+    });
+}
+
 function agregarProductoCotizacion() {
     const lista = document.getElementById('lista-productos');
     const index = lista.children.length;
-    
+
     const html = `
         <div class="producto-row">
             <div style="display: flex; gap: 12px; align-items: flex-end;">
                 <div style="flex: 3;">
                     <label style="display: block; margin-bottom: 4px; font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Nombre de producto</label>
-                    <input type="text" class="prod-nombre" required placeholder="EJ. CAJAS DE MANZANA" autocomplete="off">
+                    <select class="prod-select" required>${opcionesProductoLandingHTML()}</select>
+                    <div class="prod-otro-wrap" style="display: none; gap: 8px; align-items: center;">
+                        <input type="text" class="prod-nombre-otro" placeholder="EJ. CAJAS DE MANZANA" autocomplete="off" style="flex: 1;">
+                        <button type="button" class="btn-volver-select" title="Elegir del catálogo"><i class="fas fa-list"></i></button>
+                    </div>
+                    <input type="hidden" class="prod-nombre" value="">
+                    <input type="hidden" class="prod-id-producto" value="">
                 </div>
                 <div style="flex: 1.5;">
                     <label style="display: block; margin-bottom: 4px; font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Peso Unit.(Kg)</label>
-                    <input type="number" class="prod-peso" required min="0.1" step="0.01" placeholder="Ej. 10.5">
+                    <input type="text" inputmode="decimal" class="prod-peso" required placeholder="Ej. 10.5">
                 </div>
                 <div style="width: 70px; flex-shrink: 0;">
                     <label style="display: block; margin-bottom: 4px; font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Cantidad</label>
@@ -105,10 +139,6 @@ function agregarProductoCotizacion() {
                     <input type="checkbox" class="prod-perecible">
                     <span>Perecible</span>
                 </label>
-                <label class="chip-label">
-                    <input type="checkbox" class="prod-mudanza">
-                    <span>Mudanza</span>
-                </label>
             </div>
         </div>
     `;
@@ -125,25 +155,35 @@ async function calcularCotizacion() {
     const correo = document.getElementById('cot-correo').value;
     const id_ruta = document.getElementById('cot-ruta').value;
 
+    const sitioWeb = document.getElementById('cot-sitio-web').value;
+
     const filas = document.querySelectorAll('.producto-row');
     const productos = [];
-    filas.forEach(f => {
+    for (const f of filas) {
+        const nombre = f.querySelector('.prod-nombre').value.trim();
+        const idProducto = f.querySelector('.prod-id-producto').value;
+
+        if (!nombre) {
+            alert('Seleccione o especifique el nombre de cada producto a transportar.');
+            return;
+        }
+
         productos.push({
-            nombre: f.querySelector('.prod-nombre').value,
+            nombre,
+            id_producto: idProducto ? Number(idProducto) : null,
             peso_unitario: parseFloat(f.querySelector('.prod-peso').value),
             cantidad: parseInt(f.querySelector('.prod-cant').value),
             fragil: f.querySelector('.prod-fragil').checked,
-            perecible: f.querySelector('.prod-perecible').checked,
-            mudanza: f.querySelector('.prod-mudanza').checked
+            perecible: f.querySelector('.prod-perecible').checked
         });
-    });
+    }
 
     try {
         const response = await fetch('/api/landing/cotizar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                id_ruta, nombres, telefono, correo, productos
+                id_ruta, nombres, telefono, correo, productos, sitio_web: sitioWeb
             })
         });
 
@@ -193,8 +233,7 @@ function initValidations() {
         nombreInput.addEventListener('input', function() {
             let val = this.value;
             val = val.toUpperCase();
-            val = val.replace(/[0-9]/g, ''); // Sin numeros
-            val = val.replace(/[^A-Z\s]/g, ''); // Solo letras y espacios (sin tildes)
+            val = val.replace(/[^A-ZÑ\s]/g, ''); // Solo letras (incluye Ñ) y espacios
             val = val.replace(/\s{2,}/g, ' '); // Evitar espacios dobles
             this.value = val;
         });
@@ -228,30 +267,84 @@ function initValidations() {
         });
     }
 
+    // Cambiar entre "producto del catálogo" y "otro" (texto libre) con event delegation
+    document.getElementById('lista-productos').addEventListener('change', function(e) {
+        if (e.target.classList.contains('prod-select')) {
+            const fila = e.target.closest('.producto-row');
+            const wrapOtro = fila.querySelector('.prod-otro-wrap');
+            const inputOtro = fila.querySelector('.prod-nombre-otro');
+            const hiddenNombre = fila.querySelector('.prod-nombre');
+            const hiddenId = fila.querySelector('.prod-id-producto');
+
+            if (e.target.value === 'otro') {
+                e.target.style.display = 'none';
+                wrapOtro.style.display = 'flex';
+                inputOtro.value = '';
+                hiddenNombre.value = '';
+                hiddenId.value = '';
+                inputOtro.focus();
+            } else if (e.target.value === '') {
+                wrapOtro.style.display = 'none';
+                inputOtro.value = '';
+                hiddenNombre.value = '';
+                hiddenId.value = '';
+            } else {
+                wrapOtro.style.display = 'none';
+                inputOtro.value = '';
+                const match = productosCatalogoLanding.find(p => String(p.id_producto) === e.target.value);
+                hiddenNombre.value = match ? match.nombre : '';
+                hiddenId.value = e.target.value;
+            }
+        }
+    });
+
+    // Frágil y Perecible son mutuamente excluyentes
+    document.getElementById('lista-productos').addEventListener('change', function(e) {
+        if (e.target.classList.contains('prod-fragil') || e.target.classList.contains('prod-perecible')) {
+            if (!e.target.checked) return;
+            const fila = e.target.closest('.producto-row');
+            const otra = e.target.classList.contains('prod-fragil')
+                ? fila.querySelector('.prod-perecible')
+                : fila.querySelector('.prod-fragil');
+            if (otra) otra.checked = false;
+        }
+    });
+
+    // Volver del modo "texto libre" al select del catálogo
+    document.getElementById('lista-productos').addEventListener('click', function(e) {
+        const btnVolver = e.target.closest('.btn-volver-select');
+        if (btnVolver) {
+            const fila = btnVolver.closest('.producto-row');
+            const select = fila.querySelector('.prod-select');
+            const wrapOtro = fila.querySelector('.prod-otro-wrap');
+            const inputOtro = fila.querySelector('.prod-nombre-otro');
+            const hiddenNombre = fila.querySelector('.prod-nombre');
+            const hiddenId = fila.querySelector('.prod-id-producto');
+
+            wrapOtro.style.display = 'none';
+            inputOtro.value = '';
+            hiddenNombre.value = '';
+            hiddenId.value = '';
+            select.value = '';
+            select.style.display = 'block';
+            select.focus();
+        }
+    });
+
     // Validar productos dinámicos con event delegation
     document.getElementById('lista-productos').addEventListener('input', function(e) {
-        if (e.target.classList.contains('prod-nombre')) {
+        if (e.target.classList.contains('prod-nombre-otro')) {
             let val = e.target.value;
             val = val.toUpperCase();
-            val = val.replace(/[^A-Z0-9\s]/g, ''); // Letras y numeros permitidos, pero sin tildes ni simbolos
+            val = val.replace(/[^A-ZÑ0-9\s]/g, ''); // Letras (incluye Ñ) y numeros permitidos, sin tildes ni simbolos
             val = val.replace(/\s{2,}/g, ' '); // Sin espacios dobles
             e.target.value = val;
+
+            e.target.closest('.producto-row').querySelector('.prod-nombre').value = val.trim();
         }
-        
+
         if (e.target.classList.contains('prod-peso')) {
-            let val = e.target.value;
-            // Solo numeros y un punto
-            val = val.replace(/[^0-9.]/g, '');
-            // Evitar multiples puntos
-            const partes = val.split('.');
-            if (partes.length > 2) {
-                val = partes[0] + '.' + partes.slice(1).join('');
-            }
-            // Eliminar ceros iniciales si no es 0.
-            if (val.length > 1 && val.startsWith('0') && val[1] !== '.') {
-                val = val.replace(/^0+/, '');
-            }
-            e.target.value = val;
+            filtrarDecimalConCursor(e.target, 8, 2);
         }
 
         if (e.target.classList.contains('prod-cant')) {
@@ -271,8 +364,10 @@ function initValidations() {
     });
 
     document.getElementById('lista-productos').addEventListener('blur', function(e) {
-        if (e.target.classList.contains('prod-nombre')) {
-            e.target.value = e.target.value.trim();
+        if (e.target.classList.contains('prod-nombre-otro')) {
+            const val = e.target.value.trim();
+            e.target.value = val;
+            e.target.closest('.producto-row').querySelector('.prod-nombre').value = val;
         }
         if (e.target.classList.contains('prod-peso')) {
             let val = parseFloat(e.target.value);
@@ -281,6 +376,33 @@ function initValidations() {
             }
         }
     }, true);
+}
+
+// Filtra un input de decimal (solo dígitos + 1 punto, con límites de enteros/decimales)
+// preservando la posición del cursor para que no "salte" al final al escribir.
+function filtrarDecimalConCursor(input, maxEnteros, maxDecimales) {
+    const cursorPos = input.selectionStart;
+    const valorAntes = input.value.slice(0, cursorPos);
+
+    let val = input.value.replace(/[^0-9.]/g, '');
+
+    const partes = val.split('.');
+    if (partes.length > 2) {
+        val = partes[0] + '.' + partes.slice(1).join('');
+    }
+
+    let [entero, decimal] = val.split('.');
+    entero = entero || '';
+    if (entero.length > maxEnteros) entero = entero.slice(0, maxEnteros);
+    if (decimal !== undefined && decimal.length > maxDecimales) decimal = decimal.slice(0, maxDecimales);
+
+    val = decimal !== undefined ? `${entero}.${decimal}` : entero;
+
+    const validosAntes = (valorAntes.match(/[0-9.]/g) || []).length;
+    const nuevaPos = Math.min(validosAntes, val.length);
+
+    input.value = val;
+    input.setSelectionRange(nuevaPos, nuevaPos);
 }
 
 function enviarDatosEstatico() {

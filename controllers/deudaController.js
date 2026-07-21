@@ -18,10 +18,15 @@ const obtenerDeudas = async (req, res) => {
                 rem.nombre_razon_social AS remitente_nombre,
                 cli.telefono AS destinatario_telefono,
                 (IFNULL((SELECT SUM(flete_subtotal) FROM Detalle_Carga dc WHERE dc.id_carga = c.id_carga AND dc.estado_operativo IN ('Normal', 'Entregado') AND dc.estado = 1), 0) - IFNULL((
-                    SELECT SUM(monto_pagado) 
-                    FROM pago_carga pc 
+                    SELECT SUM(monto_pagado)
+                    FROM pago_carga pc
                     WHERE pc.id_carga = c.id_carga AND pc.estado = 1
-                ), 0)) AS saldo_pendiente
+                ), 0)) AS saldo_pendiente,
+                (SELECT GROUP_CONCAT(DISTINCT p.nombre SEPARATOR ', ')
+                    FROM Detalle_Carga dc3
+                    JOIN Productos p ON dc3.id_producto = p.id_producto
+                    WHERE dc3.id_carga = c.id_carga AND dc3.estado = 1
+                ) AS resumen_carga
             FROM Carga c
             JOIN Viaje v ON c.id_viaje = v.id_viaje
             JOIN Clientes cli ON c.id_destinatario = cli.id_cliente
@@ -98,6 +103,36 @@ const registrarCobro = async (req, res) => {
 
         const pagos = JSON.parse(pagosJSON);
         const id_usuario = req.headers['x-user-profile'] || 1; // ID de quien cobra
+
+        // Validar formato y no-duplicidad del N° de operación (aplica a Transferencia,
+        // Deposito y Billetera Digital; Efectivo no lo usa y llega vacío/null).
+        const regexOperacion = /^[0-9]{1,15}$/;
+        const operacionesEnEsteRequest = new Set();
+
+        for (const pago of pagos) {
+            const nroOperacion = pago.nro_operacion ? String(pago.nro_operacion).trim() : '';
+            if (!nroOperacion) continue;
+
+            if (!regexOperacion.test(nroOperacion)) {
+                await connection.rollback();
+                return res.status(400).json({ success: false, message: `El N° de operación "${nroOperacion}" debe contener solo números (máximo 15 dígitos).` });
+            }
+
+            if (operacionesEnEsteRequest.has(nroOperacion)) {
+                await connection.rollback();
+                return res.status(400).json({ success: false, message: `El N° de operación "${nroOperacion}" está repetido entre los métodos de pago de este cobro.` });
+            }
+            operacionesEnEsteRequest.add(nroOperacion);
+
+            const [existentes] = await connection.query(
+                'SELECT id_pago FROM pago_carga WHERE nro_operacion = ? AND estado = 1 LIMIT 1',
+                [nroOperacion]
+            );
+            if (existentes.length > 0) {
+                await connection.rollback();
+                return res.status(400).json({ success: false, message: `El N° de operación "${nroOperacion}" ya fue registrado en otro cobro.` });
+            }
+        }
 
         // Obtener cuenta de sistema (Caja Física Principal)
         const [cajaFisicaRows] = await connection.query('SELECT id_cuenta FROM cuenta_bancaria WHERE es_sistema = 1 AND tipo_cuenta = "Efectivo" LIMIT 1');
@@ -220,6 +255,10 @@ const registrarCobro = async (req, res) => {
             }
         }
         
+        if (error.code === 'ER_DUP_ENTRY' && error.sqlMessage && error.sqlMessage.includes('nro_operacion')) {
+            return res.status(400).json({ success: false, message: 'Ese N° de operación ya fue registrado en otro cobro (detectado al guardar).' });
+        }
+
         res.status(500).json({ success: false, message: 'Error interno al registrar el cobro' });
     } finally {
         connection.release();

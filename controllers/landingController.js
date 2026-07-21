@@ -1,4 +1,10 @@
 const pool = require('../config/db');
+const { calcularCotizacionCompleta } = require('../services/cotizacionPricingService');
+
+const REGEX_TELEFONO = /^9\d{8}$/;
+const REGEX_CORREO = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
+const MAX_LEN_NOMBRES = 100;
+const MAX_LEN_PRODUCTO = 150;
 
 exports.getRutas = async (req, res) => {
     try {
@@ -10,66 +16,87 @@ exports.getRutas = async (req, res) => {
     }
 };
 
+exports.getProductosCatalogo = async (req, res) => {
+    try {
+        const [productos] = await pool.query(
+            `SELECT id_producto, nombre FROM productos WHERE estado = 1 ORDER BY nombre ASC`
+        );
+        res.json({ success: true, productos });
+    } catch (error) {
+        console.error("Error al obtener catálogo de productos para landing:", error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
+    }
+};
+
 exports.calcularCotizacion = async (req, res) => {
     try {
-        let { id_ruta, productos, nombres, telefono, correo } = req.body;
-        
+        let { id_ruta, productos, nombres, telefono, correo, sitio_web } = req.body;
+
+        // Honeypot: campo oculto que solo un bot rellenaría. Se responde éxito simulado
+        // sin tocar la base de datos, para no delatar el mecanismo al bot.
+        if (sitio_web) {
+            return res.json({ success: true, min: 0, max: 0, id_cotizacion: null });
+        }
+
         nombres = nombres ? nombres.trim().toUpperCase() : '';
+        telefono = telefono ? telefono.trim() : '';
         correo = correo ? correo.trim() : '';
 
         if (!id_ruta || !productos || productos.length === 0 || !nombres || !telefono) {
             return res.status(400).json({ success: false, message: 'Faltan datos requeridos.' });
         }
 
-        // 1. Obtener precio promedio de flete por KG en esta ruta en los últimos 2 meses
-        const [historial] = await pool.query(`
-            SELECT AVG(dc.precio_peso) as avg_unit_price 
-            FROM detalle_carga dc 
-            JOIN carga c ON dc.id_carga = c.id_carga 
-            JOIN viaje v ON c.id_viaje = v.id_viaje 
-            WHERE v.id_ruta = ? 
-              AND dc.fecha_registro >= DATE_SUB(NOW(), INTERVAL 2 MONTH)
-              AND dc.estado = 1
-        `, [id_ruta]);
-
-        let precioBaseUnitario = historial[0].avg_unit_price;
-        if (!precioBaseUnitario || precioBaseUnitario <= 0) {
-            precioBaseUnitario = 0.20; // Precio por defecto por Kg si no hay historial reciente para esa ruta
+        if (nombres.length > MAX_LEN_NOMBRES) {
+            return res.status(400).json({ success: false, message: 'El nombre ingresado es demasiado largo.' });
         }
 
-        let totalCalculado = 0;
-        const detalles = [];
+        if (!REGEX_TELEFONO.test(telefono)) {
+            return res.status(400).json({ success: false, message: 'El número de teléfono no es válido.' });
+        }
 
-        // 2. Calcular modificadores por cada producto
+        if (correo && !REGEX_CORREO.test(correo)) {
+            return res.status(400).json({ success: false, message: 'El correo electrónico no es válido.' });
+        }
+
         for (const prod of productos) {
-            let { nombre, peso_unitario, cantidad, fragil, perecible, mudanza } = prod;
-            nombre = nombre ? nombre.trim().toUpperCase() : '';
-            const peso_total = (peso_unitario || 1) * cantidad;
-            let subtotalBase = peso_total * precioBaseUnitario;
-
-            let modificador = 1.0;
-            if (fragil) modificador += 0.15;
-            if (perecible) modificador += 0.20;
-            if (mudanza) modificador += 0.50;
-
-            const subtotalCalculado = subtotalBase * modificador;
-            totalCalculado += subtotalCalculado;
-
-            detalles.push({
-                nombre,
-                peso_unitario,
-                peso_total,
-                cantidad,
-                fragil: fragil ? 1 : 0,
-                perecible: perecible ? 1 : 0,
-                mudanza: mudanza ? 1 : 0,
-                subtotalCalculado
-            });
+            const nombreProd = prod && prod.nombre ? String(prod.nombre).trim() : '';
+            if (!nombreProd || nombreProd.length > MAX_LEN_PRODUCTO) {
+                return res.status(400).json({ success: false, message: 'Uno de los productos tiene un nombre inválido.' });
+            }
+            if (!(Number(prod.cantidad) > 0) || !(Number(prod.peso_unitario) > 0)) {
+                return res.status(400).json({ success: false, message: 'Cantidad y peso unitario deben ser mayores a 0.' });
+            }
         }
 
-        // 3. Establecer rangos (+- 5%)
-        const fleteMin = totalCalculado * 0.95;
-        const fleteMax = totalCalculado * 1.05;
+        // Validar los id_producto opcionales que haya resuelto el autocompletado contra el catálogo real
+        const idsProductoEnviados = [...new Set(
+            productos.map(p => Number(p.id_producto)).filter(id => Number.isInteger(id) && id > 0)
+        )];
+        let idsProductoValidos = new Set();
+        if (idsProductoEnviados.length > 0) {
+            const [catalogoRows] = await pool.query(
+                `SELECT id_producto FROM productos WHERE estado = 1 AND id_producto IN (?)`,
+                [idsProductoEnviados]
+            );
+            idsProductoValidos = new Set(catalogoRows.map(r => r.id_producto));
+        }
+
+        // 1-3. Calcular precio estimado (promedio histórico + modificadores + rango ±5%),
+        // usando el servicio compartido con el flujo de creación interna de cotizaciones.
+        const productosParaCalculo = productos.map(prod => {
+            const idProductoNum = Number(prod.id_producto);
+            return {
+                nombre: prod.nombre ? prod.nombre.trim().toUpperCase() : '',
+                id_producto: idsProductoValidos.has(idProductoNum) ? idProductoNum : null,
+                peso_unitario: prod.peso_unitario,
+                cantidad: prod.cantidad,
+                fragil: prod.fragil,
+                perecible: prod.perecible,
+                mudanza: prod.mudanza
+            };
+        });
+
+        const { detalles, fleteMin, fleteMax } = await calcularCotizacionCompleta(id_ruta, productosParaCalculo);
 
         // 4. Guardar en Base de Datos
         const connection = await pool.getConnection();
@@ -85,9 +112,9 @@ exports.calcularCotizacion = async (req, res) => {
 
             for (const det of detalles) {
                 await connection.query(`
-                    INSERT INTO cotizacion_detalles (id_cotizacion, producto, cantidad, peso_unitario, peso_total, es_fragil, es_perecible, es_mudanza, subtotal_calculado)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                `, [idCotizacion, det.nombre, det.cantidad, det.peso_unitario, det.peso_total, det.fragil, det.perecible, det.mudanza, det.subtotalCalculado]);
+                    INSERT INTO cotizacion_detalles (id_cotizacion, producto, id_producto, cantidad, peso_unitario, peso_total, es_fragil, es_perecible, es_mudanza, subtotal_calculado)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `, [idCotizacion, det.nombre, det.id_producto, det.cantidad, det.peso_unitario, det.peso_total, det.fragil, det.perecible, det.mudanza, det.subtotalCalculado]);
             }
 
             await connection.commit();

@@ -1505,8 +1505,39 @@ const liquidarViaje = async (req, res) => {
             try { carrito_pagos = JSON.parse(carrito_pagos); } catch (e) { carrito_pagos = []; }
         }
 
+        // Validar formato y no-duplicidad del N° de operación (Efectivo no lo usa y
+        // llega vacío/null; el resto de métodos sí lo requieren para conciliar).
+        const regexOperacionLiq = /^[a-zA-Z0-9-]{1,15}$/;
+        const operacionesEnEsteRequestLiq = new Set();
+        if (carrito_pagos && carrito_pagos.length > 0) {
+            for (const pago of carrito_pagos) {
+                const nroOperacion = pago.numero_operacion ? String(pago.numero_operacion).trim() : '';
+                if (!nroOperacion) continue;
+
+                if (!regexOperacionLiq.test(nroOperacion)) {
+                    return res.status(400).json({ success: false, message: `El N° de operación "${nroOperacion}" es inválido (solo letras, números y guiones, máximo 15 caracteres).` });
+                }
+                if (operacionesEnEsteRequestLiq.has(nroOperacion)) {
+                    return res.status(400).json({ success: false, message: `El N° de operación "${nroOperacion}" está repetido entre los métodos de pago de esta liquidación.` });
+                }
+                operacionesEnEsteRequestLiq.add(nroOperacion);
+            }
+        }
+
         connection = await db.getConnection();
         await connection.beginTransaction();
+
+        if (operacionesEnEsteRequestLiq.size > 0) {
+            const [existentesLiq] = await connection.query(
+                'SELECT id_detalle_pago FROM detalle_liquidacion_pago WHERE numero_operacion IN (?) LIMIT 1',
+                [Array.from(operacionesEnEsteRequestLiq)]
+            );
+            if (existentesLiq.length > 0) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({ success: false, message: 'Uno de los N° de operación ingresados ya fue registrado en otra liquidación.' });
+            }
+        }
 
         // 1. Insertar en liquidacion_viaje (ahora sin detalles de pago)
         const sqlInsertLiquidacion = `
@@ -1653,10 +1684,14 @@ const liquidarViaje = async (req, res) => {
         }
         console.error('Error al liquidar viaje:', error);
         
+        if (error.code === 'ER_DUP_ENTRY' && error.sqlMessage && error.sqlMessage.includes('numero_operacion')) {
+            return res.status(400).json({ success: false, message: 'Ese N° de operación ya fue registrado en otra liquidación (detectado al guardar).' });
+        }
+
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ success: false, message: 'Este viaje ya ha sido liquidado anteriormente.' });
         }
-        
+
         return res.status(500).json({ success: false, message: 'Error interno del servidor al procesar la liquidación' });
     } finally {
         if (connection) {

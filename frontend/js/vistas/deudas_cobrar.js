@@ -136,7 +136,8 @@ function agregarNuevoPagoCobro() {
                 </div>
                 <div style="flex: 1;">
                     <label style="font-size: 11px; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">N° Operación</label>
-                    <input type="text" class="form-control input-operacion-cobro" style="font-size: 13px;" placeholder="Ej. 123456">
+                    <input type="text" class="form-control input-operacion-cobro" inputmode="numeric" maxlength="15" style="font-size: 13px;" placeholder="Ej. 123456">
+                    <small class="msg-operacion-duplicada" style="display: none; color: #ef4444; font-size: 11px; font-weight: 600;">N° de operación repetido</small>
                 </div>
             </div>
             <div>
@@ -173,6 +174,8 @@ function calcularTotalesCobro() {
         input.style.borderColor = '#cbd5e1';
         input.style.background = '#ffffff';
     });
+
+    const hayOperacionDuplicada = validarOperacionesDuplicadasCobro();
 
     const faltaPagar = montoTotal - sumaPagos;
     const badgeFalta = document.getElementById('modalCobroFaltaPagar');
@@ -212,7 +215,7 @@ function calcularTotalesCobro() {
     }
 
     // Lógica botón Guardar
-    if (sumaPagos === montoTotal && montoTotal > 0 && !hasEmptyOrZero && inputsMonto.length > 0) {
+    if (sumaPagos === montoTotal && montoTotal > 0 && !hasEmptyOrZero && !hayOperacionDuplicada && inputsMonto.length > 0) {
         btnGuardar.disabled = false;
         btnGuardar.style.opacity = '1';
         btnGuardar.style.cursor = 'pointer';
@@ -221,6 +224,40 @@ function calcularTotalesCobro() {
         btnGuardar.style.opacity = '0.5';
         btnGuardar.style.cursor = 'not-allowed';
     }
+}
+
+// Un mismo N° de operación no puede repetirse entre los distintos métodos de pago
+// de un mismo cobro mixto (ej. dos "Transferencias" con el mismo número).
+function validarOperacionesDuplicadasCobro() {
+    const inputsOperacion = document.querySelectorAll('.input-operacion-cobro');
+    const vistos = new Map();
+    let hayDuplicado = false;
+
+    inputsOperacion.forEach(input => {
+        const bloque = input.closest('.bloque-pago-cobro');
+        const msg = bloque ? bloque.querySelector('.msg-operacion-duplicada') : null;
+        if (msg) msg.style.display = 'none';
+        input.style.borderColor = '#cbd5e1';
+    });
+
+    inputsOperacion.forEach(input => {
+        const val = input.value.trim();
+        if (!val) return;
+
+        if (vistos.has(val)) {
+            hayDuplicado = true;
+            [input, vistos.get(val)].forEach(inp => {
+                inp.style.borderColor = '#ef4444';
+                const bloque = inp.closest('.bloque-pago-cobro');
+                const msg = bloque ? bloque.querySelector('.msg-operacion-duplicada') : null;
+                if (msg) msg.style.display = 'block';
+            });
+        } else {
+            vistos.set(val, input);
+        }
+    });
+
+    return hayDuplicado;
 }
 
 function inicializarModalCobro() {
@@ -238,6 +275,8 @@ function inicializarModalCobro() {
         document.getElementById('formCobro').reset();
         if (contenedorListaPagosCobro) contenedorListaPagosCobro.innerHTML = '';
         contadorPagosCobro = 0;
+        const errorMontoTotal = document.getElementById('cobro_monto_total_error');
+        if (errorMontoTotal) errorMontoTotal.style.display = 'none';
         calcularTotalesCobro();
     };
 
@@ -245,7 +284,22 @@ function inicializarModalCobro() {
     btnCancelar.addEventListener('click', cerrarModal);
 
     if (inputMontoTotal) {
-        inputMontoTotal.addEventListener('input', calcularTotalesCobro);
+        inputMontoTotal.addEventListener('input', () => {
+            const maxPermitido = parseFloat(inputMontoTotal.dataset.maxPermitido);
+            const errorMontoTotal = document.getElementById('cobro_monto_total_error');
+
+            if (!isNaN(maxPermitido) && Number(inputMontoTotal.value) > maxPermitido) {
+                inputMontoTotal.value = maxPermitido.toFixed(2);
+                if (errorMontoTotal) {
+                    errorMontoTotal.textContent = `El monto no puede superar el saldo pendiente (S/ ${maxPermitido.toFixed(2)}).`;
+                    errorMontoTotal.style.display = 'block';
+                }
+            } else if (errorMontoTotal) {
+                errorMontoTotal.style.display = 'none';
+            }
+
+            calcularTotalesCobro();
+        });
     }
 
     if (btnAgregarPagoCobro) {
@@ -259,6 +313,10 @@ function inicializarModalCobro() {
         // Delegación de eventos para inputs de monto
         contenedorListaPagosCobro.addEventListener('input', (e) => {
             if (e.target.classList.contains('input-monto-cobro')) {
+                calcularTotalesCobro();
+            }
+            if (e.target.classList.contains('input-operacion-cobro')) {
+                e.target.value = e.target.value.replace(/[^0-9]/g, '').slice(0, 15);
                 calcularTotalesCobro();
             }
         });
@@ -430,7 +488,11 @@ function abrirModalCobro(idCarga, fleteOriginal, saldoPendiente) {
     const inputMontoTotal = document.getElementById('cobro_monto_total');
     if (inputMontoTotal) {
         inputMontoTotal.value = saldoFinal;
+        inputMontoTotal.max = saldoFinal;
+        inputMontoTotal.dataset.maxPermitido = saldoFinal;
     }
+    const errorMontoTotal = document.getElementById('cobro_monto_total_error');
+    if (errorMontoTotal) errorMontoTotal.style.display = 'none';
     
     const contenedorListaPagosCobro = document.getElementById('contenedorListaPagosCobro');
     if (contenedorListaPagosCobro) {

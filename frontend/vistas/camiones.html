@@ -57,22 +57,13 @@
                         autocomplete="off" placeholder="Ej. 987654321" maxlength="9">
                 </div>
 
-                <div class="form-group" style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
-                    <div>
-                        <label for="tipo_documento_camion">Tipo <span class="required">*</span></label>
-                        <select id="tipo_documento_camion" name="tipo_documento_camion" class="form-control" required>
-                            <option value="DNI">DNI</option>
-                            <option value="RUC">RUC</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="numero_documento_camion">N° Documento <span class="required">*</span></label>
-                        <div style="display: flex; gap: 8px;">
-                            <input type="text" id="numero_documento_camion" name="numero_documento_camion" class="form-control" required placeholder="N° Doc" style="flex: 1;" maxlength="11">
-                            <button type="button" id="btnBuscarDocCamion" class="btn-primary" style="padding: 0 16px; width: auto;" title="Consultar">
-                                <i class="fas fa-search"></i>
-                            </button>
-                        </div>
+                <div class="form-group">
+                    <label for="numero_documento_camion">DNI del Conductor <span class="required">*</span></label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="numero_documento_camion" name="numero_documento_camion" class="form-control" required placeholder="Ej. 12345678" style="flex: 1;" maxlength="8" inputmode="numeric">
+                        <button type="button" id="btnBuscarDocCamion" class="btn-primary" style="padding: 0 16px; width: auto;" title="Consultar">
+                            <i class="fas fa-search"></i>
+                        </button>
                     </div>
                 </div>
 

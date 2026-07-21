@@ -55,18 +55,16 @@ window.init_camiones = function () {
         }
     });
 
-    // Validación de Documento (DNI/RUC)
+    // Validación de Documento (DNI, único tipo permitido para conductores)
     const docInput = document.getElementById('numero_documento_camion');
-    const docType = document.getElementById('tipo_documento_camion');
     const docBtn = document.getElementById('btnBuscarDocCamion');
-    
+
     function validarDocumento() {
         let val = docInput.value.replace(/[^0-9]/g, ''); // Solo números
-        const max = docType.value === 'DNI' ? 8 : 11;
-        if (val.length > max) val = val.substring(0, max);
+        if (val.length > 8) val = val.substring(0, 8);
         docInput.value = val;
-        
-        if (val.length === max) {
+
+        if (val.length === 8) {
             docBtn.disabled = false;
             docInput.style.borderColor = '#10b981';
         } else {
@@ -74,12 +72,8 @@ window.init_camiones = function () {
             docInput.style.borderColor = '#ef4444';
         }
     }
-    
+
     docInput.addEventListener('input', validarDocumento);
-    docType.addEventListener('change', () => {
-        docInput.value = '';
-        validarDocumento();
-    });
     // Validar en la carga inicial
     validarDocumento();
 };
@@ -194,7 +188,6 @@ window.abrirModalEditarCamion = function (id) {
     document.getElementById('id_camion').value = data.id_camion;
     document.getElementById('nombre_camion').value = data.nombre;
     document.getElementById('placa_camion').value = data.placa;
-    document.getElementById('tipo_documento_camion').value = data.tipo_documento;
     document.getElementById('numero_documento_camion').value = data.numero_documento;
     document.getElementById('conductor_camion').value = data.conductor;
     document.getElementById('direccion_camion').value = data.direccion;
@@ -219,7 +212,7 @@ async function guardarCamion(e) {
     const datos = {
         nombre: document.getElementById('nombre_camion').value.trim(),
         placa: document.getElementById('placa_camion').value.trim().toUpperCase(),
-        tipo_documento: document.getElementById('tipo_documento_camion').value,
+        tipo_documento: 'DNI',
         numero_documento: document.getElementById('numero_documento_camion').value.trim(),
         conductor: document.getElementById('conductor_camion').value.trim(),
         direccion: document.getElementById('direccion_camion').value.trim(),
@@ -370,7 +363,6 @@ window.cambiarEstadoCamion = async function (id, estado) {
 };
 
 async function buscarDocumentoConductorCamion() {
-    const tipo = document.getElementById('tipo_documento_camion').value;
     const numero = document.getElementById('numero_documento_camion').value.trim();
     const btn = document.getElementById('btnBuscarDocCamion');
     const icon = btn.querySelector('i');
@@ -385,7 +377,7 @@ async function buscarDocumentoConductorCamion() {
 
     try {
         const sessionData = JSON.parse(sessionStorage.getItem('usuario_joselito') || '{}');
-        const response = await fetch(`http://localhost:3000/api/camiones/consultar-documento/${tipo}/${numero}`, {
+        const response = await fetch(`http://localhost:3000/api/camiones/consultar-documento/${numero}`, {
             headers: { 'x-user-profile': sessionData.id_perfil }
         });
         const result = await response.json();

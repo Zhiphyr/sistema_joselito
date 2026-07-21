@@ -161,28 +161,29 @@
             <form id="formNuevoIngreso">
                 <div class="form-group">
                     <label>Concepto *</label>
-                    <input type="text" id="ingresoConcepto" class="form-control" required maxlength="150" oninput="limpiarInputConceptoFinanciero(this)">
+                    <input type="text" id="ingresoConcepto" class="form-control" required maxlength="150" oninput="limpiarInputConceptoFinanciero(this); validarFormularioNuevoIngreso();">
                     <small style="color: var(--text-muted); display: block; margin-top: 4px;">Letras, números, paréntesis y guiones. Máx. 150 caracteres.</small>
                 </div>
                 <div class="form-group">
                     <label>Monto (S/) *</label>
-                    <input type="text" id="ingresoMonto" class="form-control" inputmode="decimal" placeholder="0.00" maxlength="11" required oninput="limpiarInputMontoDecimalFinanciero(this)">
+                    <input type="text" id="ingresoMonto" class="form-control" inputmode="decimal" placeholder="0.00" maxlength="11" required oninput="limpiarInputMontoDecimalFinanciero(this); validarFormularioNuevoIngreso();">
                 </div>
                 <div class="form-group">
                     <label>¿A dónde ingresa el dinero? *</label>
-                    <select id="ingresoDestino" class="form-control" required onchange="actualizarNumeroOperacionFinanciero('ingresoDestino', 'grupoNumeroOperacionIngreso', 'ingresoNumeroOperacion')">
+                    <select id="ingresoDestino" class="form-control" required onchange="actualizarNumeroOperacionFinanciero('ingresoDestino', 'grupoNumeroOperacionIngreso', 'ingresoNumeroOperacion'); validarFormularioNuevoIngreso();">
                         <option value="">Seleccione...</option>
                     </select>
                 </div>
                 <div class="form-group" id="grupoNumeroOperacionIngreso" style="display: none;">
                     <label>N° de Operación *</label>
-                    <input type="text" id="ingresoNumeroOperacion" class="form-control" maxlength="100" oninput="limpiarInputNumeroOperacionFinanciero(this)">
+                    <input type="text" id="ingresoNumeroOperacion" class="form-control" maxlength="15" inputmode="numeric" oninput="limpiarInputNumeroOperacionFinanciero(this); validarFormularioNuevoIngreso();">
+                    <small style="color: var(--text-muted); display: block; margin-top: 4px;">Solo números. Entre 3 y 15 dígitos.</small>
                 </div>
             </form>
         </div>
         <div style="padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; gap: 12px; background: #f8fafc; border-bottom-left-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-lg);">
             <button class="btn-secondary" onclick="cerrarModalNuevoIngreso()">Cancelar</button>
-            <button class="btn-primary" id="btnGuardarNuevoIngreso" onclick="guardarNuevoIngreso()" style="background: #10b981;">
+            <button class="btn-primary" id="btnGuardarNuevoIngreso" onclick="guardarNuevoIngreso()" style="background: #10b981;" disabled>
                 <i class="fas fa-save"></i> Registrar Ingreso
             </button>
         </div>
@@ -200,7 +201,7 @@
             <form id="formNuevoEgreso">
                 <div class="form-group">
                     <label>Concepto *</label>
-                    <input type="text" id="egresoConcepto" class="form-control" required maxlength="150" oninput="limpiarInputConceptoFinanciero(this)">
+                    <input type="text" id="egresoConcepto" class="form-control" required maxlength="150" placeholder="Ej. Pago de peajes" oninput="limpiarInputConceptoFinanciero(this)">
                     <small style="color: var(--text-muted); display: block; margin-top: 4px;">Letras, números, paréntesis y guiones. Máx. 150 caracteres.</small>
                 </div>
                 <div class="form-group">
@@ -216,7 +217,8 @@
                 </div>
                 <div class="form-group" id="grupoNumeroOperacionEgreso" style="display: none;">
                     <label>N° de Operación *</label>
-                    <input type="text" id="egresoNumeroOperacion" class="form-control" maxlength="100" oninput="limpiarInputNumeroOperacionFinanciero(this)">
+                    <input type="text" id="egresoNumeroOperacion" class="form-control" maxlength="15" inputmode="numeric" oninput="limpiarInputNumeroOperacionFinanciero(this)">
+                    <small style="color: var(--text-muted); display: block; margin-top: 4px;">Solo números. Entre 3 y 15 dígitos.</small>
                 </div>
             </form>
         </div>
@@ -260,9 +262,10 @@
                     <input type="text" id="transferenciaConcepto" class="form-control" required maxlength="150" value="Transferencia entre cuentas propias" oninput="limpiarInputConceptoFinanciero(this)">
                     <small style="color: var(--text-muted); display: block; margin-top: 4px;">Letras, números, paréntesis y guiones. Máx. 150 caracteres.</small>
                 </div>
-                <div class="form-group">
-                    <label>N° de Operación (Opcional)</label>
-                    <input type="text" id="transferenciaNumeroOperacion" class="form-control" maxlength="100" oninput="limpiarInputNumeroOperacionFinanciero(this)">
+                <div class="form-group" id="grupoNumeroOperacionTransferencia" style="display: none;">
+                    <label>N° de Operación *</label>
+                    <input type="text" id="transferenciaNumeroOperacion" class="form-control" maxlength="15" inputmode="numeric" oninput="limpiarInputNumeroOperacionFinanciero(this)">
+                    <small style="color: var(--text-muted); display: block; margin-top: 4px;">Solo números. Entre 3 y 15 dígitos.</small>
                 </div>
             </form>
         </div>

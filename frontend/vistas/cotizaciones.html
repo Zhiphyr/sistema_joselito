@@ -1,8 +1,11 @@
-<div class="module-header">
+<div class="module-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
     <div>
         <h2>Cotizaciones</h2>
         <p>Revisa las cotizaciones generadas desde la web pública</p>
     </div>
+    <button type="button" class="btn-primary" id="btnNuevaCotizacion" style="width: auto;">
+        <i class="fas fa-plus"></i> Nueva Cotización
+    </button>
 </div>
 
 <div class="cotizaciones-layout">
@@ -98,6 +101,10 @@
                     <span class="detalle-valor" id="detalle-ruta">-</span>
                 </div>
                 <div>
+                    <span class="detalle-label">Origen</span>
+                    <span class="detalle-valor" id="detalle-origen">-</span>
+                </div>
+                <div>
                     <span class="detalle-label">Flete estimado</span>
                     <span class="detalle-valor" id="detalle-flete" style="font-size: 18px; font-weight: 800; color: black;">-</span>
                 </div>
@@ -118,6 +125,103 @@
                     </thead>
                     <tbody id="tbody-detalle-cotizacion"></tbody>
                 </table>
+            </div>
+
+            <div id="detalle-carga-generada-section" style="display: none;">
+                <h3 class="detalle-subtitulo" style="margin-top: 32px;">Carga generada</h3>
+                <div class="detalle-cotizacion-grid">
+                    <div>
+                        <span class="detalle-label">Remitente</span>
+                        <span class="detalle-valor" id="carga-remitente">-</span>
+                    </div>
+                    <div>
+                        <span class="detalle-label">Destinatario</span>
+                        <span class="detalle-valor" id="carga-destinatario">-</span>
+                    </div>
+                    <div>
+                        <span class="detalle-label">Flete total</span>
+                        <span class="detalle-valor" id="carga-flete-total" style="font-size: 18px; font-weight: 800; color: black;">-</span>
+                    </div>
+                </div>
+                <div class="tabla-scroll">
+                    <table class="tabla-modulo tabla-limpia" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th class="tabla-th" style="background: transparent; color: var(--text-secondary); border-bottom: 2px solid var(--border-light);">Producto</th>
+                                <th class="tabla-th" style="background: transparent; color: var(--text-secondary); border-bottom: 2px solid var(--border-light);">Marca visual</th>
+                                <th class="tabla-th" style="background: transparent; color: var(--text-secondary); border-bottom: 2px solid var(--border-light); text-align: right;">Cant. / Peso unit.</th>
+                                <th class="tabla-th" style="background: transparent; color: var(--text-secondary); border-bottom: 2px solid var(--border-light); text-align: right;">Tarifa S//kg</th>
+                                <th class="tabla-th" style="background: transparent; color: var(--text-secondary); border-bottom: 2px solid var(--border-light); text-align: right;">Flete subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-carga-generada"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="welcome-card fade-in-transition" id="crear-cotizacion-card" style="display: none; height: 100%; overflow-y: auto;">
+            <div class="detalle-cotizacion-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-light); padding-bottom: 16px; margin-bottom: 24px;">
+                <h2 style="margin: 0; font-size: 20px;">Nueva Cotización</h2>
+                <button type="button" class="btn-secondary" id="btnCerrarCrearCotizacion" style="width: auto;">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+
+            <div class="detalle-cotizacion-grid">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Nombres <span class="required">*</span></label>
+                    <input type="text" id="crear-nombres" class="form-control" maxlength="100" placeholder="EJ. JUAN PEREZ">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Teléfono <span class="required">*</span></label>
+                    <input type="text" id="crear-telefono" class="form-control" maxlength="9" placeholder="987654321">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Correo (Opcional)</label>
+                    <input type="email" id="crear-correo" class="form-control" placeholder="Ej. juan@empresa.com">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Ruta <span class="required">*</span></label>
+                    <select id="crear-ruta" class="form-control">
+                        <option value="">Seleccione una ruta...</option>
+                    </select>
+                </div>
+            </div>
+
+            <h3 class="detalle-subtitulo">Productos a cotizar</h3>
+            <div id="lista-productos-crear"><!-- filas .crear-producto-row inyectadas por JS --></div>
+            <button type="button" class="btn-secondary" id="btnAgregarProductoCrear" style="width: auto; margin-top: 8px;">
+                <i class="fas fa-plus"></i> Agregar producto
+            </button>
+
+            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+                <button type="button" class="btn-secondary" id="btnCancelarCrearCotizacion" style="width: auto;">Cancelar</button>
+                <button type="button" class="btn-primary" id="btnGuardarCotizacionInterna" style="width: auto; padding: 10px 24px;">Guardar Cotización</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Registrar producto nuevo al vuelo (desde el formulario de creación de cotización) -->
+<div id="modalNuevoProductoRapido" class="modal-overlay" style="display: none;">
+    <div class="modal-container" style="max-width: 500px; width: 95%;">
+        <div class="modal-header">
+            <h3>Registrar Producto Nuevo</h3>
+            <button class="btn-close" id="btnCerrarModalProductoRapido"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Nombre <span class="required">*</span></label>
+                <input type="text" id="npr-nombre" class="form-control" maxlength="60" minlength="3" placeholder="Ej. CAJAS DE MANZANA">
+            </div>
+            <div class="form-group">
+                <label>Descripción</label>
+                <textarea id="npr-descripcion" class="form-control" maxlength="250" rows="3" placeholder="Opcional" style="resize: vertical;"></textarea>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="btn-secondary" id="btnCancelarProductoRapido" style="width: auto;">Cancelar</button>
+                <button type="button" class="btn-primary" id="btnGuardarProductoRapido" style="width: auto;" disabled>Guardar Producto</button>
             </div>
         </div>
     </div>
@@ -612,8 +716,78 @@
         min-width: 150px;
     }
 
-    .aprobar-input-tarifa {
-        width: 100px;
+    /* Etiqueta "Cotizado como: X" alineada con el padding del select/badge de abajo */
+    .aprobar-prod-etiqueta {
+        text-align: left;
+        padding-left: 14px;
+        margin-bottom: 6px;
+        font-size: 12px;
+        font-style: italic;
+        color: var(--text-muted);
+    }
+
+    /* Badge estático que reemplaza al select cuando el producto viene bloqueado */
+    .aprobar-prod-locked-badge {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        padding: 10px 14px;
+        font-size: 14px;
+        color: var(--text-primary);
+        background-color: #f1f5f9;
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-md);
+    }
+
+    .aprobar-prod-locked-badge i.fa-lock {
+        color: var(--text-muted);
+        font-size: 13px;
+        flex-shrink: 0;
+    }
+
+    /* Input group para la tarifa: prefijo "S/" integrado al borde del input */
+    .aprobar-input-group {
+        display: flex;
+        align-items: stretch;
+        margin-left: auto;
+        width: fit-content;
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-md);
+        background-color: #fafafa;
+        overflow: hidden;
+        transition: border-color 0.2s ease;
+    }
+
+    .aprobar-input-group:focus-within {
+        border-color: var(--brand-blue);
+    }
+
+    .aprobar-input-group-prefix {
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+        background-color: #f1f5f9;
+        color: var(--text-secondary);
+        font-weight: 600;
+        font-size: 13px;
+        border-right: 1px solid var(--border-light);
+    }
+
+    .aprobar-input-group .aprobar-input-tarifa {
+        border: none;
+        background: transparent;
+        width: 90px;
+        text-align: right;
+        padding: 10px 10px;
+        font-size: 14px;
+        font-family: inherit;
+        color: var(--text-primary);
+    }
+
+    .aprobar-input-group .aprobar-input-tarifa:focus {
+        outline: none;
     }
 
     .aprobar-total-footer {
@@ -628,5 +802,67 @@
         .aprobar-clientes-grid {
             grid-template-columns: 1fr;
         }
+    }
+
+    /* Badge de origen de la cotización */
+    .badge-origen-publica {
+        background: #ede9fe;
+        color: #5b21b6;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-block;
+    }
+
+    .badge-origen-interna {
+        background: #e0f2fe;
+        color: #0369a1;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-block;
+    }
+
+    /* Filas dinámicas de producto en el formulario "Nueva Cotización" */
+    .crear-producto-row {
+        background: #f8fafc;
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+
+    .crear-checkbox-group {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+    }
+
+    .crear-chip-label {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 14px;
+        border-radius: 20px;
+        background: white;
+        border: 1px solid var(--border-light);
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .crear-chip-label input[type="checkbox"] {
+        display: none;
+    }
+
+    .crear-chip-label:has(input[type="checkbox"]:checked) {
+        background: #eff6ff;
+        border-color: var(--brand-blue);
+        color: var(--brand-blue);
     }
 </style>

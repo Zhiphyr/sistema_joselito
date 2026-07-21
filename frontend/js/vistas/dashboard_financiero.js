@@ -41,7 +41,7 @@ window.init_dashboard_financiero = function () {
 // ----------------------------------------------------
 
 const REGEX_MONTO_DECIMAL_FINANCIERO = /^\d{1,8}(\.\d{1,2})?$/;
-const REGEX_NUMERO_OPERACION_FINANCIERO = /^[a-zA-Z0-9-]{1,100}$/;
+const REGEX_NUMERO_OPERACION_FINANCIERO = /^\d{3,15}$/;
 
 // Trae fresco (nunca cacheado, el saldo cambia constantemente) el listado de cuentas y
 // billeteras activas, usado tanto para poblar los selects como para validar fondos.
@@ -113,9 +113,9 @@ function limpiarInputConceptoFinanciero(input) {
     input.value = input.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9()\-\s]/g, '');
 }
 
-// Letras, números y guiones (mismo criterio que el resto del sistema, ej. liquidación).
+// Solo dígitos, máximo 15 (mismo criterio que deudas por cobrar / liquidación).
 function limpiarInputNumeroOperacionFinanciero(input) {
-    input.value = input.value.replace(/[^a-zA-Z0-9-]/g, '');
+    input.value = input.value.replace(/[^0-9]/g, '').slice(0, 15);
 }
 
 // Muestra/oculta y marca requerido el campo de N° de Operación según el método derivado
@@ -154,13 +154,45 @@ async function abrirModalNuevoIngreso() {
     const select = document.getElementById('ingresoDestino');
     select.innerHTML = '<option value="">Cargando...</option>';
     document.getElementById('modalNuevoIngreso').style.display = 'flex';
+    validarFormularioNuevoIngreso();
 
     const data = await obtenerResumenCuentasParaFormulario();
     select.innerHTML = construirOpcionesCuentasYBilleteras(data);
+    validarFormularioNuevoIngreso();
 }
 
 function cerrarModalNuevoIngreso() {
     document.getElementById('modalNuevoIngreso').style.display = 'none';
+}
+
+// Bloquea "Registrar Ingreso" hasta que todos los campos requeridos sean válidos:
+// concepto y monto con formato correcto, un destino seleccionado, y N° de operación
+// (si el destino no es Efectivo).
+function validarFormularioNuevoIngreso() {
+    const btn = document.getElementById('btnGuardarNuevoIngreso');
+    if (!btn) return;
+
+    const concepto = document.getElementById('ingresoConcepto').value.trim();
+    const montoTexto = document.getElementById('ingresoMonto').value.trim();
+    const select = document.getElementById('ingresoDestino');
+    const destinoValor = select.value;
+    const numeroOperacion = document.getElementById('ingresoNumeroOperacion').value.trim();
+
+    const opcionSeleccionada = destinoValor ? select.options[select.selectedIndex] : null;
+    const metodo = opcionSeleccionada ? opcionSeleccionada.dataset.metodo : null;
+
+    const conceptoValido = validarConceptoFinanciero(concepto);
+    const montoValido = REGEX_MONTO_DECIMAL_FINANCIERO.test(montoTexto) && Number(montoTexto) > 0;
+    const destinoValido = !!destinoValor;
+    const numeroOperacionValido = (!metodo || metodo === 'Efectivo')
+        ? true
+        : (!!numeroOperacion && REGEX_NUMERO_OPERACION_FINANCIERO.test(numeroOperacion));
+
+    const esValido = conceptoValido && montoValido && destinoValido && numeroOperacionValido;
+
+    btn.disabled = !esValido;
+    btn.style.opacity = esValido ? '1' : '0.5';
+    btn.style.cursor = esValido ? 'pointer' : 'not-allowed';
 }
 
 async function guardarNuevoIngreso() {
@@ -194,7 +226,7 @@ async function guardarNuevoIngreso() {
         return;
     }
     if (numeroOperacion && !REGEX_NUMERO_OPERACION_FINANCIERO.test(numeroOperacion)) {
-        Swal.fire({ icon: 'warning', title: 'N° de Operación inválido', text: 'Solo letras, números y guiones.', confirmButtonColor: '#3b82f6' });
+        Swal.fire({ icon: 'warning', title: 'N° de Operación inválido', text: 'Solo números, entre 3 y 15 dígitos.', confirmButtonColor: '#3b82f6' });
         return;
     }
 
@@ -309,7 +341,7 @@ async function guardarNuevoEgreso() {
         return;
     }
     if (numeroOperacion && !REGEX_NUMERO_OPERACION_FINANCIERO.test(numeroOperacion)) {
-        Swal.fire({ icon: 'warning', title: 'N° de Operación inválido', text: 'Solo letras, números y guiones.', confirmButtonColor: '#3b82f6' });
+        Swal.fire({ icon: 'warning', title: 'N° de Operación inválido', text: 'Solo números, entre 3 y 15 dígitos.', confirmButtonColor: '#3b82f6' });
         return;
     }
 
@@ -373,6 +405,8 @@ async function abrirModalTransferenciaInterna() {
     document.getElementById('formTransferenciaInterna').reset();
     document.getElementById('transferenciaConcepto').value = 'Transferencia entre cuentas propias';
     document.getElementById('transferenciaSaldoDisponible').textContent = '';
+    document.getElementById('grupoNumeroOperacionTransferencia').style.display = 'none';
+    document.getElementById('transferenciaNumeroOperacion').required = false;
 
     const selectOrigen = document.getElementById('transferenciaOrigen');
     const selectDestino = document.getElementById('transferenciaDestino');
@@ -392,6 +426,7 @@ function cerrarModalTransferenciaInterna() {
 
 function onCambioOrigenTransferencia() {
     mostrarSaldoDisponible('transferenciaOrigen', 'transferenciaSaldoDisponible');
+    actualizarNumeroOperacionFinanciero('transferenciaOrigen', 'grupoNumeroOperacionTransferencia', 'transferenciaNumeroOperacion');
 }
 
 // Resuelve el saldo disponible de un método de pago (Efectivo -> Caja Física; Billetera
@@ -450,17 +485,21 @@ async function guardarTransferenciaInterna() {
         return;
     }
 
-    if (numeroOperacion && !REGEX_NUMERO_OPERACION_FINANCIERO.test(numeroOperacion)) {
-        Swal.fire({ icon: 'warning', title: 'N° de Operación inválido', text: 'Solo letras, números y guiones.', confirmButtonColor: '#3b82f6' });
-        return;
-    }
-
     const [tipo_origen, id_origen] = origenValor.split(':');
     const [tipo_destino, id_destino] = destinoValor.split(':');
 
     const selectOrigen = document.getElementById('transferenciaOrigen');
     const opcionOrigen = selectOrigen.options[selectOrigen.selectedIndex];
     const metodoOrigen = opcionOrigen ? opcionOrigen.dataset.metodo : null;
+
+    if (metodoOrigen !== 'Efectivo' && !numeroOperacion) {
+        Swal.fire({ icon: 'warning', title: 'Falta el N° de Operación', text: 'El origen seleccionado requiere un número de operación.', confirmButtonColor: '#3b82f6' });
+        return;
+    }
+    if (numeroOperacion && !REGEX_NUMERO_OPERACION_FINANCIERO.test(numeroOperacion)) {
+        Swal.fire({ icon: 'warning', title: 'N° de Operación inválido', text: 'Solo números, entre 3 y 15 dígitos.', confirmButtonColor: '#3b82f6' });
+        return;
+    }
 
     // Chequeo de fondos con datos frescos (el valor cacheado en el <option> pudo quedar
     // desactualizado si hubo otros movimientos mientras el modal estaba abierto).
